@@ -1,0 +1,715 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>유효숫자 마스터</title>
+<style>
+:root{--pri:#6366f1;--pri2:#4f46e5;--sec:#10b981;--acc:#f59e0b;--err:#ef4444;--bg:#0f172a;--bg2:#1e293b;--bg3:#334155;--txt:#f1f5f9;--txt2:#94a3b8;--r:12px}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--txt);min-height:100vh;overflow-x:hidden}
+.screen{display:none;min-height:100vh;padding:20px;animation:fadeIn .3s}
+.screen.active{display:flex;flex-direction:column;align-items:center}
+@keyframes fadeIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+@keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.08)}}
+@keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-6px)}75%{transform:translateX(6px)}}
+@keyframes popIn{from{transform:scale(0);opacity:0}to{transform:scale(1);opacity:1}}
+@keyframes comboFloat{from{opacity:1;transform:translate(-50%,-50%) scale(1)}to{opacity:0;transform:translate(-50%,-50%) translateY(-80px) scale(1.8)}}
+@keyframes confetti{0%{transform:translateY(0) rotate(0);opacity:1}100%{transform:translateY(500px) rotate(720deg);opacity:0}}
+@keyframes timerPulse{0%,100%{color:var(--err)}50%{color:#fca5a5}}
+@keyframes countIn{from{transform:scale(2);opacity:0}to{transform:scale(1);opacity:1}}
+
+h1{font-size:2.5rem;background:linear-gradient(135deg,#818cf8,#6366f1,#a78bfa);-webkit-background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:10px}
+h2{font-size:1.4rem;color:var(--txt2);margin-bottom:25px;font-weight:400}
+
+.btn{padding:12px 28px;border:none;border-radius:var(--r);font-size:1rem;font-weight:600;cursor:pointer;transition:all .2s;color:#fff;display:inline-flex;align-items:center;gap:8px}
+.btn:hover{transform:translateY(-2px);box-shadow:0 4px 15px rgba(0,0,0,.3)}
+.btn:active{transform:translateY(0)}
+.btn-pri{background:linear-gradient(135deg,var(--pri),var(--pri2))}
+.btn-sec{background:linear-gradient(135deg,var(--sec),#059669)}
+.btn-acc{background:linear-gradient(135deg,var(--acc),#d97706)}
+.btn-err{background:linear-gradient(135deg,var(--err),#dc2626)}
+.btn-ghost{background:var(--bg3)}
+.btn-lg{padding:16px 36px;font-size:1.15rem}
+.btn-sm{padding:8px 16px;font-size:.9rem}
+
+.card{background:var(--bg2);border-radius:var(--r);padding:24px;border:1px solid var(--bg3);transition:all .2s;cursor:pointer}
+.card:hover{border-color:var(--pri);transform:translateY(-3px);box-shadow:0 8px 25px rgba(99,102,241,.15)}
+
+.game-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:20px;max-width:900px;width:100%;margin-top:20px}
+.game-card{text-align:center}
+.game-card .icon{font-size:3rem;margin-bottom:12px}
+.game-card h3{margin-bottom:8px}
+.game-card p{color:var(--txt2);font-size:.88rem;line-height:1.5}
+
+.play-modes{display:flex;gap:20px;flex-wrap:wrap;justify-content:center;margin-top:20px}
+.play-mode-card{text-align:center;min-width:200px;flex:1;max-width:280px}
+.play-mode-card .icon{font-size:2.5rem;margin-bottom:10px}
+
+.setup-area{max-width:500px;width:100%}
+.setup-area input{width:100%;padding:12px 16px;border-radius:var(--r);border:1px solid var(--bg3);background:var(--bg);color:var(--txt);font-size:1rem;margin-bottom:10px;outline:none;transition:border .2s}
+.setup-area input:focus{border-color:var(--pri)}
+.setup-area label{display:block;margin-bottom:4px;color:var(--txt2);font-size:.9rem}
+.settings-row{display:flex;gap:15px;align-items:center;margin-bottom:12px;flex-wrap:wrap;justify-content:center}
+.settings-row label{color:var(--txt2);font-size:.9rem}
+.settings-row select{padding:8px 12px;border-radius:8px;border:1px solid var(--bg3);background:var(--bg);color:var(--txt);font-size:.9rem;outline:none}
+
+/* Game Header */
+.game-hdr{display:flex;justify-content:space-between;align-items:center;width:100%;max-width:900px;padding:15px 20px;background:var(--bg2);border-radius:var(--r);margin-bottom:15px;flex-wrap:wrap;gap:10px}
+.game-hdr .player-info{display:flex;align-items:center;gap:12px}
+.game-hdr .score{font-size:1.3rem;font-weight:700;color:var(--acc)}
+.game-hdr .combo{color:var(--sec);font-weight:600}
+.game-hdr .solved{color:var(--txt2);font-size:.95rem}
+.big-timer{font-size:2.2rem;font-weight:800;padding:8px 20px;border-radius:var(--r);background:var(--bg3);min-width:100px;text-align:center}
+.big-timer.urgent{animation:timerPulse .5s infinite}
+
+/* Question area */
+.q-area{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;width:100%;max-width:900px}
+.q-label{color:var(--txt2);font-size:1rem;margin-bottom:12px}
+
+.num-display{font-size:3.5rem;font-weight:700;letter-spacing:8px;padding:30px 50px;background:var(--bg2);border-radius:var(--r);border:2px solid var(--bg3);margin-bottom:25px;font-family:'Courier New',monospace}
+
+/* Digit select */
+.digit-box{display:flex;gap:4px;font-size:3.2rem;font-family:'Courier New',monospace;margin-bottom:25px;flex-wrap:wrap;justify-content:center}
+.dg{padding:10px 14px;background:var(--bg2);border:2px solid var(--bg3);border-radius:8px;cursor:pointer;transition:all .15s;user-select:none;min-width:50px;text-align:center}
+.dg:hover{border-color:var(--pri)}
+.dg.sel{background:var(--pri);border-color:var(--pri);color:#fff;box-shadow:0 0 15px rgba(99,102,241,.4)}
+.dg.ok{background:var(--sec);border-color:var(--sec);color:#fff}
+.dg.no{background:var(--err);border-color:var(--err);color:#fff}
+.dg.pt{cursor:default;background:transparent;border:none;padding:10px 3px;min-width:16px}
+.dg.miss{border-color:var(--sec);opacity:.55}
+
+/* Instrument */
+.inst-area{display:flex;flex-direction:column;align-items:center;margin-bottom:15px}
+.inst-canvas{background:var(--bg2);border-radius:var(--r);border:1px solid var(--bg3)}
+.inst-lbl{margin-top:6px;color:var(--txt2);font-size:.85rem}
+
+/* Answer */
+.ans-area{display:flex;flex-direction:column;align-items:center;gap:10px;width:100%;max-width:450px}
+.ans-row{display:flex;gap:10px;align-items:center;width:100%}
+.ans-row label{min-width:110px;text-align:right;color:var(--txt2);font-size:.9rem}
+.ans-inp{flex:1;padding:12px 16px;border-radius:var(--r);border:2px solid var(--bg3);background:var(--bg);color:var(--txt);font-size:1.2rem;text-align:center;outline:none;transition:border .2s;font-family:'Courier New',monospace}
+.ans-inp:focus{border-color:var(--pri)}
+.ans-inp.ok{border-color:var(--sec);background:rgba(16,185,129,.1)}
+.ans-inp.no{border-color:var(--err);background:rgba(239,68,68,.1);animation:shake .3s}
+
+.fb{padding:12px 20px;border-radius:var(--r);font-size:1rem;font-weight:600;margin-top:10px;animation:popIn .25s;text-align:center;max-width:600px}
+.fb.ok{background:rgba(16,185,129,.15);color:var(--sec);border:1px solid var(--sec)}
+.fb.no{background:rgba(239,68,68,.15);color:var(--err);border:1px solid var(--err)}
+.fb .exp{font-weight:400;font-size:.85rem;margin-top:5px;color:var(--txt2)}
+
+.combo-pop{position:fixed;top:50%;left:50%;pointer-events:none;font-size:2.2rem;font-weight:900;color:var(--acc);animation:comboFloat 1s ease-out forwards;z-index:100;text-shadow:0 0 20px rgba(245,158,11,.5)}
+
+/* Battle */
+.battle-grid{display:grid;grid-template-columns:1fr 1fr;gap:20px;width:100%;max-width:1100px}
+.battle-side{background:var(--bg2);border-radius:var(--r);padding:20px;display:flex;flex-direction:column;align-items:center;border:2px solid var(--bg3);transition:border-color .3s}
+.battle-side.win{border-color:var(--acc);box-shadow:0 0 20px rgba(245,158,11,.3)}
+
+/* Results */
+.res-box{max-width:600px;width:100%;text-align:center}
+.res-card{background:var(--bg2);border-radius:var(--r);padding:30px;margin-bottom:15px}
+.res-card .final{font-size:2.5rem;font-weight:800;color:var(--acc);margin:10px 0}
+.res-card .stats{color:var(--txt2);font-size:.9rem;line-height:1.8}
+.res-card .stats b{color:var(--txt)}
+.res-item{display:flex;justify-content:space-between;align-items:center;padding:15px 20px;background:var(--bg2);border-radius:var(--r);margin-bottom:8px}
+
+.rules-box{background:var(--bg2);border-radius:var(--r);padding:20px;max-width:600px;width:100%;margin-top:30px;border-left:4px solid var(--pri)}
+.rules-box h4{margin-bottom:8px;color:var(--pri)}
+.rules-box li{padding:3px 0;color:var(--txt2);font-size:.88rem;list-style:none}
+.rules-box li::before{content:'• ';color:var(--pri)}
+
+.back-btn{position:fixed;top:20px;left:20px;z-index:50}
+.confetti{position:fixed;top:-10px;pointer-events:none;z-index:200}
+.countdown{position:fixed;top:0;left:0;right:0;bottom:0;display:flex;align-items:center;justify-content:center;background:rgba(15,23,42,.85);z-index:300;font-size:5rem;font-weight:900;color:var(--acc);animation:countIn .4s}
+
+@media(max-width:768px){
+  h1{font-size:1.8rem}
+  .num-display{font-size:2.2rem;padding:20px 25px;letter-spacing:4px}
+  .dg{font-size:2rem;padding:8px 10px;min-width:36px}
+  .battle-grid{grid-template-columns:1fr}
+  .game-cards{grid-template-columns:1fr}
+  .ans-row{flex-direction:column;align-items:stretch}
+  .ans-row label{text-align:left;min-width:0}
+  .big-timer{font-size:1.6rem}
+}
+</style>
+</head>
+<body>
+
+<!-- MENU -->
+<div id="s-menu" class="screen active">
+<div style="text-align:center;margin-top:50px">
+<div style="font-size:4rem;margin-bottom:15px">🔬</div>
+<h1>유효숫자 마스터</h1>
+<h2>Significant Figures Game</h2>
+</div>
+<div class="game-cards">
+<div class="card game-card" onclick="pickGame(1)">
+<div class="icon">🔢</div><h3>유효숫자 개수 세기</h3>
+<p>제시된 숫자의 유효숫자가 몇 개인지 맞혀보세요!</p>
+</div>
+<div class="card game-card" onclick="pickGame(2)">
+<div class="icon">🎯</div><h3>유효숫자 찾기</h3>
+<p>유효숫자에 해당하는 숫자를 하나하나 골라보세요!</p>
+</div>
+<div class="card game-card" onclick="pickGame(3)">
+<div class="icon">📏</div><h3>측정값 읽기</h3>
+<p>측정 기구의 눈금을 읽고 측정값과 유효숫자를 확인하세요!</p>
+</div>
+</div>
+<div class="rules-box">
+<h4>유효숫자 규칙</h4>
+<ul>
+<li>0이 아닌 숫자는 항상 유효숫자입니다.</li>
+<li>0이 아닌 숫자 사이의 0은 유효숫자입니다. (예: 3.04 → 3개)</li>
+<li>소수점 앞의 0(앞자리 0)은 유효숫자가 아닙니다. (예: 0.003 → 1개)</li>
+<li>소수점 뒤 끝자리 0은 유효숫자입니다. (예: 2.50 → 3개)</li>
+<li>소수점이 없는 정수의 끝자리 0은 유효숫자가 아닙니다. (예: 1200 → 2개)</li>
+</ul>
+</div>
+</div>
+
+<!-- PLAY MODE -->
+<div id="s-play" class="screen">
+<button class="btn btn-ghost btn-sm back-btn" onclick="go('menu')">← 뒤로</button>
+<div style="text-align:center;margin-top:60px">
+<h1 id="game-title"></h1><h2>플레이 모드 선택</h2>
+</div>
+<div class="play-modes">
+<div class="card play-mode-card" onclick="pickPlay('single')">
+<div class="icon">🎮</div><h3>싱글 플레이</h3><p>혼자서 도전! 최고 기록을 세워보세요.</p>
+</div>
+<div class="card play-mode-card" onclick="pickPlay('multi')">
+<div class="icon">👥</div><h3>멀티 플레이</h3><p>친구와 번갈아가며 같은 시간 도전!</p>
+</div>
+<div class="card play-mode-card" onclick="pickPlay('battle')">
+<div class="icon">⚔️</div><h3>대전 플레이</h3><p>같은 문제를 누가 더 빨리 맞히나 대결!</p>
+</div>
+</div>
+</div>
+
+<!-- SETUP -->
+<div id="s-setup" class="screen">
+<button class="btn btn-ghost btn-sm back-btn" onclick="go('play')">← 뒤로</button>
+<div style="text-align:center;margin-top:60px"><h1>게임 설정</h1><h2 id="setup-sub"></h2></div>
+<div class="setup-area">
+<div id="p-inputs"></div>
+<div class="settings-row" style="margin-top:18px">
+<label>제한 시간:</label>
+<select id="sel-time">
+<option value="30">30초</option>
+<option value="60" selected>60초</option>
+<option value="90">90초</option>
+<option value="120">120초</option>
+</select>
+<label>난이도:</label>
+<select id="sel-diff">
+<option value="easy">쉬움</option>
+<option value="medium" selected>보통</option>
+<option value="hard">어려움</option>
+<option value="mixed">혼합</option>
+</select>
+</div>
+<div style="text-align:center;margin-top:25px">
+<button class="btn btn-pri btn-lg" onclick="startGame()">🚀 게임 시작!</button>
+</div>
+</div>
+</div>
+
+<!-- GAME (single/multi) -->
+<div id="s-game" class="screen">
+<div class="game-hdr" id="g-hdr"></div>
+<div class="q-area" id="g-qarea"></div>
+<div id="g-fb" style="width:100%;display:flex;justify-content:center"></div>
+</div>
+
+<!-- BATTLE -->
+<div id="s-battle" class="screen">
+<div class="game-hdr" id="b-hdr"></div>
+<div id="b-qdisplay" style="text-align:center;margin:10px 0;width:100%;max-width:900px"></div>
+<div class="battle-grid" id="b-grid"></div>
+<div id="b-fb" style="width:100%;display:flex;justify-content:center;margin-top:8px"></div>
+</div>
+
+<!-- RESULTS -->
+<div id="s-results" class="screen">
+<div style="text-align:center;margin-top:40px"><div style="font-size:3rem;margin-bottom:10px">🏆</div><h1>게임 결과</h1></div>
+<div class="res-box" id="res-box"></div>
+<div style="display:flex;gap:15px;margin-top:20px">
+<button class="btn btn-pri btn-lg" onclick="startGame()">다시 하기</button>
+<button class="btn btn-ghost btn-lg" onclick="go('menu')">메뉴로</button>
+</div>
+</div>
+
+<!-- COUNTDOWN OVERLAY -->
+<div id="countdown" class="countdown" style="display:none"></div>
+
+<script>
+// ===== STATE =====
+const S={gm:1,pm:'single',ps:[],pi:0,diff:'medium',tl:60,timeLeft:0,timer:null,
+  solved:0,combo:0,maxCombo:0,answered:false,qStart:0,currentNum:null,currentMeas:null,
+  battleAns:[false,false]};
+
+// ===== NAV =====
+function go(id){document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));document.getElementById('s-'+id).classList.add('active')}
+const gTitles={1:'🔢 유효숫자 개수 세기',2:'🎯 유효숫자 찾기',3:'📏 측정값 읽기'};
+function pickGame(m){S.gm=m;document.getElementById('game-title').textContent=gTitles[m];go('play')}
+function pickPlay(m){
+  S.pm=m;const inp=document.getElementById('p-inputs');
+  if(m==='single'){document.getElementById('setup-sub').textContent='이름을 입력하세요';
+    inp.innerHTML='<label>플레이어</label><input id="p0" value="Player 1" maxlength="12">';}
+  else if(m==='multi'){document.getElementById('setup-sub').textContent='플레이어 이름 입력 (2~4명)';inp.innerHTML='';
+    for(let i=0;i<4;i++)inp.innerHTML+=`<label>플레이어 ${i+1}${i>=2?' (선택)':''}</label><input id="p${i}" value="${i<2?'Player '+(i+1):''}" placeholder="${i>=2?'비워두면 참여 안 함':''}" maxlength="12">`;}
+  else{document.getElementById('setup-sub').textContent='두 명의 이름을 입력하세요';
+    inp.innerHTML='<label>플레이어 1</label><input id="p0" value="Player 1" maxlength="12"><label>플레이어 2</label><input id="p1" value="Player 2" maxlength="12">';}
+  go('setup');
+}
+
+// ===== SIGFIG LOGIC =====
+function analyze(str){
+  let s=str.replace(/^[+-]/,'');const hasDot=s.includes('.');const digs=[];
+  for(let i=0;i<s.length;i++){const c=s[i];if(c==='.'){digs.push({c:'.',i,sig:false,pt:true});continue}
+    if(c>='0'&&c<='9')digs.push({c,i,sig:false,pt:false})}
+  const nd=digs.filter(d=>!d.pt);let fNZ=-1,lNZ=-1;
+  for(let i=0;i<nd.length;i++){if(nd[i].c!=='0'){if(fNZ<0)fNZ=i;lNZ=i}}
+  if(fNZ<0){nd.length&&(nd[nd.length-1].sig=true)}
+  else{for(let i=0;i<nd.length;i++){if(i<fNZ)nd[i].sig=false;else if(i<=lNZ)nd[i].sig=true;else nd[i].sig=hasDot}}
+  return{digs,nd,count:nd.filter(d=>d.sig).length}
+}
+
+// ===== NUMBER POOLS (대폭 확장) =====
+const pools={
+easy:[
+'3','7','25','42','89','6.1','3.7','0.5','0.8','1.5',
+'16','34','91','73','58','4.2','9.3','2.6','8.4','5.9',
+'123','456','789','234','567','12','99','0.45','0.73','7.3',
+'2.0','3.0','5.0','8.0','1.0','14','67','0.31','0.62','4.8',
+'510','270','38','0.9','6.5','47','82','0.17','0.28','3.4',
+],
+medium:[
+'0.0034','0.0072','0.0091','0.00056','0.0018','0.0045','0.00083','0.0067',
+'100.0','200.0','300.0','70.0','50.0','40.0','10.0','80.0',
+'3.040','5.060','2.010','8.070','1.030','9.020','4.050','7.080',
+'0.502','0.709','0.304','0.608','0.901','0.107','0.805','0.203',
+'1200','3400','5600','2500','6800','7200','4100','9300',
+'30.06','50.09','10.03','70.01','20.08','40.05','60.07','80.02',
+'0.0780','0.0340','0.0560','0.0120','0.0910','0.0450','0.0670','0.0230',
+'6500','8200','4700','1300','9100','3600','2800','5400',
+'20.10','30.20','40.50','50.30','60.40','70.80','80.60','10.90',
+],
+hard:[
+'0.001020','0.003040','0.005060','0.002010','0.007080','0.009010',
+'10.0040','20.0060','30.0020','50.0080','40.0010','60.0050',
+'300600','502000','701000','103000','204000','805000',
+'0.00008050','0.00003020','0.00006040','0.00001090','0.00005010',
+'20010.0','30020.0','50040.0','10070.0','40060.0',
+'0.0000340','0.0000560','0.0000120','0.0000890','0.0000710',
+'104000','207000','308000','506000','901000',
+'60.0200','30.0500','80.0100','20.0700','40.0300',
+'0.003004','0.005007','0.001009','0.008002','0.006003',
+'1000.00','2000.00','3000.00','5000.00','4000.00',
+'0.00100200','0.00300400','0.00500600','0.00200100','0.00700800',
+'5006000','2003000','8001000','3004000','7002000',
+'0.0700800','0.0300400','0.0500200','0.0100600','0.0900100',
+'20.0060','40.0030','60.0080','10.0020','30.0050',
+'0.0000010','0.0000030','0.0000050','0.0000020','0.0000070',
+'400.010','600.020','800.050','200.030','900.040',
+'30200','50400','70100','20300','80600',
+'100200.0','200300.0','400500.0','300100.0','500200.0',
+'7000.040','3000.020','5000.060','1000.080','9000.010',
+]};
+
+function randNum(d){if(d==='mixed')d=['easy','medium','hard'][Math.floor(Math.random()*3)];
+  const p=pools[d];return p[Math.floor(Math.random()*p.length)]}
+
+// ===== MEASUREMENT =====
+function genMeas(d){
+  const types=['ruler','cylinder','thermometer'];
+  const t=types[Math.floor(Math.random()*types.length)];
+  let val,dv,unit,sd;
+  if(t==='ruler'){
+    const b=d==='easy'?Math.random()*5+1:d==='hard'?Math.random()*12+1:Math.random()*8+1;
+    val=Math.floor(b*100)/100;dv=val.toFixed(2);unit='cm';sd=0.1;
+  }else if(t==='cylinder'){
+    const b=d==='easy'?Math.random()*30+10:d==='hard'?Math.random()*80+5:Math.random()*50+10;
+    val=Math.floor(b*10)/10;dv=val.toFixed(1);unit='mL';sd=1;
+  }else{
+    const b=d==='easy'?Math.random()*30+15:d==='hard'?Math.random()*80-10:Math.random()*50+10;
+    val=Math.floor(b*10)/10;dv=val.toFixed(1);unit='°C';sd=1;
+  }
+  return{type:t,val,dv,unit,sd,sf:analyze(dv).count}
+}
+
+function drawInst(cv,m){
+  const ctx=cv.getContext('2d'),w=cv.width,h=cv.height;ctx.clearRect(0,0,w,h);
+  if(m.type==='ruler')drawRuler(ctx,w,h,m);
+  else if(m.type==='cylinder')drawCyl(ctx,w,h,m);
+  else drawTherm(ctx,w,h,m);
+}
+
+function drawRuler(ctx,w,h,m){
+  const pad=60,rH=65,rY=h/2-rH/2,v=m.val;
+  const s0=Math.max(0,Math.floor(v-3)),e0=s0+6,px=(w-pad*2)/(e0-s0);
+  ctx.fillStyle='#fef3c7';ctx.strokeStyle='#d97706';ctx.lineWidth=2;
+  ctx.beginPath();roundRect(ctx,pad-10,rY,w-pad*2+20,rH,6);ctx.fill();ctx.stroke();
+  ctx.fillStyle='#1e293b';ctx.strokeStyle='#78350f';ctx.lineWidth=1;ctx.font='11px sans-serif';ctx.textAlign='center';
+  for(let mm=s0*10;mm<=e0*10;mm++){
+    const x=pad+(mm/10-s0)*px;if(x<pad-5||x>w-pad+5)continue;
+    const isCm=mm%10===0,is5=mm%5===0,tH=isCm?28:is5?18:10;
+    ctx.beginPath();ctx.moveTo(x,rY+rH);ctx.lineTo(x,rY+rH-tH);ctx.stroke();
+    if(isCm)ctx.fillText((mm/10)+'',x,rY+rH+16);
+  }
+  ctx.fillText('cm',w-pad+25,rY+rH+16);
+  const ax=pad+(v-s0)*px;
+  ctx.fillStyle='#ef4444';ctx.beginPath();ctx.moveTo(ax,rY-5);ctx.lineTo(ax-7,rY-22);ctx.lineTo(ax+7,rY-22);ctx.closePath();ctx.fill();
+  ctx.beginPath();ctx.moveTo(ax,rY-22);ctx.lineTo(ax,rY-38);ctx.strokeStyle='#ef4444';ctx.lineWidth=2;ctx.stroke();
+  ctx.font='bold 12px sans-serif';ctx.fillText('읽으세요',ax,rY-42);
+}
+
+function drawCyl(ctx,w,h,m){
+  const v=m.val,cW=90,cy=35,cH=h-75,cx=w/2;
+  const mx=Math.ceil(v/10)*10+10,mn=Math.max(0,mx-60),pp=cH/(mx-mn);
+  ctx.strokeStyle='#0284c7';ctx.lineWidth=2;ctx.fillStyle='#e0f2fe';
+  ctx.beginPath();ctx.moveTo(cx-cW/2,cy);ctx.lineTo(cx-cW/2,cy+cH);
+  ctx.quadraticCurveTo(cx-cW/2,cy+cH+14,cx,cy+cH+14);
+  ctx.quadraticCurveTo(cx+cW/2,cy+cH+14,cx+cW/2,cy+cH);ctx.lineTo(cx+cW/2,cy);ctx.stroke();
+  const lY=cy+cH-(v-mn)*pp;
+  ctx.fillStyle='rgba(59,130,246,.25)';ctx.beginPath();
+  ctx.moveTo(cx-cW/2+2,lY);ctx.quadraticCurveTo(cx,lY+7,cx+cW/2-2,lY);
+  ctx.lineTo(cx+cW/2-2,cy+cH);ctx.quadraticCurveTo(cx+cW/2-2,cy+cH+12,cx,cy+cH+12);
+  ctx.quadraticCurveTo(cx-cW/2+2,cy+cH+12,cx-cW/2+2,cy+cH);ctx.closePath();ctx.fill();
+  ctx.strokeStyle='#2563eb';ctx.lineWidth=2;ctx.beginPath();
+  ctx.moveTo(cx-cW/2+2,lY);ctx.quadraticCurveTo(cx,lY+7,cx+cW/2-2,lY);ctx.stroke();
+  ctx.strokeStyle='#0284c7';ctx.fillStyle='#1e293b';ctx.font='10px sans-serif';ctx.textAlign='right';ctx.lineWidth=1;
+  for(let vv=mn;vv<=mx;vv++){
+    const y=cy+cH-(vv-mn)*pp;if(y<cy||y>cy+cH)continue;
+    const maj=vv%10===0,mid=vv%5===0,tl=maj?14:mid?9:4;
+    ctx.beginPath();ctx.moveTo(cx-cW/2,y);ctx.lineTo(cx-cW/2-tl,y);ctx.stroke();
+    if(maj)ctx.fillText(vv+'',cx-cW/2-17,y+3);
+  }
+  ctx.font='11px sans-serif';ctx.textAlign='center';ctx.fillText('mL',cx,cy-8);
+  ctx.fillStyle='#ef4444';ctx.font='bold 11px sans-serif';ctx.textAlign='left';
+  ctx.fillText('← 읽으세요',cx+cW/2+8,lY+4);
+}
+
+function drawTherm(ctx,w,h,m){
+  const v=m.val,bR=18,tW=14,cx=w/2,tT=28,tB=h-55,tH=tB-tT;
+  const mx=Math.ceil(v/10)*10+10,mn=mx-60,pp=tH/(mx-mn);
+  ctx.strokeStyle='#6b7280';ctx.lineWidth=2;ctx.fillStyle='#f9fafb';
+  ctx.beginPath();ctx.moveTo(cx-tW/2,tT);ctx.lineTo(cx-tW/2,tB);
+  ctx.arc(cx,tB+4,bR,Math.PI,0,true);ctx.lineTo(cx+tW/2,tT);
+  ctx.arc(cx,tT,tW/2,0,Math.PI,true);ctx.closePath();ctx.fill();ctx.stroke();
+  const mY=tB-(v-mn)*pp;
+  ctx.fillStyle='#ef4444';ctx.beginPath();
+  ctx.moveTo(cx-tW/2+3,Math.max(tT+4,mY));ctx.lineTo(cx-tW/2+3,tB);
+  ctx.arc(cx,tB+4,bR-4,Math.PI,0,true);ctx.lineTo(cx+tW/2-3,Math.max(tT+4,mY));ctx.closePath();ctx.fill();
+  ctx.beginPath();ctx.arc(cx,tB+4,bR-4,0,Math.PI*2);ctx.fill();
+  ctx.strokeStyle='#374151';ctx.fillStyle='#1e293b';ctx.font='10px sans-serif';ctx.textAlign='left';ctx.lineWidth=1;
+  for(let t=mn;t<=mx;t++){
+    const y=tB-(t-mn)*pp;if(y<tT+4||y>tB)continue;
+    const maj=t%10===0,mid=t%5===0,tl=maj?14:mid?9:4;
+    ctx.beginPath();ctx.moveTo(cx+tW/2+2,y);ctx.lineTo(cx+tW/2+2+tl,y);ctx.stroke();
+    if(maj)ctx.fillText(t+'°C',cx+tW/2+19,y+3);
+  }
+  ctx.fillStyle='#2563eb';ctx.font='bold 11px sans-serif';ctx.textAlign='right';
+  ctx.fillText('읽으세요 →',cx-tW/2-8,mY+4);
+  ctx.strokeStyle='#2563eb';ctx.lineWidth=1;ctx.setLineDash([3,3]);
+  ctx.beginPath();ctx.moveTo(cx-tW/2-3,mY);ctx.lineTo(cx-tW/2+1,mY);ctx.stroke();ctx.setLineDash([]);
+}
+
+function roundRect(ctx,x,y,w,h,r){
+  ctx.moveTo(x+r,y);ctx.lineTo(x+w-r,y);ctx.quadraticCurveTo(x+w,y,x+w,y+r);
+  ctx.lineTo(x+w,y+h-r);ctx.quadraticCurveTo(x+w,y+h,x+w-r,y+h);
+  ctx.lineTo(x+r,y+h);ctx.quadraticCurveTo(x,y+h,x,y+h-r);
+  ctx.lineTo(x,y+r);ctx.quadraticCurveTo(x,y,x+r,y);ctx.closePath();
+}
+
+// ===== START GAME =====
+function startGame(){
+  S.ps=[];
+  if(S.pm==='single'){
+    const el=document.getElementById('p0');
+    S.ps.push(mkP(el?el.value.trim()||'Player 1':'Player 1'));
+  }else if(S.pm==='multi'){
+    for(let i=0;i<4;i++){const el=document.getElementById('p'+i);if(el&&el.value.trim())S.ps.push(mkP(el.value.trim()))}
+    if(S.ps.length<2){alert('최소 2명이 필요합니다.');return}
+  }else{
+    for(let i=0;i<2;i++){const el=document.getElementById('p'+i);S.ps.push(mkP(el?el.value.trim()||'Player '+(i+1):'Player '+(i+1)))}
+  }
+  S.tl=parseInt(document.getElementById('sel-time').value);
+  S.diff=document.getElementById('sel-diff').value;
+  S.pi=0;
+  S.ps.forEach(p=>{p.score=0;p.solved=0;p.correct=0;p.wrong=0;p.combo=0;p.maxCombo=0});
+
+  if(S.pm==='battle'){go('battle');countdown(()=>startBattleRound())}
+  else{go('game');countdown(()=>startPlayerTurn())}
+}
+
+function mkP(n){return{name:n,score:0,solved:0,correct:0,wrong:0,combo:0,maxCombo:0}}
+
+function countdown(cb){
+  const el=document.getElementById('countdown');el.style.display='flex';
+  let n=3;el.textContent=n;
+  const iv=setInterval(()=>{n--;if(n>0){el.textContent=n;el.style.animation='none';el.offsetHeight;el.style.animation='countIn .4s'}
+    else{clearInterval(iv);el.textContent='GO!';setTimeout(()=>{el.style.display='none';cb()},400)}},700);
+}
+
+// ===== SINGLE / MULTI =====
+function startPlayerTurn(){
+  const p=S.ps[S.pi];p.score=0;p.solved=0;p.correct=0;p.wrong=0;p.combo=0;p.maxCombo=0;
+  S.timeLeft=S.tl;S.answered=false;
+  clearInterval(S.timer);
+  S.timer=setInterval(()=>{
+    S.timeLeft--;updateTimer();
+    if(S.timeLeft<=0){clearInterval(S.timer);endTurn()}
+  },1000);
+  nextQ();
+}
+
+function nextQ(){
+  S.answered=false;S.qStart=Date.now();
+  const d=S.diff==='mixed'?['easy','medium','hard'][Math.floor(Math.random()*3)]:S.diff;
+  const p=S.ps[S.pi];
+  const hdr=document.getElementById('g-hdr');
+  hdr.innerHTML=`<div class="player-info"><span style="font-weight:600">${p.name}</span>
+    <span class="score">⭐ ${p.score}</span><span class="combo">${p.combo>1?'🔥 '+p.combo+'콤보':''}</span></div>
+    <div class="solved">✅ ${p.correct}문제</div><div class="big-timer">${S.timeLeft}초</div>`;
+  document.getElementById('g-fb').innerHTML='';
+
+  if(S.gm===1){
+    const ns=randNum(d);S.currentNum=ns;const a=analyze(ns);
+    document.getElementById('g-qarea').innerHTML=`<div class="q-label">유효숫자는 몇 개?</div>
+      <div class="num-display">${ns}</div>
+      <div class="ans-area"><div class="ans-row"><label>개수:</label>
+      <input type="number" class="ans-inp" id="g-ans" min="1" max="20" placeholder="?" autofocus></div>
+      <button class="btn btn-pri" onclick="submitG()">제출</button></div>`;
+    const inp=document.getElementById('g-ans');inp.focus();inp.onkeydown=e=>{if(e.key==='Enter')submitG()};
+  }else if(S.gm===2){
+    const ns=randNum(d);S.currentNum=ns;const a=analyze(ns);
+    let h='<div class="q-label">유효숫자를 모두 클릭하세요!</div><div class="digit-box" id="g-digs">';
+    a.digs.forEach((d,i)=>{if(d.pt)h+=`<div class="dg pt">.</div>`;
+      else h+=`<div class="dg" data-i="${i}" onclick="togDig(this)">${d.c}</div>`});
+    h+='</div><div class="ans-area"><button class="btn btn-pri" onclick="submitG()">제출</button></div>';
+    document.getElementById('g-qarea').innerHTML=h;
+  }else{
+    const ms=genMeas(d);S.currentMeas=ms;
+    const cW=Math.min(460,window.innerWidth-50),cH=ms.type==='ruler'?190:320;
+    document.getElementById('g-qarea').innerHTML=`<div class="q-label">측정값과 유효숫자 개수를 입력하세요!</div>
+      <div class="inst-area"><canvas id="g-cv" class="inst-canvas" width="${cW}" height="${cH}"></canvas>
+      <div class="inst-lbl">${ms.type==='ruler'?'자 (최소 눈금: 1mm)':ms.type==='cylinder'?'눈금실린더 (최소 눈금: 1mL)':'온도계 (최소 눈금: 1°C)'}</div></div>
+      <div class="ans-area">
+      <div class="ans-row"><label>측정값 (${ms.unit}):</label><input type="text" class="ans-inp" id="g-meas" placeholder="예: ${ms.type==='ruler'?'3.45':'25.3'}" autofocus></div>
+      <div class="ans-row"><label>유효숫자 개수:</label><input type="number" class="ans-inp" id="g-sf" min="1" max="20" placeholder="?"></div>
+      <button class="btn btn-pri" onclick="submitG()">제출</button></div>`;
+    setTimeout(()=>drawInst(document.getElementById('g-cv'),ms),30);
+    const mi=document.getElementById('g-meas');mi.focus();
+    mi.onkeydown=e=>{if(e.key==='Enter')document.getElementById('g-sf').focus()};
+    document.getElementById('g-sf').onkeydown=e=>{if(e.key==='Enter')submitG()};
+  }
+}
+
+function togDig(el){if(!S.answered)el.classList.toggle('sel')}
+
+function submitG(){
+  if(S.answered||S.timeLeft<=0)return;S.answered=true;
+  const p=S.ps[S.pi];let ok=false,exp='';
+  if(S.gm===1){
+    const a=analyze(S.currentNum),ans=parseInt(document.getElementById('g-ans').value);
+    ok=ans===a.count;
+    exp=`${S.currentNum} → 유효숫자: ${a.nd.filter(d=>d.sig).map(d=>d.c).join(', ')} (${a.count}개)`;
+    document.getElementById('g-ans').classList.add(ok?'ok':'no');
+  }else if(S.gm===2){
+    const a=analyze(S.currentNum),digs=document.querySelectorAll('#g-digs .dg:not(.pt)');
+    let allOk=true;const nd=a.nd;
+    digs.forEach((el,i)=>{const ex=nd[i]?.sig,sel=el.classList.contains('sel');
+      if(sel&&ex)el.classList.add('ok');else if(sel&&!ex){el.classList.add('no');allOk=false}
+      else if(!sel&&ex){el.classList.add('miss');allOk=false}el.style.cursor='default'});
+    ok=allOk;exp=`유효숫자: ${nd.filter(d=>d.sig).map(d=>d.c).join(', ')} (${a.count}개)`;
+  }else{
+    const ms=S.currentMeas,mv=parseFloat(document.getElementById('g-meas').value),sv=parseInt(document.getElementById('g-sf').value);
+    const tol=ms.type==='ruler'?0.03:0.2;
+    const mOk=!isNaN(mv)&&Math.abs(mv-ms.val)<=tol,sOk=sv===ms.sf;ok=mOk&&sOk;
+    document.getElementById('g-meas').classList.add(mOk?'ok':'no');
+    document.getElementById('g-sf').classList.add(sOk?'ok':'no');
+    exp=`정답: ${ms.dv} ${ms.unit} (유효숫자 ${ms.sf}개)`;
+  }
+  p.solved++;
+  if(ok){p.correct++;p.combo++;if(p.combo>p.maxCombo)p.maxCombo=p.combo;
+    const elapsed=(Date.now()-S.qStart)/1000;let pts=100+Math.max(0,Math.floor((10-elapsed)*5))+Math.min((p.combo-1)*20,100);
+    p.score+=pts;showFB('g-fb',true,`+${pts}점! ${exp}`,p.combo);
+  }else{p.wrong++;p.combo=0;showFB('g-fb',false,exp,0)}
+  // Update header
+  document.querySelector('#g-hdr .score').textContent='⭐ '+p.score;
+  const ce=document.querySelector('#g-hdr .combo');if(ce)ce.textContent=p.combo>1?'🔥 '+p.combo+'콤보':'';
+  document.querySelector('#g-hdr .solved').textContent='✅ '+p.correct+'문제';
+  // Auto next after short delay
+  setTimeout(()=>{if(S.timeLeft>0)nextQ()},ok?600:1200);
+}
+
+function updateTimer(){
+  document.querySelectorAll('.big-timer').forEach(el=>{el.textContent=S.timeLeft+'초';el.classList.toggle('urgent',S.timeLeft<=5)})}
+
+function endTurn(){
+  if(S.pm==='multi'&&S.pi<S.ps.length-1){
+    S.pi++;
+    const p=S.ps[S.pi];
+    document.getElementById('g-qarea').innerHTML=`<div style="text-align:center"><h2 style="color:var(--acc);margin-bottom:20px">${p.name} 차례!</h2>
+      <button class="btn btn-pri btn-lg" onclick="countdown(()=>startPlayerTurn())">준비!</button></div>`;
+    document.getElementById('g-fb').innerHTML='';
+    document.getElementById('g-hdr').innerHTML=`<div class="player-info"><span style="font-weight:600">${p.name}</span></div><div class="big-timer">대기</div>`;
+  }else{endGame()}
+}
+
+// ===== BATTLE MODE =====
+function startBattleRound(){
+  S.timeLeft=S.tl;S.ps.forEach(p=>{p.score=0;p.solved=0;p.correct=0;p.wrong=0;p.combo=0;p.maxCombo=0});
+  clearInterval(S.timer);
+  S.timer=setInterval(()=>{S.timeLeft--;updateTimer();if(S.timeLeft<=0){clearInterval(S.timer);endGame()}},1000);
+  nextBQ();
+}
+
+function nextBQ(){
+  S.battleAns=[false,false];S.qStart=Date.now();
+  const d=S.diff==='mixed'?['easy','medium','hard'][Math.floor(Math.random()*3)]:S.diff;
+  // Header
+  const hdr=document.getElementById('b-hdr');
+  hdr.innerHTML=`<div class="player-info"><span style="font-weight:600">${S.ps[0].name}</span><span class="score">⭐ ${S.ps[0].score}</span></div>
+    <div class="big-timer">${S.timeLeft}초</div>
+    <div class="player-info"><span style="font-weight:600">${S.ps[1].name}</span><span class="score">⭐ ${S.ps[1].score}</span></div>`;
+  document.getElementById('b-fb').innerHTML='';
+
+  if(S.gm===1||S.gm===2){
+    const ns=randNum(d);S.currentNum=ns;
+    document.getElementById('b-qdisplay').innerHTML=`<div class="q-label">${S.gm===1?'유효숫자 개수를 맞혀보세요!':'유효숫자를 모두 찾으세요!'}</div>
+      <div class="num-display" style="display:inline-block">${ns}</div>`;
+  }else{
+    const ms=genMeas(d);S.currentMeas=ms;
+    const cW=Math.min(420,window.innerWidth-60),cH=ms.type==='ruler'?170:280;
+    document.getElementById('b-qdisplay').innerHTML=`<div class="q-label">측정값과 유효숫자를 입력하세요!</div>
+      <canvas id="b-cv" class="inst-canvas" width="${cW}" height="${cH}"></canvas>
+      <div class="inst-lbl">${ms.type==='ruler'?'자 (최소 눈금: 1mm)':ms.type==='cylinder'?'눈금실린더 (최소 눈금: 1mL)':'온도계 (최소 눈금: 1°C)'}</div>`;
+    setTimeout(()=>drawInst(document.getElementById('b-cv'),ms),30);
+  }
+  // Battle sides
+  const bg=document.getElementById('b-grid');bg.innerHTML='';
+  for(let i=0;i<2;i++){
+    const sd=document.createElement('div');sd.className='battle-side';sd.id='bs-'+i;
+    let ih=`<h3>${S.ps[i].name} <span style="font-size:.8rem;color:var(--txt2)">✅${S.ps[i].correct}</span></h3>`;
+    if(S.gm===1){
+      ih+=`<div class="ans-area" style="width:100%"><div class="ans-row"><label>개수:</label>
+        <input type="number" class="ans-inp" id="b-a${i}" min="1" max="20" placeholder="?"></div>
+        <button class="btn btn-pri btn-sm" onclick="bSubmit(${i})">제출</button></div>`;
+    }else if(S.gm===2){
+      const a=analyze(S.currentNum);
+      ih+='<div class="digit-box" id="b-dg'+i+'" style="font-size:1.8rem;justify-content:center">';
+      a.digs.forEach((dd,di)=>{if(dd.pt)ih+='<div class="dg pt" style="font-size:1.8rem">.</div>';
+        else ih+=`<div class="dg" style="font-size:1.8rem;padding:6px 9px;min-width:32px" data-i="${di}" onclick="bTogDig(this,${i})">${dd.c}</div>`});
+      ih+='</div><button class="btn btn-pri btn-sm" style="margin-top:8px" onclick="bSubmit('+i+')">제출</button>';
+    }else{
+      const ms=S.currentMeas;
+      ih+=`<div class="ans-area" style="width:100%">
+        <div class="ans-row"><label>측정값(${ms.unit}):</label><input type="text" class="ans-inp" id="b-m${i}" placeholder="?" style="font-size:1rem"></div>
+        <div class="ans-row"><label>유효숫자:</label><input type="number" class="ans-inp" id="b-s${i}" min="1" max="20" placeholder="?" style="font-size:1rem"></div>
+        <button class="btn btn-pri btn-sm" onclick="bSubmit(${i})">제출</button></div>`;
+    }
+    sd.innerHTML=ih;bg.appendChild(sd);
+  }
+  // Enter handlers
+  for(let i=0;i<2;i++){
+    const ae=document.getElementById('b-a'+i);if(ae)ae.onkeydown=e=>{if(e.key==='Enter')bSubmit(i)};
+    const se=document.getElementById('b-s'+i);if(se)se.onkeydown=e=>{if(e.key==='Enter')bSubmit(i)};
+    const me=document.getElementById('b-m'+i);if(me)me.onkeydown=e=>{if(e.key==='Enter'){const s=document.getElementById('b-s'+i);if(s)s.focus()}};
+  }
+  const f=document.getElementById('b-a0')||document.getElementById('b-m0');if(f)f.focus();
+}
+
+function bTogDig(el,pi){if(!S.battleAns[pi])el.classList.toggle('sel')}
+
+function bSubmit(pi){
+  if(S.battleAns[pi]||S.timeLeft<=0)return;S.battleAns[pi]=true;
+  const p=S.ps[pi];let ok=false;
+  if(S.gm===1){
+    const a=analyze(S.currentNum),ans=parseInt(document.getElementById('b-a'+pi).value);
+    ok=ans===a.count;document.getElementById('b-a'+pi).classList.add(ok?'ok':'no');
+  }else if(S.gm===2){
+    const a=analyze(S.currentNum),nd=a.nd,digs=document.querySelectorAll('#b-dg'+pi+' .dg:not(.pt)');
+    let allOk=true;
+    digs.forEach((el,i)=>{const ex=nd[i]?.sig,sel=el.classList.contains('sel');
+      if(sel&&ex)el.classList.add('ok');else if(sel&&!ex){el.classList.add('no');allOk=false}
+      else if(!sel&&ex){el.classList.add('miss');allOk=false}});
+    ok=allOk;
+  }else{
+    const ms=S.currentMeas,mv=parseFloat((document.getElementById('b-m'+pi).value||'').trim()),sv=parseInt(document.getElementById('b-s'+pi).value);
+    const tol=ms.type==='ruler'?0.03:0.2;
+    const mOk=!isNaN(mv)&&Math.abs(mv-ms.val)<=tol,sOk=sv===ms.sf;ok=mOk&&sOk;
+    document.getElementById('b-m'+pi).classList.add(mOk?'ok':'no');
+    document.getElementById('b-s'+pi).classList.add(sOk?'ok':'no');
+  }
+  p.solved++;const sd=document.getElementById('bs-'+pi);
+  if(ok){p.correct++;p.combo++;if(p.combo>p.maxCombo)p.maxCombo=p.combo;
+    const el=(Date.now()-S.qStart)/1000;let pts=100+Math.max(0,Math.floor((8-el)*8))+Math.min((p.combo-1)*25,120);
+    if(!S.battleAns[1-pi])pts+=50; // 먼저 맞추면 보너스
+    p.score+=pts;sd.innerHTML+=`<div class="fb ok" style="margin-top:8px">✅ +${pts}점</div>`;
+    if(p.combo>=2)showCombo(p.combo);
+  }else{p.wrong++;p.combo=0;sd.innerHTML+=`<div class="fb no" style="margin-top:8px">❌</div>`}
+  // Update header scores
+  document.querySelectorAll('#b-hdr .score')[pi].textContent='⭐ '+p.score;
+
+  if(S.battleAns[0]&&S.battleAns[1]){
+    const a=S.gm===3?S.currentMeas:analyze(S.currentNum);
+    const exp=S.gm===3?`정답: ${a.dv} ${a.unit} (유효숫자 ${a.sf}개)`
+      :`유효숫자: ${a.nd.filter(d=>d.sig).map(d=>d.c).join(', ')} (${a.count}개)`;
+    document.getElementById('b-fb').innerHTML=`<div class="fb" style="background:var(--bg2);border:1px solid var(--bg3);color:var(--txt)">${exp}</div>`;
+    setTimeout(()=>{if(S.timeLeft>0)nextBQ()},1000);
+  }
+}
+
+// ===== FEEDBACK =====
+function showFB(id,ok,text,combo){
+  document.getElementById(id).innerHTML=`<div class="fb ${ok?'ok':'no'}">${ok?'✅ 정답!':'❌ 오답!'}<div class="exp">${text}</div></div>`;
+  if(combo>=2)showCombo(combo);
+}
+function showCombo(n){
+  const el=document.createElement('div');el.className='combo-pop';el.textContent=`🔥 ${n} COMBO!`;
+  document.body.appendChild(el);setTimeout(()=>el.remove(),1000);
+}
+
+// ===== END GAME =====
+function endGame(){
+  clearInterval(S.timer);go('results');
+  const rb=document.getElementById('res-box');
+  const sorted=[...S.ps].sort((a,b)=>b.score-a.score);
+  if(S.ps.length===1){
+    const p=S.ps[0];
+    rb.innerHTML=`<div class="res-card"><div style="font-size:3rem">🏆</div>
+      <div style="font-size:1.3rem;font-weight:700;margin:10px 0">${p.name}</div>
+      <div class="final">${p.score}점</div>
+      <div class="stats">맞은 문제: <b>${p.correct}개</b> / ${p.solved}개<br>
+      정답률: <b>${p.solved?Math.round(p.correct/p.solved*100):0}%</b><br>
+      최대 콤보: <b>${p.maxCombo}회</b><br>
+      제한 시간: <b>${S.tl}초</b></div></div>`;
+  }else{
+    let h='';sorted.forEach((p,i)=>{
+      const em=i===0?'🥇':i===1?'🥈':i===2?'🥉':'🏅';
+      const acc=p.solved?Math.round(p.correct/p.solved*100):0;
+      h+=`<div class="res-item" style="${i===0?'border:2px solid var(--acc)':''}">
+        <div style="display:flex;align-items:center;gap:12px"><span style="font-size:1.5rem">${em}</span>
+        <div><div style="font-weight:700">${p.name}</div>
+        <div style="color:var(--txt2);font-size:.82rem">정답 ${p.correct}개 (${acc}%) · 콤보 ${p.maxCombo}회</div></div></div>
+        <div style="font-size:1.3rem;font-weight:800;color:var(--acc)">${p.score}점</div></div>`});
+    rb.innerHTML=h;
+  }
+  if(sorted[0].correct>=10)spawnConfetti();
+}
+
+function spawnConfetti(){
+  const cols=['#ef4444','#f59e0b','#10b981','#6366f1','#ec4899','#06b6d4'];
+  for(let i=0;i<30;i++){const el=document.createElement('div');el.className='confetti';
+    el.style.left=Math.random()*100+'vw';el.style.background=cols[Math.floor(Math.random()*6)];
+    el.style.width=el.style.height=(Math.random()*8+4)+'px';el.style.borderRadius=Math.random()>.5?'50%':'2px';
+    el.style.animation=`confetti ${Math.random()*2+1.5}s ease-out ${Math.random()*.5}s forwards`;
+    document.body.appendChild(el);setTimeout(()=>el.remove(),4000)}
+}
+</script>
+</body>
+</html>
