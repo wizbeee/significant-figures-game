@@ -2247,9 +2247,6 @@ Object.assign(window, {
 
   // 페이지 이동 (시약목록, 학생명단, 임장일정)
   goToPage,
-  // 보고서 관리
-  goToReportAdmin,
-
   // 고급 필터 토글 / 결과 카운트
   toggleAdvanced,
   updateResultCount,
@@ -2281,30 +2278,6 @@ function loadTeacherList() {
       console.error("교사 목록 로드 실패:", e);
     })
     .getTeacherListForEdit();
-}
-
-/* =========================================================
- * 보고서 관리 페이지 이동 (★ 수정됨)
- * - window.location.href 대신 서버에서 배포 URL을 받아 이동
- * ========================================================= */
-
-function goToReportAdmin() {
-  showGlobalBusy('보고서 관리 페이지로 이동 중...');
-  
-  google.script.run
-    .withSuccessHandler(function(url) {
-      if (!url) {
-        hideGlobalBusy();
-        alert('URL을 가져오지 못했습니다.');
-        return;
-      }
-      window.top.location.href = url + '?view=report_admin';
-    })
-    .withFailureHandler(function(err) {
-      hideGlobalBusy();
-      alert('URL을 가져오는 중 오류가 발생했습니다: ' + (err && (err.message || err)));
-    })
-    .getAppUrl();
 }
 
 /* =========================================================
@@ -2482,6 +2455,24 @@ function glFilter(term) {
   GL_PAGINATION.page = 1;
   glRenderPage();
 }
+
+/* =========================================================
+ * 키보드 단축키 (접근성)
+ * ========================================================= */
+document.addEventListener('keydown', function(e) {
+  // Ctrl+F: 검색 입력으로 포커스
+  if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
+    const searchInput = document.getElementById('searchInput') || document.querySelector('input[type="search"]');
+    if (searchInput) { e.preventDefault(); searchInput.focus(); }
+  }
+  // Ctrl+E: 편집모드 토글
+  if ((e.ctrlKey || e.metaKey) && e.key === 'e') {
+    e.preventDefault();
+    if (typeof toggleEditMode === 'function') {
+      toggleEditMode(!EDIT_MODE);
+    }
+  }
+});
 
 /* =========================================================
  * 끝

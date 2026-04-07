@@ -101,7 +101,7 @@ function checkRateLimit(funcName) {
   var key = userBase + '_' + funcName;
   var lastRequest = cache.get(key);
   if (lastRequest && (Date.now() - Number(lastRequest) < CONFIG.RATE_LIMIT_MS)) {
-    throw new Error('요청이 너무 잦습니다. 잠시 후 다시 시도하세요.');
+    throw new Error('RATE_LIMIT: 요청이 너무 빠릅니다. ' + Math.ceil(CONFIG.RATE_LIMIT_MS/1000) + '초 후 다시 시도해주세요.');
   }
   cache.put(key, Date.now().toString(), CONFIG.RATE_LIMIT_TTL);
 }
@@ -259,7 +259,9 @@ function onStatusChange(e) {
                  + '■ 변경 상태: ' + (newVal || '(비어있음)') + '\n\n'
                  + '상세 내역은 조회 페이지에서 확인하세요.';
 
-    GmailApp.sendEmail(email, subject, '', { from: 'cnsa.science@cnsa.hs.kr', htmlBody: '<pre>' + body + '</pre>' });
+    // XSS 방지: HTML 이스케이프 처리
+    var safeBody = body.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+    GmailApp.sendEmail(email, subject, body, { from: 'cnsa.science@cnsa.hs.kr', htmlBody: '<pre>' + safeBody + '</pre>' });
   } catch (err) {
     logError('onStatusChange', err);
   }

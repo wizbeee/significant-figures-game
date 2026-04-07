@@ -478,4 +478,29 @@ function goToAdmin() {
       .getAppUrl();
   }
 }
+
+/* ===== 페이지 이동 ===== */
+function goToPage(page) {
+  var viewMap = {
+    'admin': 'admin',
+    'common_list': 'common_list',
+    'student_list': 'student_list',
+    'teacher_schedule': 'teacher_schedule',
+    'report': 'report_admin',
+    'report_admin': 'report_admin'
+  };
+  var view = viewMap[page] || page;
+  if (typeof APP_BASE_URL !== 'undefined' && APP_BASE_URL) {
+    window.top.location.href = APP_BASE_URL + '?view=' + encodeURIComponent(view);
+  } else {
+    google.script.run
+      .withSuccessHandler(function(url) {
+        window.top.location.href = url + '?view=' + encodeURIComponent(view);
+      })
+      .withFailureHandler(function(err) {
+        alert('페이지 이동 실패: ' + (err.message || err));
+      })
+      .getAppUrl();
+  }
+}
 </script>

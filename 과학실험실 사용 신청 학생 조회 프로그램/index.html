@@ -1,15 +1,31 @@
 <!DOCTYPE html>
-<html>
+<html lang="ko">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <base target="_top">
   <title>과학실험실 신청 조회</title>
 
-  <!-- jsPDF -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.2/jspdf.umd.min.js"></script>
-  <!-- html2canvas (한글 PDF 지원) -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <!-- jsPDF & html2canvas: 지연 로딩 (PDF 버튼 클릭 시 로드) -->
+  <script>
+    var _pdfLibsLoaded = false;
+    function loadPdfLibs() {
+      if (_pdfLibsLoaded) return Promise.resolve();
+      return new Promise(function(resolve, reject) {
+        var s1 = document.createElement('script');
+        s1.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.2/jspdf.umd.min.js';
+        s1.onload = function() {
+          var s2 = document.createElement('script');
+          s2.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
+          s2.onload = function() { _pdfLibsLoaded = true; resolve(); };
+          s2.onerror = reject;
+          document.head.appendChild(s2);
+        };
+        s1.onerror = reject;
+        document.head.appendChild(s1);
+      });
+    }
+  </script>
 
   <style>
     /* ===== 기본 ===== */
@@ -37,7 +53,8 @@
       padding: 10px 12px; font-size: 14px;
       border: 1px solid #ccc; border-radius: 4px; width: 160px;
     }
-    .inputs input:focus { outline: none; border-color: #1976d2; }
+    .inputs input:focus { border-color: #1976d2; }
+    .inputs input:focus-visible { outline: 3px solid #1976d2; outline-offset: 2px; }
     .inputs button {
       padding: 10px 20px; font-size: 14px; cursor: pointer;
       background: #1976d2; color: #fff; border: none; border-radius: 4px;
@@ -97,15 +114,15 @@
     }
     .app-table th { background: #f5f5f5; font-weight: 600; }
     .app-table tbody tr:hover { background: #e3f2fd; cursor: pointer; }
-    .app-table tbody tr.row-past { opacity: 0.5; }
-    .app-table tbody tr.row-past:hover { opacity: 0.8; background: #f5f5f5; }
+    .app-table tbody tr.row-past { opacity: 0.65; }
+    .app-table tbody tr.row-past:hover { opacity: 0.85; background: #f5f5f5; }
 
     .date-badge {
       display: inline-block; padding: 2px 8px; border-radius: 10px;
       font-size: 11px; font-weight: 600; margin-left: 6px;
     }
     .date-upcoming { background: #e3f2fd; color: #1565c0; }
-    .date-past { background: #f5f5f5; color: #999; }
+    .date-past { background: #f5f5f5; color: #757575; }
     .date-today { background: #fff3e0; color: #e65100; }
 
     .status-badge {
@@ -297,6 +314,14 @@
       .step { min-width: 60px; }
       .step-connector { width: 20px; }
     }
+    /* ===== 접근성 ===== */
+    :focus-visible { outline: 3px solid #1976d2; outline-offset: 2px; }
+    button:focus-visible, a:focus-visible { outline: 3px solid #1976d2; outline-offset: 2px; }
+    .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+      @keyframes pulse { 0%, 100% { box-shadow: none; } }
+    }
   </style>
 </head>
 <body>
@@ -306,21 +331,23 @@
     <!-- 메인 뷰 -->
     <div id="main-view">
       <div class="inputs">
+        <label class="sr-only" for="repId">대표자학번 (5자리)</label>
         <input type="text" id="repId" placeholder="대표자학번 (5자리)"
                maxlength="5" autocomplete="off" inputmode="numeric" />
+        <label class="sr-only" for="repName">대표자이름</label>
         <input type="text" id="repName" placeholder="대표자이름"
                maxlength="20" autocomplete="off" />
         <button id="queryBtn" type="button">조회하기</button>
       </div>
-      <div id="message"></div>
+      <div id="message" aria-live="polite"></div>
 
       <!-- 툴바 (조회 후 표시) -->
       <div id="toolbar" style="display:none;">
         <div class="toolbar">
           <div class="toolbar-left">
             <div class="view-toggle">
-              <button class="vt-btn active" data-view="table">📋 목록</button>
-              <button class="vt-btn" data-view="calendar">📅 달력</button>
+              <button class="vt-btn active" data-view="table" aria-pressed="true">📋 목록</button>
+              <button class="vt-btn" data-view="calendar" aria-pressed="false">📅 달력</button>
             </div>
             <label>상태:</label>
             <select id="filterStatus">
@@ -359,7 +386,7 @@
     </div>
   </div>
 
-  <div id="loading"><div id="loading-content">조회 중...</div></div>
+  <div id="loading" role="alert" aria-live="assertive"><div id="loading-content">조회 중...</div></div>
 
   <script>
     /* ══════════════════════════════════════
@@ -437,8 +464,9 @@
        ══════════════════════════════════════ */
     document.querySelectorAll('.vt-btn').forEach(function(btn) {
       btn.addEventListener('click', function() {
-        document.querySelectorAll('.vt-btn').forEach(function(b){ b.classList.remove('active'); });
+        document.querySelectorAll('.vt-btn').forEach(function(b){ b.classList.remove('active'); b.setAttribute('aria-pressed','false'); });
         this.classList.add('active');
+        this.setAttribute('aria-pressed','true');
         currentView = this.dataset.view;
         showCurrentView();
       });
@@ -615,7 +643,12 @@
       el.innerHTML = html;
 
       document.querySelectorAll('.app-table tbody tr').forEach(function(tr) {
+        tr.setAttribute('tabindex', '0');
+        tr.setAttribute('role', 'button');
         tr.addEventListener('click', function() { showDetail(this.dataset.id); });
+        tr.addEventListener('keydown', function(e) {
+          if (e.key === 'Enter') { showDetail(this.dataset.id); }
+        });
       });
     }
 
@@ -851,6 +884,20 @@
       var content    = document.getElementById('detail-content');
       var detailView = document.getElementById('detail-view');
       if (!content) { alert('출력할 내용이 없습니다.'); return; }
+
+      // PDF 라이브러리 지연 로딩
+      if (!_pdfLibsLoaded) {
+        var pdfBtn = document.querySelector('.btn-pdf');
+        if (pdfBtn) { pdfBtn.disabled = true; pdfBtn.textContent = '📥 PDF 라이브러리 로딩 중...'; }
+        loadPdfLibs().then(function() {
+          if (pdfBtn) { pdfBtn.disabled = false; pdfBtn.textContent = '📥 PDF 저장'; }
+          generatePDF(r, chems);
+        }).catch(function() {
+          if (pdfBtn) { pdfBtn.disabled = false; pdfBtn.textContent = '📥 PDF 저장'; }
+          alert('PDF 라이브러리를 불러오지 못했습니다. 인터넷 연결을 확인하세요.');
+        });
+        return;
+      }
 
       /* 섹션 분리: 마지막 .section-title(시약) 이후를 2장으로 분리 */
       var sections = content.querySelectorAll('.section-title');

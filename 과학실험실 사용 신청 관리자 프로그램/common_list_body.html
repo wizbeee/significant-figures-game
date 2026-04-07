@@ -1,11 +1,10 @@
 <!-- chemical_list_body.html -->
 <div class="container">
-  <nav class="nav-bar no-print">
+  <nav class="nav-bar no-print" aria-label="관리자 메뉴">
     <a class="nav-item" onclick="goToAdmin(); return false;" href="#">📊 대시보드</a>
-    <a class="nav-item active">📦 시약 목록</a>
+    <a class="nav-item active" href="#" aria-current="page">📦 시약 목록</a>
     <a class="nav-item" onclick="goToPage('student_list'); return false;" href="#">👥 학생 명단</a>
     <a class="nav-item" onclick="goToPage('teacher_schedule'); return false;" href="#">🧑‍🏫 임장 일정</a>
-    <a class="nav-item" onclick="goToPage('report_admin'); return false;" href="#">📋 보고서</a>
   </nav>
 
   <!-- 페이지 헤더 -->

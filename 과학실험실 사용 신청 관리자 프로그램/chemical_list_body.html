@@ -1,5 +1,12 @@
 <!-- chemical_list_body.html -->
 <div class="container">
+  <nav class="nav-bar no-print" aria-label="관리자 메뉴">
+    <a class="nav-item" onclick="goToAdmin(); return false;" href="#">📊 대시보드</a>
+    <a class="nav-item active" href="#" aria-current="page">📦 시약 목록</a>
+    <a class="nav-item" onclick="goToPage('student_list'); return false;" href="#">👥 학생 명단</a>
+    <a class="nav-item" onclick="goToPage('teacher_schedule'); return false;" href="#">🧑‍🏫 임장 일정</a>
+  </nav>
+
   <!-- 페이지 헤더 -->
   <div class="page-header no-print">
     <div>
@@ -7,7 +14,6 @@
       <p>조회 기간 내 신청된 시약을 다양한 기준으로 정렬하여 조회합니다</p>
     </div>
     <div class="header-actions">
-      <a href="#" onclick="goToAdmin(); return false;" class="btn btn-secondary">← 관리자 페이지</a>
       <button class="theme-toggle" id="themeToggle" onclick="toggleDarkMode()" title="다크모드 전환">
         <span class="icon-light">☀️</span>
         <span class="icon-dark">🌙</span>

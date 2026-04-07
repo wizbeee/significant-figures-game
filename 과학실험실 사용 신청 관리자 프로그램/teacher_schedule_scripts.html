@@ -784,9 +784,13 @@ function updateLabFilter() {
 }
 
 function goToPage(view) {
-  google.script.run
-    .withSuccessHandler(function(url) { window.top.location.href = url + '?view=' + view; })
-    .withFailureHandler(function() { alert('페이지 이동 실패'); })
-    .getAppUrl();
+  if (typeof APP_BASE_URL !== 'undefined' && APP_BASE_URL) {
+    window.top.location.href = APP_BASE_URL + '?view=' + encodeURIComponent(view);
+  } else {
+    google.script.run
+      .withSuccessHandler(function(url) { window.top.location.href = url + '?view=' + encodeURIComponent(view); })
+      .withFailureHandler(function() { alert('페이지 이동 실패'); })
+      .getAppUrl();
+  }
 }
 </script>

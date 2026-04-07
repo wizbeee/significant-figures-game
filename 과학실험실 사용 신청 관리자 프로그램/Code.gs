@@ -4,8 +4,7 @@
  *   1) 제한 만료 정리 강건화(문자열/타임존 안전 파싱 + 자정 기준 비교)
  *   2) 만료 자동 정리 일일 트리거 제공(setupDailyRestrictionMaintenance)
  *   3) 기존 기능·헤더·시트 구조 유지
- *   4) ✅ (추가) 보고서 관리 페이지 라우팅 (report_admin)
- *   5) ✅ (수정) 버그 수정 및 신규 기능 추가
+ *   4) ✅ (수정) 버그 수정 및 신규 기능 추가
  ****************************************************/
 
 // ===== 스프레드시트 ID들 =====
@@ -33,9 +32,6 @@ const EXCLUDED_SHEETS = [
   RESTRICT_ACCUM_SHEET_NAME,
   ADMIN_LOG_SHEET_NAME,
   BACKUP_CONFIG_SHEET_NAME,
-  '보고서제출현황',      // ✅ 추가 - 보고서 관련 시트 제외
-  '보고서정책',          // ✅ 추가 - 보고서 관련 시트 제외
-  '보고서마감연장'       // ✅ 추가 - 보고서 관련 시트 제외
 ];
 
 // ===== 정책/명단 헤더 =====
@@ -44,7 +40,7 @@ const RESTRICT_HEADERS      = ['학번', '이름', '제한사유', '시작일', 
 const RESTRICT_ACCUM_HEADERS= ['학번','이름','누적 횟수'];
 
 /* ==================================================
- *  공통/진입점 (✅ 수정됨 - report_admin 라우팅 추가)
+ *  공통/진입점
  * ================================================== */
 
 function doGet(e) {
@@ -58,12 +54,9 @@ function doGet(e) {
       file = 'admin';
       title = '과학실험·실습실 사용 신청 관리 시스템';
       break;
-    case 'report_admin':
-      file = 'report_admin';
-      title = '보고서 관리';
-      break;
     case 'chemical_list':
-      file = 'chemical_list';
+    case 'common_list':
+      file = 'common_list';
       title = '시약 목록';
       break;
     case 'student_list':
@@ -85,11 +78,6 @@ function doGet(e) {
   
   try {
     var tpl = HtmlService.createTemplateFromFile(file);
-    
-    // report_admin 페이지에 webAppUrl 전달
-    if (view === 'report_admin') {
-      tpl.webAppUrl = ScriptApp.getService().getUrl();
-    }
     
     return tpl.evaluate()
       .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL)
@@ -117,12 +105,11 @@ function doGet(e) {
           <div class="step"><b>1단계:</b> GAS 편집기 → <span class="code">파일 → 새로 만들기 → HTML</span></div>
           <div class="step"><b>2단계:</b> 파일명을 <span class="code">${safeMissing}</span> 으로 저장</div>
           <div class="step"><b>3단계:</b> (관리자 페이지라면) <span class="code">admin, admin_head, admin_body, admin_scripts</span> 4개 파일</div>
-          <div class="step"><b>4단계:</b> (보고서 관리라면) <span class="code">report_admin, ReportFunctions</span> 파일 추가</div>
-          <div class="step"><b>5단계:</b> (시약목록) <span class="code">chemical_list, chemical_list_body, chemical_list_scripts</span></div>
-          <div class="step"><b>6단계:</b> (학생명단) <span class="code">student_list, student_list_body, student_list_scripts</span></div>
-          <div class="step"><b>7단계:</b> (임장일정) <span class="code">teacher_schedule, teacher_schedule_body, teacher_schedule_scripts</span></div>
-          <div class="step"><b>8단계:</b> (공통) <span class="code">common_styles</span></div>
-          <div class="step"><b>9단계:</b> 저장 후 다시 배포</div>
+          <div class="step"><b>4단계:</b> (시약목록) <span class="code">chemical_list, chemical_list_body, chemical_list_scripts</span></div>
+          <div class="step"><b>5단계:</b> (학생명단) <span class="code">student_list, student_list_body, student_list_scripts</span></div>
+          <div class="step"><b>6단계:</b> (임장일정) <span class="code">teacher_schedule, teacher_schedule_body, teacher_schedule_scripts</span></div>
+          <div class="step"><b>7단계:</b> (공통) <span class="code">common_styles</span></div>
+          <div class="step"><b>8단계:</b> 저장 후 다시 배포</div>
           <p style="margin-top:16px;background:#fff3cd;padding:10px;border-radius:6px">
             <b>오류:</b> ${safeError}
           </p>

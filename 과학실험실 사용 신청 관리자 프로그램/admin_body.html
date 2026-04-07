@@ -1,7 +1,15 @@
 <!-- admin_body.html -->
 <!-- 중복 body 태그 제거됨 - admin.html에서 관리 -->
 <!-- ✅ 수정: 조회기준을 hidden으로 변경 (실험할날짜 고정) -->
+<a href="#main-content" class="skip-link">본문으로 건너뛰기</a>
 <div class="container">
+<nav class="nav-bar no-print" aria-label="관리자 메뉴">
+  <a class="nav-item active" href="#" aria-current="page">📊 대시보드</a>
+  <a class="nav-item" href="#" onclick="goToPage('common_list'); return false;">📦 시약 목록</a>
+  <a class="nav-item" href="#" onclick="goToPage('student_list'); return false;">👥 학생 명단</a>
+  <a class="nav-item" href="#" onclick="goToPage('teacher_schedule'); return false;">🧑‍🏫 임장 일정</a>
+</nav>
+<main id="main-content">
   <!-- 헤더 -->
   <div class="header" role="banner">
     <h1>과학 실험·실습실 관리 시스템</h1>
@@ -10,27 +18,27 @@
 
   <!-- 통계 카드 -->
   <div class="stats-grid" aria-label="신청 통계">
-    <div class="stat-card total" role="button" data-status="전체" onclick="filterByStatusFromCard('전체')">
+    <div class="stat-card total" role="button" tabindex="0" data-status="전체" onclick="filterByStatusFromCard('전체')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click();}">
       <div class="stat-number" id="stat-total">-</div>
       <div class="stat-label">전체 신청</div>
       <div class="stat-sublabel">총 신청 건수</div>
     </div>
-    <div class="stat-card pending" role="button" data-status="대기" onclick="filterByStatusFromCard('대기')">
+    <div class="stat-card pending" role="button" tabindex="0" data-status="대기" onclick="filterByStatusFromCard('대기')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click();}">
       <div class="stat-number" id="stat-pending">-</div>
       <div class="stat-label">대기중</div>
       <div class="stat-sublabel">승인 대기</div>
     </div>
-    <div class="stat-card" role="button" data-status="1차승인" onclick="filterByStatusFromCard('1차승인')">
+    <div class="stat-card" role="button" tabindex="0" data-status="1차승인" onclick="filterByStatusFromCard('1차승인')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click();}">
       <div class="stat-number" id="stat-firstApproved">-</div>
       <div class="stat-label">1차 승인</div>
       <div class="stat-sublabel">지도 승인</div>
     </div>
-    <div class="stat-card" role="button" data-status="최종승인" onclick="filterByStatusFromCard('최종승인')">
+    <div class="stat-card" role="button" tabindex="0" data-status="최종승인" onclick="filterByStatusFromCard('최종승인')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click();}">
       <div class="stat-number" id="stat-finalApproved">-</div>
       <div class="stat-label">최종승인</div>
       <div class="stat-sublabel">최종 승인</div>
     </div>
-    <div class="stat-card" role="button" data-status="반려" onclick="filterByStatusFromCard('반려')">
+    <div class="stat-card" role="button" tabindex="0" data-status="반려" onclick="filterByStatusFromCard('반려')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click();}">
       <div class="stat-number" id="stat-rejected">-</div>
       <div class="stat-label">반려</div>
       <div class="stat-sublabel">반려 처리</div>
@@ -208,7 +216,7 @@
       </div>
     </div>
 
-    <!-- 4줄: 지도일지/통계/신청제한/보고서 관리 -->
+    <!-- 4줄: 지도일지/통계/신청제한 -->
     <div class="control-row">
       <div class="control-group" style="display:flex;gap:8px;flex-wrap:wrap;">
         <button class="btn btn-info" onclick="openGuidanceForm()">지도일지 작성</button>
@@ -218,7 +226,6 @@
                 onclick="openRestrictionModal(); loadRestrictedList();">
           실험실 사용신청 제한 조회
         </button>
-        <button class="btn btn-warning" onclick="goToReportAdmin()">보고서 관리</button>
       </div>
     </div>
     </div><!-- /advancedPanel -->
@@ -321,7 +328,7 @@
   </div>
 
   <!-- 필터 칩 영역 -->
-  <div id="resultCountBar" class="result-count-bar"></div>
+  <div id="resultCountBar" class="result-count-bar" aria-live="polite"></div>
 
   <!-- 표 -->
   <div class="table-container">
@@ -342,7 +349,7 @@
           <th class="col-actions">관리</th>
         </tr>
       </thead>
-      <tbody id="applicationTableBody">
+      <tbody id="applicationTableBody" aria-live="polite">
         <tr><td colspan="10" class="loading">데이터를 불러오는 중...</td></tr>
       </tbody>
     </table>
@@ -350,6 +357,7 @@
 
   <!-- 페이지네이션 바 -->
   <div id="paginationBar" class="pagination-bar"></div>
+</main><!-- /main-content -->
 </div>
 
 <!-- 교사 목록 datalist (자동완성용) -->
@@ -362,7 +370,7 @@
       <h2 id="modalTitle">상세 정보</h2>
       <button class="close-modal" onclick="closeDetail()" aria-label="닫기">&times;</button>
     </div>
-    <div class="modal-body" id="detailBody"></div>
+    <div class="modal-body" id="detailBody" aria-live="polite"></div>
   </div>
 </div>
 
