@@ -126,9 +126,16 @@ function processAndRender() {
       
       const item = chemMap.get(key);
 
-      // 시간 정보 누적 (중복 제외)
-      if (time && !String(item.시간).split(/[,\s]+/).includes(time)) {
-        item.시간 = item.시간 ? item.시간 + ', ' + time : time;
+      // 시간 정보 누적 (중복 제외, 복합값 분해)
+      if (time) {
+        const existingTokens = new Set(String(item.시간 || '').split(/[,\s]+/).filter(Boolean));
+        const newTokens = time.split(/[,\s]+/).map(t => t.trim()).filter(Boolean);
+        newTokens.forEach(t => {
+          if (!existingTokens.has(t)) {
+            item.시간 = item.시간 ? item.시간 + ', ' + t : t;
+            existingTokens.add(t);
+          }
+        });
       }
 
       // 이 신청서에서 이 시약이 처음 등장하는 경우에만 카운트

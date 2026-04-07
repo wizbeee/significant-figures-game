@@ -50,9 +50,18 @@
         </select>
       </div>
       <div class="control-group">
-        <label>실험실</label>
+        <label>실험·실습실</label>
         <select id="labFilter">
           <option value="">전체</option>
+        </select>
+      </div>
+      <div class="control-group">
+        <label>시간(일시)</label>
+        <select id="timeFilter">
+          <option value="">전체</option>
+          <option value="ET">ET</option>
+          <option value="EP1">EP1</option>
+          <option value="7교시">7교시</option>
         </select>
       </div>
       <button class="btn btn-primary" onclick="loadData()">🔍 조회</button>
@@ -64,6 +73,7 @@
         <label>1순위 정렬</label>
         <select id="sort1Key">
           <option value="실험실">실험실</option>
+          <option value="시간">시간(ET/EP1/7교시)</option>
           <option value="시약명">시약명(가나다순)</option>
           <option value="상태">상태(고체/액체)</option>
           <option value="날짜">사용일</option>
@@ -82,6 +92,7 @@
         <select id="sort2Key">
           <option value="">없음</option>
           <option value="실험실">실험실</option>
+          <option value="시간">시간(ET/EP1/7교시)</option>
           <option value="시약명" selected>시약명(가나다순)</option>
           <option value="상태">상태(고체/액체)</option>
           <option value="날짜">사용일</option>
@@ -100,6 +111,7 @@
         <select id="sort3Key">
           <option value="">없음</option>
           <option value="실험실">실험실</option>
+          <option value="시간">시간(ET/EP1/7교시)</option>
           <option value="시약명">시약명(가나다순)</option>
           <option value="상태">상태(고체/액체)</option>
           <option value="날짜">사용일</option>
@@ -122,6 +134,7 @@
         <select id="groupBy">
           <option value="">그룹 없음 (전체 통합)</option>
           <option value="실험실" selected>실험실별</option>
+          <option value="시간">시간별(ET/EP1/7교시)</option>
           <option value="상태">상태별(고체/액체/기체)</option>
           <option value="날짜">날짜별</option>
         </select>

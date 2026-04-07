@@ -18,7 +18,7 @@ function setQuickDate(type) {
   const today = new Date();
   today.setHours(0,0,0,0);
   let from, to;
-  
+
   if (type === 'today') {
     from = to = today;
   } else if (type === 'week') {
@@ -29,7 +29,7 @@ function setQuickDate(type) {
     from = new Date(today.getFullYear(), today.getMonth(), 1);
     to = new Date(today.getFullYear(), today.getMonth() + 1, 0);
   }
-  
+
   const fmt = d => { const y=d.getFullYear(), m=String(d.getMonth()+1).padStart(2,'0'), day=String(d.getDate()).padStart(2,'0'); return `${y}-${m}-${day}`; };
   $('#dateFrom').value = fmt(from);
   $('#dateTo').value = fmt(to);
@@ -39,10 +39,10 @@ function setQuickDate(type) {
 function loadData() {
   const container = $('#resultContainer');
   showLoading(container, '시약 데이터를 불러오는 중...');
-  
+
   const dateFrom = $('#dateFrom').value;
   const dateTo = $('#dateTo').value;
-  
+
   google.script.run
     .withSuccessHandler(data => {
       ALL_DATA = data || [];
@@ -62,9 +62,9 @@ function updateLabFilter() {
     if (app['신청실험실']) labs.add(app['신청실험실']);
   });
   LAB_LIST = Array.from(labs).sort();
-  
+
   const sel = $('#labFilter');
-  sel.innerHTML = '<option value="">전체</option>' + 
+  sel.innerHTML = '<option value="">전체</option>' +
     LAB_LIST.map(lab => `<option value="${escapeHtml(lab)}">${escapeHtml(lab)}</option>`).join('');
 }
 
@@ -72,7 +72,8 @@ function updateLabFilter() {
 function processAndRender() {
   const approvalFilter = $('#approvalFilter').value;
   const labFilter = $('#labFilter').value;
-  
+  const timeFilter = $('#timeFilter') ? $('#timeFilter').value : '';
+
   // 필터링
   let filtered = ALL_DATA.filter(app => {
     // 승인 상태
@@ -81,26 +82,32 @@ function processAndRender() {
     if (approvalFilter === 'pending' && status !== '대기') return false;
     // 실험실
     if (labFilter && app['신청실험실'] !== labFilter) return false;
+    // 시간 필터
+    if (timeFilter) {
+      const appTimes = String(app['신청시간'] || '').split(/[,\s]+/).map(t => t.trim()).filter(Boolean);
+      if (!appTimes.includes(timeFilter)) return false;
+    }
     return true;
   });
-  
+
   // 시약 데이터 수집 (수정: 신청건수를 신청서 단위로 정확히 카운트)
   const chemMap = new Map();
-  
+
   filtered.forEach(app => {
     const chemicals = app.chemicals || [];
     const lab = app['신청실험실'] || '';
     const date = formatDate(app['실험할날짜']);
+    const time = app['신청시간'] || '';
     const student = app['대표자이름'] || '';
     const studentId = app['대표자학번'] || '';
     const appId = app['신청ID'] || '';
-    
+
     // 이 신청서에서 이미 처리한 시약 키를 추적 (중복 방지)
     const processedKeys = new Set();
-    
+
     chemicals.forEach(c => {
       const key = `${c['시약명']||''}|${c['상태']||''}|${c['농도']||''}|${lab}|${date}`;
-      
+
       if (!chemMap.has(key)) {
         chemMap.set(key, {
           시약명: c['시약명'] || '',
@@ -108,6 +115,7 @@ function processAndRender() {
           농도: c['농도'] || '',
           용량: c['용량'] || '',
           MSDS: c['MSDS'] || '',
+          시간: time,
           실험실: lab,
           날짜: date,
           대표학생: [],
@@ -115,18 +123,30 @@ function processAndRender() {
           _processedApps: new Set() // 이미 처리한 신청ID 추적
         });
       }
-      
+
       const item = chemMap.get(key);
-      
+
+      // 시간 정보 누적 (중복 제외, 복합값 분해)
+      if (time) {
+        const existingTokens = new Set(String(item.시간 || '').split(/[,\s]+/).filter(Boolean));
+        const newTokens = time.split(/[,\s]+/).map(t => t.trim()).filter(Boolean);
+        newTokens.forEach(t => {
+          if (!existingTokens.has(t)) {
+            item.시간 = item.시간 ? item.시간 + ', ' + t : t;
+            existingTokens.add(t);
+          }
+        });
+      }
+
       // 이 신청서에서 이 시약이 처음 등장하는 경우에만 카운트
       if (!processedKeys.has(key)) {
         processedKeys.add(key);
-        
+
         // 이 신청서가 아직 처리되지 않았으면 신청건수 증가
         if (!item._processedApps.has(appId)) {
           item._processedApps.add(appId);
           item.신청건수++;
-          
+
           // 대표학생 추가 (중복 제외)
           if (student && !item.대표학생.some(s => s.id === studentId)) {
             item.대표학생.push({ id: studentId, name: student });
@@ -135,12 +155,12 @@ function processAndRender() {
       }
     });
   });
-  
+
   CHEM_DATA = Array.from(chemMap.values());
-  
+
   // 정렬
   applySorting();
-  
+
   // 렌더링
   renderTable();
   updateSummary(filtered.length);
@@ -165,7 +185,7 @@ function applySorting() {
   const s2d = $('#sort2Dir').value;
   const s3k = $('#sort3Key').value;
   const s3d = $('#sort3Dir').value;
-  
+
   CHEM_DATA.sort((a, b) => {
     if (s1k) { const c = cmp(a, b, s1k); if (c !== 0) return s1d === 'asc' ? c : -c; }
     if (s2k) { const c = cmp(a, b, s2k); if (c !== 0) return s2d === 'asc' ? c : -c; }
@@ -188,35 +208,56 @@ function cmp(a, b, key) {
     const order = { '고체': 1, '액체': 2, '기체': 3 };
     return (order[a[key]] || 99) - (order[b[key]] || 99);
   }
+  if (key === '시간') {
+    const timeOrder = { 'ET': 1, 'EP1': 2, '7교시': 3 };
+    const at = String(a[key]||'').split(/[,\s]+/)[0]?.trim() || '';
+    const bt = String(b[key]||'').split(/[,\s]+/)[0]?.trim() || '';
+    return (timeOrder[at] || 99) - (timeOrder[bt] || 99);
+  }
   return String(a[key]||'').localeCompare(String(b[key]||''), 'ko');
 }
 
 /* ===== 렌더링 ===== */
 function renderTable() {
   const container = $('#resultContainer');
-  
+
   if (CHEM_DATA.length === 0) {
     showEmpty(container, '조회된 시약이 없습니다', '기간이나 필터 조건을 확인해 주세요');
     return;
   }
-  
+
   const groupBy = $('#groupBy').value;
-  
+
   let html = '';
-  
+
   if (groupBy) {
-    // 그룹화
+    // 그룹화 (시간의 경우 복합값 "ET, EP1"을 분리)
     const groups = new Map();
     CHEM_DATA.forEach(item => {
-      const gk = item[groupBy] || '미지정';
-      if (!groups.has(gk)) groups.set(gk, []);
-      groups.get(gk).push(item);
+      if (groupBy === '시간') {
+        const times = String(item['시간'] || '').split(/[,\s]+/).map(t => t.trim()).filter(Boolean);
+        if (times.length === 0) times.push('미지정');
+        times.forEach(t => {
+          if (!groups.has(t)) groups.set(t, []);
+          groups.get(t).push(item);
+        });
+      } else {
+        const gk = item[groupBy] || '미지정';
+        if (!groups.has(gk)) groups.set(gk, []);
+        groups.get(gk).push(item);
+      }
     });
-    
-    const sorted = Array.from(groups.entries()).sort((a,b) => String(a[0]).localeCompare(String(b[0]), 'ko'));
-    
+
+    let sorted;
+    if (groupBy === '시간') {
+      const timeOrder = { 'ET': 1, 'EP1': 2, '7교시': 3 };
+      sorted = Array.from(groups.entries()).sort((a,b) => (timeOrder[a[0]]||99) - (timeOrder[b[0]]||99));
+    } else {
+      sorted = Array.from(groups.entries()).sort((a,b) => String(a[0]).localeCompare(String(b[0]), 'ko'));
+    }
+
     sorted.forEach(([gname, items]) => {
-      const icon = groupBy === '실험실' ? '🔬' : groupBy === '상태' ? '🧪' : '📅';
+      const icon = groupBy === '실험실' ? '🔬' : groupBy === '상태' ? '🧪' : groupBy === '시간' ? '🕐' : '📅';
       html += `
         <div class="group-header">
           <span class="group-title">${icon} ${escapeHtml(gname)}</span>
@@ -228,21 +269,21 @@ function renderTable() {
   } else {
     html = createTableHtml(CHEM_DATA, '');
   }
-  
+
   container.innerHTML = html;
 }
 
 function createTableHtml(data, excludeCol) {
   // MSDS 제외한 컬럼
-  const cols = ['시약명', '상태', '농도', '용량', '실험실', '날짜', '대표학생', '신청건수'];
+  const cols = ['시약명', '상태', '농도', '용량', '시간', '실험실', '날짜', '대표학생', '신청건수'];
   const dispCols = excludeCol ? cols.filter(c => c !== excludeCol) : cols;
-  
+
   const ths = dispCols.map(c => `<th>${c}</th>`).join('');
-  
+
   const rows = data.map(item => {
     // 모든 대표학생 이름 표시
     const students = item.대표학생.map(s => s.name).join(', ') || '-';
-    
+
     const tds = dispCols.map(c => {
       if (c === '대표학생') {
         return `<td title="${escapeHtml(students)}">${escapeHtml(students)}</td>`;
@@ -252,10 +293,10 @@ function createTableHtml(data, excludeCol) {
       }
       return `<td>${escapeHtml(item[c])}</td>`;
     }).join('');
-    
+
     return `<tr>${tds}</tr>`;
   }).join('');
-  
+
   return `<table class="data-table"><thead><tr>${ths}</tr></thead><tbody>${rows}</tbody></table>`;
 }
 
@@ -264,14 +305,14 @@ function updateSummary(appCount) {
   const card = $('#summaryCard');
   const from = $('#dateFrom').value || '-';
   const to = $('#dateTo').value || '-';
-  
+
   $('#summaryPeriod').textContent = `${from} ~ ${to}`;
   $('#summaryCount').textContent = CHEM_DATA.length;
   $('#summaryApps').textContent = appCount;
-  
+
   // 인쇄용
   $('#printInfo').textContent = `기간: ${from} ~ ${to} | 인쇄일: ${new Date().toLocaleString('ko-KR')}`;
-  
+
   card.style.display = 'block';
 }
 
@@ -280,7 +321,7 @@ function printList() {
   const from = $('#dateFrom').value || '-';
   const to = $('#dateTo').value || '-';
   const groupBy = $('#groupBy').value;
-  
+
   // 인쇄용 HTML 생성
   let printHtml = `
     <html>
@@ -309,32 +350,47 @@ function printList() {
       <h1>📦 시약 목록</h1>
       <p class="info">조회 기간: ${escapeHtml(from)} ~ ${escapeHtml(to)} | 인쇄일: ${new Date().toLocaleString('ko-KR')}</p>
   `;
-  
+
   if (groupBy) {
-    // 그룹화
+    // 그룹화 (시간의 경우 복합값 "ET, EP1"을 분리)
     const groups = new Map();
     CHEM_DATA.forEach(item => {
-      const gk = item[groupBy] || '미지정';
-      if (!groups.has(gk)) groups.set(gk, []);
-      groups.get(gk).push(item);
+      if (groupBy === '시간') {
+        const times = String(item['시간'] || '').split(/[,\s]+/).map(t => t.trim()).filter(Boolean);
+        if (times.length === 0) times.push('미지정');
+        times.forEach(t => {
+          if (!groups.has(t)) groups.set(t, []);
+          groups.get(t).push(item);
+        });
+      } else {
+        const gk = item[groupBy] || '미지정';
+        if (!groups.has(gk)) groups.set(gk, []);
+        groups.get(gk).push(item);
+      }
     });
-    
-    const sorted = Array.from(groups.entries()).sort((a,b) => String(a[0]).localeCompare(String(b[0]), 'ko'));
-    
+
+    let sorted;
+    if (groupBy === '시간') {
+      const timeOrder = { 'ET': 1, 'EP1': 2, '7교시': 3 };
+      sorted = Array.from(groups.entries()).sort((a,b) => (timeOrder[a[0]]||99) - (timeOrder[b[0]]||99));
+    } else {
+      sorted = Array.from(groups.entries()).sort((a,b) => String(a[0]).localeCompare(String(b[0]), 'ko'));
+    }
+
     sorted.forEach(([gname, items]) => {
-      const icon = groupBy === '실험실' ? '🔬' : groupBy === '상태' ? '🧪' : '📅';
+      const icon = groupBy === '실험실' ? '🔬' : groupBy === '상태' ? '🧪' : groupBy === '시간' ? '🕐' : '📅';
       printHtml += `<div class="group-header">${icon} ${escapeHtml(gname)} (${items.length}종)</div>`;
       printHtml += createPrintTableHtml(items, groupBy);
     });
   } else {
     printHtml += createPrintTableHtml(CHEM_DATA, '');
   }
-  
+
   printHtml += `
     </body>
     </html>
   `;
-  
+
   // 새 창에서 인쇄
   const printWindow = window.open('', '_blank', 'width=800,height=600');
   printWindow.document.write(printHtml);
@@ -348,23 +404,23 @@ function printList() {
 
 function createPrintTableHtml(data, excludeCol) {
   // 인쇄용: MSDS 제외, 간결한 컬럼
-  const cols = ['시약명', '상태', '농도', '용량', '실험실', '날짜', '대표학생', '신청건수'];
+  const cols = ['시약명', '상태', '농도', '용량', '시간', '실험실', '날짜', '대표학생', '신청건수'];
   const dispCols = excludeCol ? cols.filter(c => c !== excludeCol) : cols;
-  
+
   const ths = dispCols.map(c => `<th>${c}</th>`).join('');
-  
+
   const rows = data.map(item => {
     const students = item.대표학생.map(s => s.name).join(', ') || '-';
-    
+
     const tds = dispCols.map(c => {
       if (c === '대표학생') return `<td>${escapeHtml(students)}</td>`;
       if (c === '신청건수') return `<td class="center">${item[c]}</td>`;
       return `<td>${escapeHtml(item[c])}</td>`;
     }).join('');
-    
+
     return `<tr>${tds}</tr>`;
   }).join('');
-  
+
   return `<table><thead><tr>${ths}</tr></thead><tbody>${rows}</tbody></table>`;
 }
 
@@ -374,23 +430,23 @@ function exportCSV() {
     alert('내보낼 데이터가 없습니다.');
     return;
   }
-  
+
   const esc = v => {
     const s = String(v||'').replace(/"/g,'""');
     return s.includes(',') || s.includes('"') || s.includes('\n') ? `"${s}"` : s;
   };
-  
-  const headers = ['시약명','상태','농도','용량','실험실','날짜','대표학생','신청건수'];
+
+  const headers = ['시약명','상태','농도','용량','시간','실험실','날짜','대표학생','신청건수'];
   const rows = [headers.join(',')];
-  
+
   CHEM_DATA.forEach(item => {
     const students = item.대표학생.map(s => s.name).join(', ') || '-';
     rows.push([
       esc(item.시약명), esc(item.상태), esc(item.농도), esc(item.용량),
-      esc(item.실험실), esc(item.날짜), esc(students), item.신청건수
+      esc(item.시간), esc(item.실험실), esc(item.날짜), esc(students), item.신청건수
     ].join(','));
   });
-  
+
   const blob = new Blob(['\uFEFF' + rows.join('\n')], { type: 'text/csv;charset=utf-8;' });
   const link = document.createElement('a');
   link.href = URL.createObjectURL(blob);
@@ -399,10 +455,10 @@ function exportCSV() {
 }
 
 /* ===== 이벤트 바인딩 ===== */
-['approvalFilter','labFilter','sort1Key','sort1Dir','sort2Key','sort2Dir','sort3Key','sort3Dir','groupBy'].forEach(id => {
+['approvalFilter','labFilter','timeFilter','sort1Key','sort1Dir','sort2Key','sort2Dir','sort3Key','sort3Dir','groupBy'].forEach(id => {
   const el = $('#' + id);
   if (el) el.addEventListener('change', () => {
-    if (['approvalFilter','labFilter'].includes(id)) processAndRender();
+    if (['approvalFilter','labFilter','timeFilter'].includes(id)) processAndRender();
     else { applySorting(); renderTable(); }
   });
 });
