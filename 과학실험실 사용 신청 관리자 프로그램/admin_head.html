@@ -461,34 +461,78 @@
     margin-left: auto;
   }
 
-  /* 반응형 */
-  @media (max-width: 768px) {
-    .control-row { flex-direction: row; flex-wrap: wrap; gap: 8px; }
-    .control-row .control-group { flex: 1 1 calc(50% - 4px); min-width: 0; }
-    .control-row .control-group label { font-size: 11px; }
+  /* ===== 반응형: 3단계 브레이크포인트 ===== */
+
+  /* --- 태블릿: 481px ~ 1024px --- */
+  @media (min-width: 481px) and (max-width: 1024px) {
+    .container { padding: 14px; }
+    .header h1 { font-size: 20px; }
+    .stats-grid { grid-template-columns: repeat(3, 1fr); gap: 10px; }
+    .stat-card { padding: 12px 8px; }
+    .stat-number { font-size: 20px; }
+    .stat-label { font-size: 13px; }
+    .control-row { flex-direction: row; flex-wrap: wrap; gap: 10px; }
+    .control-row .control-group { flex: 1 1 calc(50% - 5px); min-width: 140px; }
+    .control-row .control-group label { font-size: 12px; }
     .control-row .control-group select,
-    .control-row .control-group input { font-size: 13px; width: 100%; }
-    .container { padding: 8px; }
-    .header h1 { font-size: 18px; }
-    .stats-grid { grid-template-columns: repeat(3, 1fr); gap: 8px; }
-    .stat-card { padding: 10px 6px; }
-    .stat-number { font-size: 18px; }
-    .stat-label { font-size: 12px; }
-    .stat-sublabel { font-size: 10px; }
-    table { font-size: 12px; }
-    th, td { padding: 6px 4px; }
-    .btn { font-size: 12px; padding: 6px 10px; }
+    .control-row .control-group input { font-size: 13px; width: 100%; min-height: 44px; }
+    table.data-table { font-size: 12px; }
+    table.data-table th, table.data-table td { padding: 6px 6px; }
+    .btn { min-height: 44px; font-size: 13px; padding: 6px 12px; }
+    .btn-small { min-height: 38px; }
+    .btn-mini { min-height: 32px; }
     .table-container { overflow-x: auto; -webkit-overflow-scrolling: touch; }
-    .bulkbar { gap: 4px; padding: 8px; }
-    .bulkbar .btn { font-size: 11px; padding: 4px 8px; }
+    .bulkbar { gap: 6px; padding: 8px; flex-wrap: wrap; }
+    .bulkbar .btn { min-height: 38px; }
     .export-btns { flex-wrap: wrap; }
     .nav-bar { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    .modal-content { width: 92%; }
+    .detail-grid { grid-template-columns: repeat(2, 1fr); }
+    /* 터치 UX: 체크박스/라디오 확대 */
+    input[type="checkbox"], input[type="radio"] { width: 20px; height: 20px; min-width: 20px; }
+    select, input[type="text"], input[type="date"], input[type="number"], input[type="search"] { min-height: 44px; }
+    a.btn, a.nav-item { min-height: 44px; display: inline-flex; align-items: center; }
   }
 
+  /* --- 폰: 480px 이하 --- */
   @media (max-width: 480px) {
-    .stats-grid { grid-template-columns: repeat(2, 1fr); }
+    .container { padding: 8px; }
+    .header h1 { font-size: 16px; }
+    .header p { font-size: 12px; }
+    .stats-grid { grid-template-columns: repeat(2, 1fr); gap: 8px; }
+    .stat-card { padding: 10px 6px; }
+    .stat-number { font-size: 18px; }
+    .stat-label { font-size: 11px; }
+    .stat-sublabel { font-size: 10px; }
+    .control-row { flex-direction: column; gap: 8px; }
     .control-row .control-group { flex: 1 1 100%; }
+    .control-row .control-group label { font-size: 11px; }
+    .control-row .control-group select,
+    .control-row .control-group input { font-size: 14px; width: 100%; min-height: 44px; }
+    table.data-table { font-size: 11px; }
+    table.data-table th, table.data-table td { padding: 5px 4px; }
+    /* 테이블 가로 스크롤 */
+    .table-container { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    .table-container table.data-table { min-width: 600px; }
+    .btn { min-height: 44px; font-size: 12px; padding: 6px 10px; }
+    .btn-small { min-height: 40px; font-size: 11px; }
+    .btn-mini { min-height: 36px; font-size: 11px; }
+    .bulkbar { gap: 4px; padding: 8px; flex-wrap: wrap; }
+    .bulkbar .btn { font-size: 11px; padding: 6px 10px; min-height: 40px; }
+    .export-btns { flex-wrap: wrap; width: 100%; }
+    .export-btns .btn { flex: 1 1 auto; }
+    .nav-bar { overflow-x: auto; -webkit-overflow-scrolling: touch; }
     .modal-content { width: 98%; padding: 14px; }
+    .detail-grid { grid-template-columns: 1fr; }
+    /* 터치 UX: 체크박스/라디오 확대 */
+    input[type="checkbox"], input[type="radio"] { width: 22px; height: 22px; min-width: 22px; }
+    select, input[type="text"], input[type="date"], input[type="number"], input[type="search"] { min-height: 44px; }
+    a.btn, a.nav-item { min-height: 44px; display: inline-flex; align-items: center; }
+    /* 페이지네이션 터치 최적화 */
+    .page-btn { min-width: 40px; height: 40px; font-size: 14px; }
+    /* quick-date 버튼 */
+    .quick-date-btns { flex-wrap: wrap; margin-left: 0; margin-top: 4px; }
+    .quick-date-btns .btn { min-height: 36px; font-size: 12px; padding: 4px 10px; }
   }
 
   /* 페이지네이션 */

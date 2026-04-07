@@ -77,6 +77,16 @@
     .btn-ghost:hover{ background:var(--seg-bg); }
     .help{ margin-top:10px; color:var(--muted); font-size:.95rem; text-align:center; }
     .error{ margin-top:10px; color:var(--danger); font-weight:700; text-align:center; min-height:1.2em; }
+    /* 로그인 유지 체크박스 */
+    .remember-row{
+      display:flex; align-items:center; gap:8px; margin:12px 0 0 2px;
+    }
+    .remember-row input[type="checkbox"]{
+      width:20px; height:20px; cursor:pointer; accent-color:var(--primary);
+    }
+    .remember-row label{
+      font-size:.93rem; color:var(--muted); cursor:pointer; user-select:none;
+    }
     .hidden{ display:none !important; }
 
     /* 전역 작업 오버레이 */
@@ -118,6 +128,10 @@
         <label for="teacherId" class="label">교사 아이디</label>
         <input id="teacherId" class="input" placeholder="예: kimsamsung" autocomplete="username" />
       </div>
+      <div class="remember-row">
+        <input type="checkbox" id="rememberIdCheck" />
+        <label for="rememberIdCheck">로그인 유지</label>
+      </div>
       <div class="actions">
         <button class="btn btn-primary" id="btn-id-enter">입장</button>
         <button class="btn btn-ghost" id="btn-id-clear">지우기</button>
@@ -130,6 +144,10 @@
       <div class="field">
         <label for="adminPw" class="label">비밀번호</label>
         <input id="adminPw" class="input" type="password" placeholder="비밀번호를 입력하세요" autocomplete="current-password" />
+      </div>
+      <div class="remember-row">
+        <input type="checkbox" id="rememberPwCheck" />
+        <label for="rememberPwCheck">로그인 유지</label>
       </div>
       <div class="actions">
         <button class="btn btn-primary" id="btn-pw-enter">입장</button>
@@ -148,6 +166,71 @@
   </div>
 
   <script>
+    // ===== 로그인 유지 (localStorage) =====
+    const STORAGE_KEY = 'lab-admin-remember';
+
+    function getSavedLogin() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (!raw) return null;
+        return JSON.parse(raw);
+      } catch(e) { return null; }
+    }
+
+    function saveLogin(type, value) {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify({ type: type, value: value }));
+      } catch(e) {}
+    }
+
+    function clearSavedLogin() {
+      try { localStorage.removeItem(STORAGE_KEY); } catch(e) {}
+    }
+
+    // 페이지 로드 시 저장된 로그인 정보가 있으면 자동 로그인
+    function tryAutoLogin() {
+      const saved = getSavedLogin();
+      if (!saved || !saved.value) return;
+
+      showBusy('자동 로그인 중…');
+
+      if (saved.type === 'id') {
+        google.script.run
+          .withSuccessHandler(function(res) {
+            if (res && res.ok) {
+              var m = document.getElementById('busyMsg');
+              if (m) m.textContent = '로그인 되었습니다. 페이지를 불러오는 중입니다.';
+              goAdmin();
+            } else {
+              hideBusy();
+              clearSavedLogin(); // 저장된 정보가 유효하지 않으면 삭제
+            }
+          })
+          .withFailureHandler(function() {
+            hideBusy();
+            clearSavedLogin();
+          })
+          .verifyTeacherId(saved.value);
+      } else if (saved.type === 'pw') {
+        google.script.run
+          .withSuccessHandler(function(res) {
+            if (res && res.ok) {
+              var m = document.getElementById('busyMsg');
+              if (m) m.textContent = '로그인 되었습니다. 페이지를 불러오는 중입니다.';
+              goAdmin();
+            } else {
+              hideBusy();
+              clearSavedLogin();
+            }
+          })
+          .withFailureHandler(function() {
+            hideBusy();
+            clearSavedLogin();
+          })
+          .verifyPassword(saved.value);
+      }
+    }
+
     // ===== 다크모드 토글 =====
     function toggleDarkMode() {
       const html = document.documentElement;
@@ -241,12 +324,16 @@
       google.script.run
         .withSuccessHandler(res => {
           if (res && res.ok) {
-            // ✅ 이미 띄워둔 오버레이의 문구만 교체 (showBusy를 다시 호출하지 않음)
+            // 로그인 유지 체크 시 저장
+            if (document.getElementById('rememberIdCheck').checked) {
+              saveLogin('id', raw);
+            } else {
+              clearSavedLogin();
+            }
             const m = document.getElementById('busyMsg');
             if (m) m.textContent = '로그인 되었습니다. 페이지를 불러오는 중입니다. 잠시만 기다려주세요.';
-            goAdmin(); // 오버레이는 유지한 채로 관리자 화면으로 이동
+            goAdmin();
           } else {
-            // ❌ 실패: 차단 해제 후 오류 표시
             hideBusy();
             idError.textContent = '허용된 교사 아이디가 아닙니다.';
           }
@@ -255,7 +342,6 @@
           hideBusy();
           idError.textContent = '확인 중 오류가 발생했습니다: ' + (err && (err.message || err));
         })
-
         .verifyTeacherId(raw);
     });
     document.getElementById('btn-id-clear').addEventListener('click', ()=>{
@@ -277,21 +363,24 @@
       google.script.run
         .withSuccessHandler(res => {
           if (res && res.ok) {
-            // ✅ 이미 띄워둔 오버레이의 문구만 교체 (showBusy를 다시 호출하지 않음)
+            // 로그인 유지 체크 시 저장
+            if (document.getElementById('rememberPwCheck').checked) {
+              saveLogin('pw', raw);
+            } else {
+              clearSavedLogin();
+            }
             const m = document.getElementById('busyMsg');
             if (m) m.textContent = '로그인 되었습니다. 페이지를 불러오는 중입니다. 잠시만 기다려주세요.';
-            goAdmin(); // 오버레이는 유지한 채로 관리자 화면으로 이동
+            goAdmin();
           } else {
-            // ❌ 실패: 차단 해제 후 오류 표시
             hideBusy();
             pwError.textContent = '비밀번호가 올바르지 않습니다.';
           }
         })
-.withFailureHandler(err => {
-  hideBusy();
-  pwError.textContent = '확인 중 오류가 발생했습니다: ' + (err && (err.message || err));
-})
-
+        .withFailureHandler(err => {
+          hideBusy();
+          pwError.textContent = '확인 중 오류가 발생했습니다: ' + (err && (err.message || err));
+        })
         .verifyPassword(raw);
     });
     document.getElementById('btn-pw-clear').addEventListener('click', ()=>{
@@ -300,6 +389,9 @@
     adminPw.addEventListener('keydown', e=>{
       if (e.key==='Enter') document.getElementById('btn-pw-enter').click();
     });
+
+    // ===== 저장된 로그인 정보로 자동 입장 =====
+    tryAutoLogin();
   </script>
 </body>
 </html>
