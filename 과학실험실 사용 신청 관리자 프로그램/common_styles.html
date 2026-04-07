@@ -1,0 +1,454 @@
+<!-- common_styles.html -->
+<!-- 공통 CSS 스타일 + 다크모드 지원 -->
+<style>
+  /* ===== CSS 변수 (라이트모드 기본) ===== */
+  :root {
+    --bg-primary: #f9fafb;
+    --bg-secondary: #ffffff;
+    --bg-tertiary: #f3f4f6;
+    --bg-hover: #e5e7eb;
+    --bg-active: #dbeafe;
+    
+    --text-primary: #1f2937;
+    --text-secondary: #4b5563;
+    --text-tertiary: #6b7280;
+    --text-muted: #9ca3af;
+    
+    --border-color: #e5e7eb;
+    --border-dark: #d1d5db;
+    
+    --shadow-sm: 0 1px 2px rgba(0,0,0,0.05);
+    --shadow-md: 0 4px 6px rgba(0,0,0,0.07);
+    --shadow-lg: 0 10px 15px rgba(0,0,0,0.1);
+    
+    --primary: #2563eb;
+    --primary-hover: #1d4ed8;
+    --success: #16a34a;
+    --success-hover: #15803d;
+    --warning: #f59e0b;
+    --warning-hover: #d97706;
+    --danger: #dc2626;
+    --danger-hover: #b91c1c;
+    --info: #0ea5e9;
+    --info-hover: #0284c7;
+    
+    --status-pending-bg: #fef9c3;
+    --status-pending-text: #92400e;
+    --status-approved-bg: #d1fae5;
+    --status-approved-text: #065f46;
+    --status-final-bg: #bfdbfe;
+    --status-final-text: #1e3a8a;
+    --status-rejected-bg: #fee2e2;
+    --status-rejected-text: #991b1b;
+    
+    --table-header-bg: #f3f4f6;
+    --table-row-hover: #f9fafb;
+    --table-row-alt: #fafafa;
+    
+    --input-bg: #ffffff;
+    --input-border: #d1d5db;
+    --input-focus: #2563eb;
+    
+    --card-bg: #ffffff;
+    --modal-overlay: rgba(0,0,0,0.4);
+  }
+
+  /* ===== 다크모드 ===== */
+  [data-theme="dark"] {
+    --bg-primary: #111827;
+    --bg-secondary: #1f2937;
+    --bg-tertiary: #374151;
+    --bg-hover: #4b5563;
+    --bg-active: #1e3a5f;
+    
+    --text-primary: #f9fafb;
+    --text-secondary: #e5e7eb;
+    --text-tertiary: #d1d5db;
+    --text-muted: #9ca3af;
+    
+    --border-color: #374151;
+    --border-dark: #4b5563;
+    
+    --shadow-sm: 0 1px 2px rgba(0,0,0,0.3);
+    --shadow-md: 0 4px 6px rgba(0,0,0,0.4);
+    --shadow-lg: 0 10px 15px rgba(0,0,0,0.5);
+    
+    --status-pending-bg: #78350f;
+    --status-pending-text: #fef3c7;
+    --status-approved-bg: #064e3b;
+    --status-approved-text: #d1fae5;
+    --status-final-bg: #1e3a8a;
+    --status-final-text: #dbeafe;
+    --status-rejected-bg: #7f1d1d;
+    --status-rejected-text: #fee2e2;
+    
+    --table-header-bg: #374151;
+    --table-row-hover: #2d3748;
+    --table-row-alt: #1a202c;
+    
+    --input-bg: #374151;
+    --input-border: #4b5563;
+    
+    --card-bg: #1f2937;
+    --modal-overlay: rgba(0,0,0,0.7);
+  }
+
+  /* ===== 기본 스타일 ===== */
+  * { box-sizing: border-box; }
+  
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans KR", sans-serif;
+    margin: 0;
+    padding: 0;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    min-height: 100vh;
+    transition: background-color 0.3s, color 0.3s;
+  }
+
+  .container { max-width: 1600px; margin: 0 auto; padding: 20px; }
+
+  /* ===== 헤더 ===== */
+  .page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 24px;
+    padding-bottom: 16px;
+    border-bottom: 2px solid var(--border-color);
+  }
+  .page-header h1 { margin: 0; font-size: 24px; font-weight: 700; }
+  .page-header p { margin: 4px 0 0; color: var(--text-secondary); font-size: 14px; }
+  .header-actions { display: flex; gap: 12px; align-items: center; }
+
+  /* ===== 다크모드 토글 ===== */
+  .theme-toggle {
+    width: 44px; height: 44px;
+    border: none; border-radius: 50%;
+    background: var(--bg-tertiary);
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: background-color 0.3s, transform 0.2s;
+    box-shadow: var(--shadow-sm);
+  }
+  .theme-toggle:hover { background: var(--bg-hover); transform: scale(1.05); }
+  .theme-toggle .icon-light, .theme-toggle .icon-dark {
+    position: absolute; font-size: 20px;
+    transition: opacity 0.3s, transform 0.3s;
+  }
+  .theme-toggle .icon-dark { opacity: 0; transform: rotate(-90deg); }
+  [data-theme="dark"] .theme-toggle .icon-light { opacity: 0; transform: rotate(90deg); }
+  [data-theme="dark"] .theme-toggle .icon-dark { opacity: 1; transform: rotate(0deg); }
+
+  /* ===== 카드/컨트롤 ===== */
+  .card {
+    background: var(--card-bg); border-radius: 12px;
+    padding: 20px; box-shadow: var(--shadow-md); margin-bottom: 20px;
+  }
+  .controls {
+    background: var(--card-bg); border-radius: 12px;
+    padding: 20px; margin-bottom: 20px; box-shadow: var(--shadow-md);
+  }
+  .control-row {
+    display: flex; flex-wrap: wrap; gap: 16px;
+    margin-bottom: 16px; align-items: flex-end;
+  }
+  .control-row:last-child { margin-bottom: 0; }
+  .control-group { display: flex; flex-direction: column; gap: 6px; }
+  .control-group label { font-size: 13px; font-weight: 600; color: var(--text-secondary); }
+  .control-group input, .control-group select {
+    padding: 8px 12px; border: 1px solid var(--input-border);
+    border-radius: 8px; font-size: 14px;
+    background: var(--input-bg); color: var(--text-primary);
+    transition: border-color 0.2s, box-shadow 0.2s;
+  }
+  .control-group input:focus, .control-group select:focus {
+    outline: none; border-color: var(--input-focus);
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+  }
+
+  /* ===== 버튼 ===== */
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center;
+    gap: 6px; padding: 8px 16px; border: none; border-radius: 8px;
+    font-size: 14px; font-weight: 500; cursor: pointer;
+    transition: all 0.2s; white-space: nowrap;
+  }
+  .btn:hover { transform: translateY(-1px); box-shadow: var(--shadow-md); }
+  .btn:active { transform: translateY(0); }
+  .btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+  .btn-primary { background: var(--primary); color: #fff; }
+  .btn-primary:hover { background: var(--primary-hover); }
+  .btn-success { background: var(--success); color: #fff; }
+  .btn-success:hover { background: var(--success-hover); }
+  .btn-warning { background: var(--warning); color: #fff; }
+  .btn-warning:hover { background: var(--warning-hover); }
+  .btn-danger { background: var(--danger); color: #fff; }
+  .btn-danger:hover { background: var(--danger-hover); }
+  .btn-info { background: var(--info); color: #fff; }
+  .btn-info:hover { background: var(--info-hover); }
+  .btn-secondary { background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border-color); }
+  .btn-secondary:hover { background: var(--bg-hover); }
+  .btn-sm { padding: 6px 12px; font-size: 13px; }
+  .btn-icon { width: 36px; height: 36px; padding: 0; }
+
+  /* ===== 테이블 ===== */
+  .table-container {
+    background: var(--card-bg); border-radius: 12px;
+    box-shadow: var(--shadow-md); overflow: hidden;
+  }
+  .table-scroll { overflow-x: auto; max-height: 600px; overflow-y: auto; }
+  table.data-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  table.data-table th, table.data-table td {
+    padding: 12px 16px; text-align: left;
+    border-bottom: 1px solid var(--border-color);
+  }
+  table.data-table th {
+    background: var(--table-header-bg); font-weight: 600;
+    position: sticky; top: 0; z-index: 10; white-space: nowrap;
+  }
+  table.data-table th.sortable { cursor: pointer; user-select: none; }
+  table.data-table th.sortable:hover { background: var(--bg-hover); }
+  table.data-table tbody tr { transition: background-color 0.15s; }
+  table.data-table tbody tr:hover { background: var(--table-row-hover); }
+  table.data-table tbody tr:nth-child(even) { background: var(--table-row-alt); }
+  table.data-table td.truncate { max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  /* ===== 뱃지 ===== */
+  .badge {
+    display: inline-block; padding: 4px 10px;
+    border-radius: 20px; font-size: 12px; font-weight: 600;
+  }
+  .badge-pending { background: var(--status-pending-bg); color: var(--status-pending-text); }
+  .badge-approved { background: var(--status-approved-bg); color: var(--status-approved-text); }
+  .badge-final { background: var(--status-final-bg); color: var(--status-final-text); }
+  .badge-rejected { background: var(--status-rejected-bg); color: var(--status-rejected-text); }
+
+  /* ===== 탭/보기모드 ===== */
+  .view-toggle { display: inline-flex; background: var(--bg-tertiary); border-radius: 8px; padding: 4px; }
+  .view-toggle .btn { background: transparent; color: var(--text-secondary); box-shadow: none; }
+  .view-toggle .btn.active { background: var(--card-bg); color: var(--text-primary); box-shadow: var(--shadow-sm); }
+
+  /* ===== 로딩/빈상태 ===== */
+  .loading { display: flex; align-items: center; justify-content: center; padding: 40px; color: var(--text-muted); }
+  .loading-spinner {
+    width: 24px; height: 24px; border: 3px solid var(--border-color);
+    border-top-color: var(--primary); border-radius: 50%;
+    animation: spin 0.8s linear infinite; margin-right: 12px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .empty-state { text-align: center; padding: 60px 20px; color: var(--text-muted); }
+  .empty-icon { font-size: 48px; margin-bottom: 16px; opacity: 0.5; }
+  .empty-text { font-size: 16px; margin-bottom: 8px; }
+
+  /* ===== 모달 ===== */
+  .modal {
+    display: none; position: fixed; inset: 0;
+    background: var(--modal-overlay);
+    justify-content: center; align-items: center;
+    z-index: 1000; padding: 20px;
+  }
+  .modal.show { display: flex; }
+  .modal-content {
+    background: var(--card-bg); border-radius: 16px;
+    max-width: 600px; width: 100%; max-height: 90vh;
+    overflow: hidden; display: flex; flex-direction: column;
+    box-shadow: var(--shadow-lg);
+  }
+  .modal-header {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 20px 24px; border-bottom: 1px solid var(--border-color);
+  }
+  .modal-header h2 { margin: 0; font-size: 18px; font-weight: 600; }
+  .modal-close {
+    width: 36px; height: 36px; border: none;
+    background: var(--bg-tertiary); border-radius: 50%;
+    font-size: 20px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    color: var(--text-secondary); transition: all 0.2s;
+  }
+  .modal-close:hover { background: var(--bg-hover); color: var(--text-primary); }
+  .modal-body { padding: 24px; overflow-y: auto; flex: 1; }
+  .modal-footer {
+    display: flex; justify-content: flex-end; gap: 12px;
+    padding: 16px 24px; border-top: 1px solid var(--border-color);
+  }
+
+  /* ===== 폼 ===== */
+  .form-group { margin-bottom: 16px; }
+  .form-group label { display: block; font-size: 14px; font-weight: 500; margin-bottom: 6px; }
+  .form-group input, .form-group select, .form-group textarea {
+    width: 100%; padding: 10px 14px;
+    border: 1px solid var(--input-border); border-radius: 8px;
+    font-size: 14px; background: var(--input-bg); color: var(--text-primary);
+  }
+
+  /* ===== 달력 ===== */
+  .calendar-container { background: var(--card-bg); border-radius: 12px; padding: 20px; box-shadow: var(--shadow-md); }
+  .calendar-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+  .calendar-title { font-size: 18px; font-weight: 600; }
+  .calendar-grid {
+    display: grid; grid-template-columns: repeat(7, 1fr);
+    gap: 1px; background: var(--border-color);
+    border: 1px solid var(--border-color); border-radius: 8px; overflow: hidden;
+  }
+  .calendar-day-header {
+    background: var(--table-header-bg); padding: 12px;
+    text-align: center; font-weight: 600; font-size: 13px;
+  }
+  .calendar-day { background: var(--card-bg); min-height: 100px; padding: 8px; }
+  .calendar-day.other-month { background: var(--bg-tertiary); opacity: 0.5; }
+  .calendar-day.today { background: var(--bg-active); }
+  .calendar-date { font-size: 14px; font-weight: 500; margin-bottom: 6px; }
+  .calendar-event {
+    font-size: 11px; padding: 3px 6px; border-radius: 4px;
+    margin-bottom: 4px; cursor: pointer;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .calendar-event.need-attend, .calendar-event.need-presence { 
+    background: #fff3cd; color: #856404; border-left: 3px solid #ffc107;
+  }
+  .calendar-event.no-attend, .calendar-event.no-presence { 
+    background: #d4edda; color: #155724; border-left: 3px solid #28a745;
+  }
+  
+  /* 달력 범례 */
+  .calendar-legend {
+    display: flex; gap: 16px; margin-top: 12px; padding: 8px 12px;
+    background: var(--bg-tertiary); border-radius: 6px; font-size: 12px;
+  }
+  .calendar-legend-item { display: flex; align-items: center; gap: 6px; }
+  .legend-box { width: 16px; height: 16px; border-radius: 3px; }
+  .legend-box.need { background: #fff3cd; border-left: 3px solid #ffc107; }
+  .legend-box.no-need { background: #d4edda; border-left: 3px solid #28a745; }
+
+  /* ===== 그룹 헤더 ===== */
+  .group-header {
+    background: linear-gradient(135deg, var(--bg-tertiary), var(--bg-hover));
+    padding: 12px 16px; border-radius: 8px; margin: 20px 0 12px;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .group-header:first-child { margin-top: 0; }
+  .group-title { font-weight: 600; display: flex; align-items: center; gap: 8px; }
+  .group-count {
+    background: var(--primary); color: #fff;
+    padding: 2px 10px; border-radius: 12px; font-size: 12px; font-weight: 600;
+  }
+
+  /* ===== 드롭다운 체크박스 (교사 선택용) ===== */
+  .teacher-dropdown { position: relative; display: inline-block; }
+  .teacher-dropdown .dropdown-toggle {
+    min-width: 180px; padding: 8px 12px; border: 1px solid var(--border-color);
+    border-radius: 6px; background: var(--card-bg); cursor: pointer;
+    display: flex; justify-content: space-between; align-items: center;
+    font-size: 14px; color: var(--text-color);
+  }
+  .teacher-dropdown .dropdown-toggle:hover { border-color: var(--primary); }
+  .teacher-dropdown .dropdown-menu {
+    position: absolute; top: 100%; left: 0; z-index: 1000;
+    min-width: 200px; max-height: 250px; overflow-y: auto;
+    background: var(--card-bg); border: 1px solid var(--border-color);
+    border-radius: 6px; box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    padding: 8px 0;
+  }
+  .teacher-dropdown .dropdown-item {
+    display: flex; align-items: center; padding: 8px 12px; cursor: pointer;
+    font-size: 13px;
+  }
+  .teacher-dropdown .dropdown-item:hover { background: var(--bg-color); }
+  .teacher-dropdown .dropdown-item input { margin-right: 8px; }
+  .teacher-dropdown .dropdown-divider {
+    height: 1px; background: var(--border-color); margin: 4px 0;
+  }
+
+  /* ===== 인쇄 ===== */
+  @media print {
+    body { background: #fff !important; color: #000 !important; }
+    .no-print { display: none !important; }
+    .card, .table-container, .controls { box-shadow: none !important; border: 1px solid #ddd; }
+    table.data-table th { background: #f0f0f0 !important; }
+    .attendance-box { width: 20px; height: 20px; border: 1px solid #000; display: inline-block; }
+    /* 스크롤 영역 전체 출력 */
+    .table-scroll, .table-container, #resultContainer, #tableContainer {
+      max-height: none !important;
+      height: auto !important;
+      overflow: visible !important;
+    }
+    /* 달력도 전체 출력 */
+    .calendar-container, #calendarView {
+      max-height: none !important;
+      height: auto !important;
+      overflow: visible !important;
+    }
+    @page { margin: 1cm; }
+  }
+
+  /* ===== 반응형 ===== */
+  @media (max-width: 768px) {
+    .container { padding: 12px; }
+    .page-header { flex-direction: column; align-items: flex-start; gap: 12px; }
+    .control-row { flex-direction: column; }
+    .control-group { width: 100%; }
+    table.data-table { font-size: 12px; }
+    table.data-table th, table.data-table td { padding: 8px 10px; }
+  }
+
+/* 네비게이션 바 */
+.nav-bar { display: flex; gap: 0; background: #fff; border-bottom: 2px solid #e0e0e0; margin-bottom: 16px; overflow-x: auto; }
+.nav-item { padding: 10px 18px; font-size: 14px; color: #666; text-decoration: none; cursor: pointer; border-bottom: 3px solid transparent; transition: all .2s; white-space: nowrap; }
+.nav-item:hover { color: #1976d2; background: #f5f5f5; }
+.nav-item.active { color: #1976d2; border-bottom-color: #1976d2; font-weight: 600; }
+
+/* 반응형 */
+@media (max-width: 768px) {
+  .control-row { flex-direction: column; gap: 8px; }
+  .container { padding: 8px; }
+  table { font-size: 12px; }
+  th, td { padding: 6px 4px; }
+  .table-wrapper { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .nav-item { padding: 8px 12px; font-size: 13px; }
+}
+</style>
+
+<script>
+/* ===== 다크모드 관리 ===== */
+function initTheme() {
+  const saved = localStorage.getItem('lab-system-theme') || 'light';
+  document.documentElement.setAttribute('data-theme', saved);
+}
+function toggleDarkMode() {
+  const html = document.documentElement;
+  const current = html.getAttribute('data-theme') || 'light';
+  const next = current === 'dark' ? 'light' : 'dark';
+  html.setAttribute('data-theme', next);
+  localStorage.setItem('lab-system-theme', next);
+}
+document.addEventListener('DOMContentLoaded', initTheme);
+
+/* ===== 공통 유틸리티 ===== */
+const $ = (s, el = document) => el.querySelector(s);
+const $$ = (s, el = document) => Array.from(el.querySelectorAll(s));
+function escapeHtml(str) {
+  if (str == null) return '';
+  return String(str).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+}
+function formatDate(v) {
+  if (!v) return '-';
+  const d = v instanceof Date ? v : new Date(v);
+  if (isNaN(d.getTime())) return v;
+  const pad = n => String(n).padStart(2,'0');
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+}
+function showLoading(el, msg='로딩 중...') {
+  if (typeof el === 'string') el = $(el);
+  if (el) el.innerHTML = `<div class="loading"><div class="loading-spinner"></div><span>${msg}</span></div>`;
+}
+function showEmpty(el, msg='데이터가 없습니다', hint='') {
+  if (typeof el === 'string') el = $(el);
+  if (el) el.innerHTML = `<div class="empty-state"><div class="empty-icon">📭</div><div class="empty-text">${msg}</div>${hint?`<div style="font-size:13px;margin-top:8px;">${hint}</div>`:''}</div>`;
+}
+function showModal(id) { const m = document.getElementById(id); if(m) m.classList.add('show'); }
+function hideModal(id) { const m = document.getElementById(id); if(m) m.classList.remove('show'); }
+document.addEventListener('click', e => { if(e.target.classList.contains('modal')) e.target.classList.remove('show'); });
+document.addEventListener('keydown', e => { if(e.key==='Escape') $$('.modal.show').forEach(m=>m.classList.remove('show')); });
+</script>

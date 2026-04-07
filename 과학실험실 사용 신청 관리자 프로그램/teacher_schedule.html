@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>임장 일정</title>
+  <base target="_top">
+  <?!= include('common_styles'); ?>
+</head>
+<body>
+  <!-- 서버에서 웹앱 URL 전달 -->
+  <script>
+    var APP_BASE_URL = '<?= ScriptApp.getService().getUrl() ?>';
+  </script>
+  
+  <?!= include('teacher_schedule_body'); ?>
+  <?!= include('teacher_schedule_scripts'); ?>
+</body>
+</html>

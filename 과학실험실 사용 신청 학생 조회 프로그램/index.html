@@ -1,0 +1,970 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <base target="_top">
+  <title>과학실험실 신청 조회</title>
+
+  <!-- jsPDF -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.2/jspdf.umd.min.js"></script>
+  <!-- html2canvas (한글 PDF 지원) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+
+  <style>
+    /* ===== 기본 ===== */
+    * { box-sizing: border-box; }
+    html, body { height: 100%; margin: 0; padding: 0; min-height: 100vh; background: #f9f9f9; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Noto Sans KR', sans-serif;
+      display: flex; justify-content: center; align-items: flex-start; padding: 16px;
+    }
+    #container {
+      width: 100%; max-width: 1000px; background: #fff;
+      padding: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      border-radius: 8px; min-height: 400px;
+      display: flex; flex-direction: column;
+      margin: 16px 0;
+    }
+    h2 { text-align: center; margin: 0 0 20px 0; font-size: 1.4em; }
+
+    /* ===== 입력 영역 ===== */
+    .inputs {
+      display: flex; flex-wrap: wrap; justify-content: center;
+      align-items: center; gap: 10px; margin-bottom: 20px;
+    }
+    .inputs input {
+      padding: 10px 12px; font-size: 14px;
+      border: 1px solid #ccc; border-radius: 4px; width: 160px;
+    }
+    .inputs input:focus { outline: none; border-color: #1976d2; }
+    .inputs button {
+      padding: 10px 20px; font-size: 14px; cursor: pointer;
+      background: #1976d2; color: #fff; border: none; border-radius: 4px;
+    }
+    .inputs button:hover { background: #1565c0; }
+    .inputs button:disabled { background: #ccc; cursor: not-allowed; }
+
+    /* ===== 뷰 전환 + 필터 바 ===== */
+    .toolbar {
+      display: flex; flex-wrap: wrap; justify-content: space-between;
+      align-items: center; gap: 10px; margin-bottom: 16px;
+      padding: 12px; background: #f5f5f5; border-radius: 6px;
+    }
+    .toolbar-left, .toolbar-right {
+      display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+    }
+    .view-toggle {
+      display: inline-flex; border: 1px solid #ccc; border-radius: 4px; overflow: hidden;
+    }
+    .view-toggle button {
+      padding: 6px 14px; font-size: 13px; border: none;
+      background: #fff; cursor: pointer; color: #555; font-weight: 600;
+    }
+    .view-toggle button.active { background: #1976d2; color: #fff; }
+    .view-toggle button:not(:last-child) { border-right: 1px solid #ccc; }
+    .toolbar label { font-size: 13px; font-weight: 600; color: #555; }
+    .toolbar select, .toolbar input[type="date"] {
+      padding: 5px 8px; font-size: 13px; border: 1px solid #ccc; border-radius: 4px;
+    }
+    .filter-reset {
+      padding: 5px 12px; font-size: 13px;
+      background: #fff; border: 1px solid #ccc; border-radius: 4px; cursor: pointer;
+    }
+    .filter-reset:hover { background: #e0e0e0; }
+
+    /* ===== 메시지 / 요약 ===== */
+    #message { text-align: center; color: #555; margin: 10px 0; font-size: 14px; }
+    .result-summary { text-align: center; margin-bottom: 12px; font-size: 14px; color: #333; }
+    .result-summary .count { font-weight: bold; color: #1976d2; }
+
+    /* ===== 로딩 ===== */
+    #loading {
+      display: none; position: fixed; top: 0; left: 0;
+      width: 100vw; height: 100vh; background: rgba(255,255,255,0.7); z-index: 999;
+    }
+    #loading-content {
+      position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+      background: #fff; border-radius: 8px; padding: 24px 32px;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.15); font-size: 16px;
+      color: #1976d2; font-weight: bold;
+    }
+
+    /* ===== 메인 테이블 ===== */
+    .app-table { width: 100%; border-collapse: collapse; margin-bottom: 16px; }
+    .app-table th, .app-table td {
+      border: 1px solid #ddd; padding: 10px 8px; text-align: center; font-size: 14px;
+    }
+    .app-table th { background: #f5f5f5; font-weight: 600; }
+    .app-table tbody tr:hover { background: #e3f2fd; cursor: pointer; }
+    .app-table tbody tr.row-past { opacity: 0.5; }
+    .app-table tbody tr.row-past:hover { opacity: 0.8; background: #f5f5f5; }
+
+    .date-badge {
+      display: inline-block; padding: 2px 8px; border-radius: 10px;
+      font-size: 11px; font-weight: 600; margin-left: 6px;
+    }
+    .date-upcoming { background: #e3f2fd; color: #1565c0; }
+    .date-past { background: #f5f5f5; color: #999; }
+    .date-today { background: #fff3e0; color: #e65100; }
+
+    .status-badge {
+      display: inline-block; padding: 4px 10px; border-radius: 12px;
+      font-size: 12px; font-weight: 600;
+    }
+    .status-approved { background: #c8e6c9; color: #2e7d32; }
+    .status-rejected { background: #ffcdd2; color: #c62828; }
+    .status-pending { background: #fff3e0; color: #e65100; }
+
+    /* ===== 달력 (내 신청만) ===== */
+    .cal-nav {
+      display: flex; align-items: center; justify-content: center;
+      gap: 16px; margin-bottom: 12px;
+    }
+    .cal-nav button {
+      padding: 6px 12px; font-size: 14px; background: #f5f5f5;
+      border: 1px solid #ddd; border-radius: 4px; cursor: pointer;
+    }
+    .cal-nav button:hover { background: #e0e0e0; }
+    .cal-nav .cal-label { font-size: 16px; font-weight: bold; min-width: 140px; text-align: center; }
+    .cal-grid {
+      display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; margin-bottom: 16px;
+    }
+    .cal-day-header {
+      text-align: center; font-weight: 600; font-size: 13px;
+      padding: 8px 4px; background: #f5f5f5; color: #555;
+    }
+    .cal-day-header.sun { color: #c62828; }
+    .cal-day-header.sat { color: #1565c0; }
+    .cal-cell {
+      min-height: 80px; border: 1px solid #eee; padding: 4px;
+      background: #fff; font-size: 12px;
+    }
+    .cal-cell.empty { background: #fafafa; }
+    .cal-cell.today { background: #fffde7; border-color: #ffcc02; }
+    .cal-cell .cal-date { font-weight: 600; font-size: 13px; margin-bottom: 4px; }
+    .cal-cell .cal-date.sun { color: #c62828; }
+    .cal-cell .cal-date.sat { color: #1565c0; }
+    .cal-event {
+      padding: 2px 4px; margin-bottom: 2px; border-radius: 3px;
+      font-size: 11px; white-space: nowrap; overflow: hidden;
+      text-overflow: ellipsis; cursor: pointer;
+    }
+    .cal-event:hover { opacity: 0.8; }
+    .cal-event.ev-approved { background: #c8e6c9; color: #2e7d32; }
+    .cal-event.ev-pending  { background: #fff3e0; color: #e65100; }
+    .cal-event.ev-rejected { background: #ffcdd2; color: #c62828; }
+
+    /* ===== 프로그레스 스테퍼 ===== */
+    .stepper {
+      display: flex; align-items: flex-start; justify-content: center;
+      gap: 0; margin: 16px 0 24px 0;
+    }
+    .step { display: flex; flex-direction: column; align-items: center; min-width: 100px; }
+    .step-circle {
+      width: 40px; height: 40px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 16px; font-weight: bold; color: #fff;
+      background: #e0e0e0; z-index: 1;
+    }
+    .step-circle.done { background: #4caf50; }
+    .step-circle.active { background: #ff9800; animation: pulse 1.5s infinite; }
+    .step-circle.rejected { background: #f44336; }
+    @keyframes pulse {
+      0%,100% { box-shadow: 0 0 0 0 rgba(255,152,0,0.4); }
+      50% { box-shadow: 0 0 0 8px rgba(255,152,0,0); }
+    }
+    .step-label { margin-top: 8px; font-size: 12px; font-weight: 600; color: #555; text-align: center; }
+    .step-status { margin-top: 4px; font-size: 11px; color: #999; text-align: center; }
+    .step-connector { height: 3px; width: 60px; background: #e0e0e0; margin-top: 20px; }
+    .step-connector.done { background: #4caf50; }
+    .step-connector.rejected { background: #f44336; }
+
+    /* 반려 안내 */
+    .rejection-guide {
+      background: #fff3e0; border-left: 4px solid #e65100;
+      padding: 12px 16px; margin: 12px 0 16px 0;
+      font-size: 13px; color: #bf360c; border-radius: 0 6px 6px 0; line-height: 1.6;
+    }
+    .rejection-guide strong { color: #e65100; }
+
+    /* ===== 상세 화면 ===== */
+    .detail-top-btns { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+    .btn-back, .btn-print, .btn-pdf {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 10px 16px; border-radius: 4px; font-size: 14px; cursor: pointer;
+      border: 1px solid #ddd;
+    }
+    .btn-back { background: #f5f5f5; color: #333; }
+    .btn-back:hover { background: #e0e0e0; }
+    .btn-print { background: #e3f2fd; color: #1565c0; border-color: #bbdefb; }
+    .btn-print:hover { background: #bbdefb; }
+    .btn-pdf { background: #e8f5e9; color: #2e7d32; border-color: #c8e6c9; }
+    .btn-pdf:hover { background: #c8e6c9; }
+
+    .status-table, .simple-table {
+      width: 100%; border-collapse: collapse; margin-bottom: 12px;
+    }
+    .status-table th, .status-table td,
+    .simple-table th, .simple-table td {
+      border: 1px solid #ddd; padding: 10px 8px; text-align: center;
+      font-size: 14px; background: #fff; vertical-align: top;
+    }
+    .status-table th, .simple-table th { background: #f5f5f5; font-weight: 600; }
+    .section-title {
+      font-weight: bold; font-size: 1.05em;
+      margin: 20px 0 12px 0; padding-bottom: 6px; border-bottom: 2px solid #1976d2;
+    }
+    #main-view, #detail-view { flex: 1 1 auto; overflow-y: auto; min-height: 200px; }
+    #detail-content { padding-right: 4px; }
+    .pre-line { white-space: pre-line; text-align: left !important; }
+
+    /* ===== 스크롤바 ===== */
+    #main-view::-webkit-scrollbar, #detail-view::-webkit-scrollbar,
+    #detail-content::-webkit-scrollbar { width: 6px; }
+    #main-view::-webkit-scrollbar-thumb, #detail-view::-webkit-scrollbar-thumb,
+    #detail-content::-webkit-scrollbar-thumb { background: #bdbdbd; border-radius: 3px; }
+
+    /* ===== 인쇄 ===== */
+    @media print {
+      body { padding: 0; background: #fff; }
+      #container { box-shadow: none; max-width: 100%; padding: 10px; margin: 0; }
+      .detail-top-btns, #loading, .inputs, .toolbar, #message { display: none !important; }
+      h2 { font-size: 16pt; }
+      .section-title { font-size: 12pt; }
+      .simple-table th, .simple-table td,
+      .status-table th, .status-table td { font-size: 10pt; padding: 6px 4px; }
+      .stepper { margin: 8px 0 16px 0; }
+      .step-circle { width: 30px; height: 30px; font-size: 13px; }
+    }
+
+    /* ===== 모바일 ===== */
+    @media screen and (max-width: 600px) {
+      body { padding: 8px; }
+      #container { padding: 16px 12px; margin: 8px 0; border-radius: 6px; }
+      h2 { font-size: 1.2em; margin-bottom: 16px; }
+
+      .inputs { flex-direction: column; gap: 8px; }
+      .inputs input, .inputs button { width: 100%; max-width: 280px; }
+
+      .toolbar { flex-direction: column; gap: 8px; padding: 10px; }
+      .toolbar-left, .toolbar-right { width: 100%; justify-content: center; }
+      .toolbar select, .toolbar input[type="date"] { max-width: 130px; }
+
+      .app-table thead { display: none; }
+      .app-table tbody tr {
+        display: block; margin-bottom: 12px;
+        border: 1px solid #ddd; border-radius: 6px; padding: 12px; background: #fff;
+      }
+      .app-table tbody td {
+        display: flex; justify-content: space-between; align-items: center;
+        border: none; padding: 6px 0; text-align: right; font-size: 13px;
+      }
+      .app-table tbody td::before {
+        content: attr(data-label); font-weight: 600; text-align: left; color: #555;
+      }
+
+      .simple-table { display: block; overflow: visible; }
+      .simple-table tbody { display: block; }
+      .simple-table tr {
+        display: flex; flex-direction: column;
+        margin-bottom: 8px; border: 1px solid #ddd; border-radius: 6px; overflow: hidden;
+      }
+      .simple-table th {
+        width: 100% !important; text-align: left; padding-left: 12px;
+        border-bottom: none; font-size: 12px; color: #1976d2;
+      }
+      .simple-table td { text-align: left; padding-left: 12px; border-top: none; }
+
+      .status-table { font-size: 12px; }
+      .status-table th, .status-table td { padding: 6px 4px; }
+
+      .stepper { flex-wrap: wrap; gap: 4px; }
+      .step { min-width: 70px; }
+      .step-circle { width: 32px; height: 32px; font-size: 13px; }
+      .step-connector { width: 30px; }
+      .step-label { font-size: 11px; }
+
+      .cal-cell { min-height: 50px; font-size: 10px; }
+      .cal-event { font-size: 9px; padding: 1px 3px; }
+      .cal-cell .cal-date { font-size: 11px; }
+
+      #loading-content { padding: 20px 24px; font-size: 14px; margin: 0 20px; }
+    }
+    @media screen and (max-width: 360px) {
+      .status-table { font-size: 11px; }
+      .stepper { gap: 2px; }
+      .step { min-width: 60px; }
+      .step-connector { width: 20px; }
+    }
+  </style>
+</head>
+<body>
+  <div id="container">
+    <h2>과학실험실 신청 조회</h2>
+
+    <!-- 메인 뷰 -->
+    <div id="main-view">
+      <div class="inputs">
+        <input type="text" id="repId" placeholder="대표자학번 (5자리)"
+               maxlength="5" autocomplete="off" inputmode="numeric" />
+        <input type="text" id="repName" placeholder="대표자이름"
+               maxlength="20" autocomplete="off" />
+        <button id="queryBtn" type="button">조회하기</button>
+      </div>
+      <div id="message"></div>
+
+      <!-- 툴바 (조회 후 표시) -->
+      <div id="toolbar" style="display:none;">
+        <div class="toolbar">
+          <div class="toolbar-left">
+            <div class="view-toggle">
+              <button class="vt-btn active" data-view="table">📋 목록</button>
+              <button class="vt-btn" data-view="calendar">📅 달력</button>
+            </div>
+            <label>상태:</label>
+            <select id="filterStatus">
+              <option value="all">전체</option>
+              <option value="approved">승인</option>
+              <option value="rejected">반려</option>
+              <option value="pending">대기</option>
+            </select>
+            <label>실험실:</label>
+            <select id="filterLab">
+              <option value="all">전체</option>
+            </select>
+          </div>
+          <div class="toolbar-right">
+            <input type="date" id="filterDateFrom" title="시작일" />
+            <span>~</span>
+            <input type="date" id="filterDateTo" title="종료일" />
+            <button class="filter-reset" id="filterResetBtn" type="button">초기화</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="result-summary"></div>
+      <div id="result-table"></div>
+      <div id="result-calendar" style="display:none;"></div>
+    </div>
+
+    <!-- 상세 뷰 -->
+    <div id="detail-view" style="display:none;">
+      <div class="detail-top-btns">
+        <button class="btn-back" id="backBtn" type="button">← 목록으로</button>
+        <button class="btn-print" id="printBtn" type="button">🖨 인쇄</button>
+        <button class="btn-pdf" id="pdfBtn" type="button">📄 PDF 저장</button>
+      </div>
+      <div id="detail-content"></div>
+    </div>
+  </div>
+
+  <div id="loading"><div id="loading-content">조회 중...</div></div>
+
+  <script>
+    /* ══════════════════════════════════════
+       전역 상태
+       ══════════════════════════════════════ */
+    var allRecords = [];
+    var filteredRecords = [];
+    var currentApplyId = null;
+    var currentRecord = null;
+    var currentChems = null;
+    var currentView = 'table';
+    var calYear, calMonth;
+
+    // 간이 캐시 (30초)
+    var cache = {
+      _d: {},
+      set: function(k,v) { this._d[k] = { v:v, t:Date.now() }; },
+      get: function(k, ttl) {
+        var e = this._d[k];
+        if (!e) return null;
+        if (Date.now() - e.t > (ttl||30000)) { delete this._d[k]; return null; }
+        return e.v;
+      }
+    };
+
+    /* ══════════════════════════════════════
+       유틸리티
+       ══════════════════════════════════════ */
+    function esc(v) {
+      if (v == null) return '';
+      return String(v).replace(/&/g,"&amp;").replace(/</g,"&lt;")
+                       .replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;");
+    }
+    function isValidInput(id, nm) {
+      return /^[0-9]{5}$/.test(id) && nm.length > 0 && nm.length <= 20 && /^[가-힣a-zA-Z\s]+$/.test(nm);
+    }
+    function showLoading(b, msg) {
+      var el = document.getElementById('loading');
+      var ct = document.getElementById('loading-content');
+      if (msg) ct.textContent = msg;
+      else ct.textContent = '조회 중...';
+      el.style.display = b ? 'block' : 'none';
+    }
+    function toDateObj(s) {
+      if (!s || s === '-') return null;
+      var d = new Date(s.replace(/[.\-\/]/g,'-'));
+      return isNaN(d.getTime()) ? null : d;
+    }
+    function todayStr() {
+      var d = new Date();
+      return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+    }
+    function getStatus(r) {
+      var t = r['지도승인여부']||'', f = r['최종승인여부']||'';
+      if (f==='반려'||t==='반려') return {text:'반려',cls:'status-rejected',key:'rejected'};
+      if (f==='승인') return {text:'승인',cls:'status-approved',key:'approved'};
+      if (t==='승인') return {text:'지도승인',cls:'status-approved',key:'approved'};
+      return {text:'대기',cls:'status-pending',key:'pending'};
+    }
+
+    /* 세션 저장/복원 */
+    function saveSession(id,nm) {
+      try { sessionStorage.setItem('labId',id); sessionStorage.setItem('labNm',nm); } catch(e){}
+    }
+    function restoreSession() {
+      try {
+        var id = sessionStorage.getItem('labId'), nm = sessionStorage.getItem('labNm');
+        if (id) document.getElementById('repId').value = id;
+        if (nm) document.getElementById('repName').value = nm;
+      } catch(e){}
+    }
+
+    /* ══════════════════════════════════════
+       뷰 전환 (목록 ↔ 달력)
+       ══════════════════════════════════════ */
+    document.querySelectorAll('.vt-btn').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        document.querySelectorAll('.vt-btn').forEach(function(b){ b.classList.remove('active'); });
+        this.classList.add('active');
+        currentView = this.dataset.view;
+        showCurrentView();
+      });
+    });
+
+    function showCurrentView() {
+      var tbl = document.getElementById('result-table');
+      var cal = document.getElementById('result-calendar');
+      if (currentView === 'table') {
+        tbl.style.display = 'block'; cal.style.display = 'none';
+        renderTable(filteredRecords);
+      } else {
+        tbl.style.display = 'none'; cal.style.display = 'block';
+        initMyCalendar();
+      }
+    }
+
+    /* ══════════════════════════════════════
+       조회
+       ══════════════════════════════════════ */
+    ['repId','repName'].forEach(function(id) {
+      document.getElementById(id).addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') document.getElementById('queryBtn').click();
+      });
+    });
+
+    document.getElementById('queryBtn').addEventListener('click', function() {
+      var repId   = document.getElementById('repId').value.trim();
+      var repName = document.getElementById('repName').value.trim();
+      var msg     = document.getElementById('message');
+      msg.textContent = '';
+      document.getElementById('result-summary').innerHTML = '';
+      document.getElementById('result-table').innerHTML = '';
+      document.getElementById('result-calendar').innerHTML = '';
+
+      if (!isValidInput(repId, repName)) {
+        msg.textContent = '대표자학번(5자리 숫자)와 대표자이름을 정확히 입력하세요.';
+        return;
+      }
+
+      var ck = 'rec_'+repId+'_'+repName;
+      var cached = cache.get(ck);
+      if (cached) { saveSession(repId,repName); onRecordsLoaded(cached); return; }
+
+      var btn = document.getElementById('queryBtn');
+      btn.disabled = true; showLoading(true);
+
+      google.script.run
+        .withSuccessHandler(function(records) {
+          showLoading(false); btn.disabled = false;
+          cache.set(ck, records);
+          saveSession(repId, repName);
+          onRecordsLoaded(records);
+        })
+        .withFailureHandler(function(err) {
+          showLoading(false); btn.disabled = false;
+          alert(err.message || '서버 오류가 발생했습니다.');
+        })
+        .getRecords(repId, repName);
+    });
+
+    function onRecordsLoaded(records) {
+      allRecords = records || [];
+      document.getElementById('filterStatus').value = 'all';
+      document.getElementById('filterDateFrom').value = '';
+      document.getElementById('filterDateTo').value = '';
+      buildLabFilter();
+      applyFilters();
+      document.getElementById('toolbar').style.display = allRecords.length > 0 ? 'block' : 'none';
+    }
+
+    /* ══════════════════════════════════════
+       필터
+       ══════════════════════════════════════ */
+    function buildLabFilter() {
+      var sel = document.getElementById('filterLab');
+      var labs = {};
+      allRecords.forEach(function(r) { if (r['신청실험실']) labs[r['신청실험실']] = true; });
+      sel.innerHTML = '<option value="all">전체</option>';
+      Object.keys(labs).sort().forEach(function(l) {
+        sel.innerHTML += '<option value="'+esc(l)+'">'+esc(l)+'</option>';
+      });
+    }
+
+    function applyFilters() {
+      var sf = document.getElementById('filterStatus').value;
+      var lf = document.getElementById('filterLab').value;
+      var df = document.getElementById('filterDateFrom').value;
+      var dt = document.getElementById('filterDateTo').value;
+
+      filteredRecords = allRecords.filter(function(r) {
+        var s = getStatus(r);
+        if (sf !== 'all' && s.key !== sf) return false;
+        if (lf !== 'all' && r['신청실험실'] !== lf) return false;
+        if (df) { var d = toDateObj(r['실험할날짜']); if (!d || d < new Date(df)) return false; }
+        if (dt) { var d = toDateObj(r['실험할날짜']); if (!d || d > new Date(dt+'T23:59:59')) return false; }
+        return true;
+      });
+      renderSummary();
+      showCurrentView();
+    }
+
+    ['filterStatus','filterLab','filterDateFrom','filterDateTo'].forEach(function(id) {
+      document.getElementById(id).addEventListener('change', applyFilters);
+    });
+    document.getElementById('filterResetBtn').addEventListener('click', function() {
+      document.getElementById('filterStatus').value = 'all';
+      document.getElementById('filterLab').value = 'all';
+      document.getElementById('filterDateFrom').value = '';
+      document.getElementById('filterDateTo').value = '';
+      applyFilters();
+    });
+
+    /* ══════════════════════════════════════
+       요약
+       ══════════════════════════════════════ */
+    function renderSummary() {
+      var el = document.getElementById('result-summary');
+      if (allRecords.length === 0) {
+        el.innerHTML = '<p style="text-align:center;color:#666;">조회 결과가 없습니다.</p>';
+        return;
+      }
+      var a=0,r=0,p=0;
+      filteredRecords.forEach(function(rec) {
+        var s = getStatus(rec);
+        if (s.key==='approved') a++; else if (s.key==='rejected') r++; else p++;
+      });
+      el.innerHTML = '<div class="result-summary">총 <span class="count">' +
+        filteredRecords.length + '건</span> ' +
+        (filteredRecords.length !== allRecords.length ? '(전체 '+allRecords.length+'건 중) ' : '') +
+        '(승인 '+a+' / 반려 '+r+' / 대기 '+p+')</div>';
+    }
+
+    /* ══════════════════════════════════════
+       목록 테이블
+       ══════════════════════════════════════ */
+    function renderTable(records) {
+      var el = document.getElementById('result-table');
+      if (!records || records.length === 0) {
+        el.innerHTML = '<p style="text-align:center;color:#666;">해당 조건의 결과가 없습니다.</p>';
+        return;
+      }
+      var today = todayStr();
+      var html = '<table class="app-table"><thead><tr>' +
+        '<th>실험할날짜</th><th>신청시간</th><th>신청실험실</th><th>실험제목</th><th>상태</th>' +
+        '</tr></thead><tbody>';
+
+      records.forEach(function(r) {
+        var id = esc(r['신청ID']), dRaw = r['실험할날짜']||'-', d = esc(dRaw);
+        var t = esc(r['신청시간']||'-'), lab = esc(r['신청실험실']||'-');
+        var title = esc(r['실험제목']||'-');
+        if (title.length > 20) title = title.substring(0,20)+'…';
+        var st = getStatus(r);
+
+        var rowCls = '', badge = '';
+        var dObj = toDateObj(dRaw);
+        if (dObj) {
+          var ds = dObj.getFullYear()+'-'+String(dObj.getMonth()+1).padStart(2,'0')+'-'+String(dObj.getDate()).padStart(2,'0');
+          if (ds === today) badge = ' <span class="date-badge date-today">오늘</span>';
+          else if (ds < today) { rowCls = 'row-past'; badge = ' <span class="date-badge date-past">완료</span>'; }
+          else badge = ' <span class="date-badge date-upcoming">예정</span>';
+        }
+
+        html += '<tr class="'+rowCls+'" data-id="'+id+'">'+
+          '<td data-label="실험할날짜">'+d+badge+'</td>'+
+          '<td data-label="신청시간">'+t+'</td>'+
+          '<td data-label="신청실험실">'+lab+'</td>'+
+          '<td data-label="실험제목">'+title+'</td>'+
+          '<td data-label="상태"><span class="status-badge '+st.cls+'">'+st.text+'</span></td></tr>';
+      });
+
+      html += '</tbody></table>'+
+        '<p style="color:#888;font-size:13px;text-align:center;">목록을 클릭하면 상세 내역을 볼 수 있습니다.</p>';
+      el.innerHTML = html;
+
+      document.querySelectorAll('.app-table tbody tr').forEach(function(tr) {
+        tr.addEventListener('click', function() { showDetail(this.dataset.id); });
+      });
+    }
+
+    /* ══════════════════════════════════════
+       달력 (내 신청만)
+       ══════════════════════════════════════ */
+    function initMyCalendar() {
+      var now = new Date();
+      calYear = now.getFullYear(); calMonth = now.getMonth()+1;
+      renderMyCalendar();
+    }
+
+    function renderMyCalendar() {
+      var el = document.getElementById('result-calendar');
+      var firstDay = new Date(calYear, calMonth-1, 1).getDay();
+      var daysInMonth = new Date(calYear, calMonth, 0).getDate();
+      var todayD = new Date();
+      var isThis = todayD.getFullYear()===calYear && todayD.getMonth()+1===calMonth;
+      var todayDate = todayD.getDate();
+
+      var eventMap = {};
+      filteredRecords.forEach(function(r) {
+        var d = toDateObj(r['실험할날짜']);
+        if (d && d.getFullYear()===calYear && d.getMonth()+1===calMonth) {
+          var day = d.getDate();
+          if (!eventMap[day]) eventMap[day] = [];
+          eventMap[day].push(r);
+        }
+      });
+
+      var days = ['일','월','화','수','목','금','토'];
+      var html = '<div class="cal-nav">'+
+        '<button type="button" id="myCalPrev">◀ 이전</button>'+
+        '<span class="cal-label">'+calYear+'년 '+calMonth+'월</span>'+
+        '<button type="button" id="myCalNext">다음 ▶</button></div>';
+
+      html += '<div class="cal-grid">';
+      days.forEach(function(dn,i) {
+        var cls = 'cal-day-header';
+        if (i===0) cls += ' sun'; if (i===6) cls += ' sat';
+        html += '<div class="'+cls+'">'+dn+'</div>';
+      });
+      for (var i=0; i<firstDay; i++) html += '<div class="cal-cell empty"></div>';
+
+      for (var day=1; day<=daysInMonth; day++) {
+        var dow = (firstDay+day-1)%7;
+        var cc = 'cal-cell';
+        if (isThis && day===todayDate) cc += ' today';
+        var dc = 'cal-date';
+        if (dow===0) dc += ' sun'; if (dow===6) dc += ' sat';
+
+        html += '<div class="'+cc+'"><div class="'+dc+'">'+day+'</div>';
+        (eventMap[day]||[]).forEach(function(r) {
+          var s = getStatus(r);
+          var ec = 'cal-event';
+          if (s.key==='approved') ec += ' ev-approved';
+          else if (s.key==='rejected') ec += ' ev-rejected';
+          else ec += ' ev-pending';
+          var tip = esc((r['신청실험실']||'')+' '+(r['신청시간']||'')+' - '+(r['실험제목']||''));
+          html += '<div class="'+ec+'" title="'+tip+'" data-id="'+esc(r['신청ID'])+'">' +
+                  esc(r['신청실험실']||'')+' '+esc(r['신청시간']||'')+'</div>';
+        });
+        html += '</div>';
+      }
+      html += '</div>';
+      el.innerHTML = html;
+
+      document.getElementById('myCalPrev').addEventListener('click', function() {
+        calMonth--; if (calMonth<1){calMonth=12;calYear--;} renderMyCalendar();
+      });
+      document.getElementById('myCalNext').addEventListener('click', function() {
+        calMonth++; if (calMonth>12){calMonth=1;calYear++;} renderMyCalendar();
+      });
+      document.querySelectorAll('.cal-event[data-id]').forEach(function(ev) {
+        ev.addEventListener('click', function() { showDetail(this.dataset.id); });
+      });
+    }
+
+    /* ══════════════════════════════════════
+       상세 화면
+       ══════════════════════════════════════ */
+    function showDetail(applyId) {
+      currentApplyId = applyId;
+      document.getElementById('main-view').style.display = 'none';
+      document.getElementById('detail-view').style.display = 'block';
+      document.getElementById('detail-content').innerHTML = '<p style="text-align:center;">불러오는 중...</p>';
+      showLoading(true);
+
+      var ck = 'det_'+applyId;
+      var cached = cache.get(ck, 60000);
+      if (cached) {
+        currentRecord = cached.r; currentChems = cached.c;
+        renderDetail(cached.r); renderChemTable(cached.c);
+        showLoading(false); return;
+      }
+
+      google.script.run.withSuccessHandler(function(r) {
+        if (!r) {
+          showLoading(false);
+          document.getElementById('detail-content').innerHTML = '<p style="text-align:center;">해당 신청 내역을 찾을 수 없습니다.</p>';
+          return;
+        }
+        currentRecord = r;
+        renderDetail(r);
+        google.script.run.withSuccessHandler(function(cl) {
+          currentChems = cl;
+          renderChemTable(cl);
+          cache.set(ck, {r:r, c:cl});
+          showLoading(false);
+        }).withFailureHandler(function(err) {
+          showLoading(false); alert(err.message||'시약 내역 불러오기 실패');
+        }).getChemicalsByApplyId(applyId);
+      }).withFailureHandler(function(err) {
+        showLoading(false); alert(err.message||'상세 내역 불러오기 실패');
+      }).getRecordById(applyId);
+    }
+
+    document.getElementById('backBtn').addEventListener('click', function() {
+      document.getElementById('detail-view').style.display = 'none';
+      document.getElementById('main-view').style.display = 'block';
+      currentApplyId = null;
+    });
+
+    /* 인쇄 버튼 */
+    document.getElementById('printBtn').addEventListener('click', function() {
+      window.print();
+    });
+
+    function renderDetail(r) {
+      if (!r) { document.getElementById('detail-content').innerHTML = '<p>상세 내역을 찾을 수 없습니다.</p>'; return; }
+      var html = '';
+
+      html += '<div class="section-title">1. 사용 신청 처리 현황</div>';
+      var teacher = r['지도승인여부']||'', final_ = r['최종승인여부']||'';
+      var s1='done', s2='waiting', s3='waiting', c1='', c2='';
+      if (teacher==='반려') { s2='rejected'; c1='rejected'; }
+      else if (teacher==='승인') {
+        s2='done'; c1='done';
+        if (final_==='반려') { s3='rejected'; c2='rejected'; }
+        else if (final_==='승인') { s3='done'; c2='done'; }
+        else { s3='active'; }
+      } else { s2='active'; }
+
+      html += '<div class="stepper">' +
+        bStep('1','사용 신청','완료',s1) + '<div class="step-connector '+c1+'"></div>' +
+        bStep('2','지도교사 승인',teacher||'대기',s2) + '<div class="step-connector '+c2+'"></div>' +
+        bStep('3','최종 승인',final_||'대기',s3) + '</div>';
+
+      if (teacher==='반려' || final_==='반려') {
+        var rt = teacher==='반려' ? esc(r['지도승인의견']||'사유 미입력') : '-';
+        var rf = final_==='반려'  ? esc(r['최종승인의견']||'사유 미입력') : '-';
+        html += '<table class="status-table"><thead><tr>' +
+          '<th>반려 유형</th><th>지도교사 반려 사유</th><th>최종 반려 사유</th>' +
+          '</tr></thead><tbody><tr>' +
+          '<td style="font-weight:bold;color:#c62828;">사유</td>' +
+          '<td style="color:#c62828;">'+rt+'</td><td style="color:#c62828;">'+rf+'</td>' +
+          '</tr></tbody></table>';
+        html += '<div class="rejection-guide">' +
+          '<strong>📌 반려 후 안내</strong><br>' +
+          '• 반려 사유를 확인한 후, 해당 사항을 수정하여 <strong>새로 신청</strong>해 주세요.<br>' +
+          '• 반려된 신청 건은 수정이 불가하며, 새로운 신청으로만 재접수됩니다.<br>' +
+          '• 반려 사유에 대해 궁금한 점이 있으면 지도교사에게 문의하세요.</div>';
+      }
+
+      html += '<div class="section-title">2. 지도교사 임장시간</div>' +
+        '<table class="simple-table"><tbody>' +
+        '<tr><th style="width:180px;">임장지도 시작시간</th><td>'+esc(r['임장지도 시작시간']||'-')+'</td></tr>' +
+        '<tr><th>임장지도 종료시간</th><td>'+esc(r['임장지도 종료시간']||'-')+'</td></tr>' +
+        '</tbody></table>';
+
+      html += '<div class="section-title">3. 신청 내역</div><table class="simple-table"><tbody>';
+      var plKeys = ['실험준비물','실험과정','동반자명단','실험뒷정리','실험시 주의사항'];
+      var fields = [
+        ['신청실험실','신청실험실'],['신청ID','신청ID'],['제출일시','제출일시'],
+        ['대표자학번','대표자학번'],['대표자이름','대표자이름'],
+        ['동반자명단','동반자명단'],['총인원수','총인원수'],
+        ['실험할날짜','실험할날짜'],['신청시간','신청시간'],
+        ['실험제목','실험제목'],['실험준비물','실험준비물'],
+        ['사용목적','사용목적'],['사용목적 기타','사용목적 기타'],
+        ['첨단기기실 이용 여부','첨단기기실 이용 여부'],
+        ['첨단기기실 이용 사유','첨단기기실 이용 사유'],
+        ['후드 사용 여부','후드 사용 여부'],['후드 사용 사유','후드 사용 사유'],
+        ['실험과정','실험과정'],['실험뒷정리','실험뒷정리'],
+        ['실험시 주의사항','실험시 주의사항'],
+        ['안전장구','안전장구'],['지도교사이름','지도교사이름']
+      ];
+      fields.forEach(function(p) {
+        var val = (r[p[1]]!=null) ? r[p[1]] : '-';
+        html += '<tr><th style="width:180px;">'+esc(p[0])+'</th>'+
+          '<td class="'+(plKeys.indexOf(p[1])>=0?'pre-line':'')+'">'+esc(val)+'</td></tr>';
+      });
+      html += '</tbody></table>';
+      document.getElementById('detail-content').innerHTML = html;
+    }
+
+    function bStep(num, label, statusText, state) {
+      var cc = 'step-circle', icon = num;
+      if (state==='done') { cc+=' done'; icon='✓'; }
+      else if (state==='active') { cc+=' active'; }
+      else if (state==='rejected') { cc+=' rejected'; icon='✕'; }
+      return '<div class="step"><div class="'+cc+'">'+icon+'</div>'+
+        '<div class="step-label">'+esc(label)+'</div>'+
+        '<div class="step-status">'+esc(statusText)+'</div></div>';
+    }
+
+    function renderChemTable(cl) {
+      var html = '<div class="section-title">4. 시약 신청 내역</div>';
+      var keys = ["시약명","상태","농도","용량","MSDS","교사임장여부"];
+      var hdrs = {"시약명":"시약명","상태":"상태","농도":"농도","용량":"용량","MSDS":"MSDS","교사임장여부":"교사 임장여부"};
+      if (!cl || cl.length===0) {
+        html += '<p style="text-align:center;color:#666;">시약 신청 내역이 없습니다.</p>';
+      } else {
+        html += '<table class="simple-table"><thead><tr>'+
+          keys.map(function(k){return '<th>'+esc(hdrs[k])+'</th>';}).join('')+
+          '</tr></thead><tbody>'+
+          cl.map(function(row){
+            return '<tr>'+keys.map(function(k){return '<td>'+esc(row[k]||'-')+'</td>';}).join('')+'</tr>';
+          }).join('')+'</tbody></table>';
+      }
+      document.getElementById('detail-content').insertAdjacentHTML('beforeend', html);
+    }
+
+    /* ══════════════════════════════════════
+       PDF 저장 (1장: 신청내역, 2장: 시약목록)
+       html2canvas 캡처 → jsPDF A4 저장
+       ══════════════════════════════════════ */
+    document.getElementById('pdfBtn').addEventListener('click', function() {
+      if (!currentRecord) { alert('상세 데이터가 없습니다.'); return; }
+      generatePDF(currentRecord, currentChems);
+    });
+
+    function generatePDF(r, chems) {
+      var content    = document.getElementById('detail-content');
+      var detailView = document.getElementById('detail-view');
+      if (!content) { alert('출력할 내용이 없습니다.'); return; }
+
+      /* 섹션 분리: 마지막 .section-title(시약) 이후를 2장으로 분리 */
+      var sections = content.querySelectorAll('.section-title');
+      if (sections.length === 0) { alert('내용을 불러온 후 시도하세요.'); return; }
+
+      var chemTitle = sections[sections.length - 1]; // "4. 시약 신청 내역" 제목
+      var chemEls   = [];
+      var el = chemTitle;
+      while (el) { chemEls.push(el); el = el.nextElementSibling; }
+
+      /* ── overflow 임시 해제: html2canvas가 스크롤 밖 내용도 캡처하도록 ── */
+      var origOverflow  = detailView.style.overflow;
+      var origHeight    = detailView.style.height;
+      var origMaxHeight = detailView.style.maxHeight;
+      detailView.style.overflow  = 'visible';
+      detailView.style.height    = 'auto';
+      detailView.style.maxHeight = 'none';
+
+      function restoreOverflow() {
+        detailView.style.overflow  = origOverflow;
+        detailView.style.height    = origHeight;
+        detailView.style.maxHeight = origMaxHeight;
+      }
+
+      /* 1장: 시약 섹션 숨기고 캡처 */
+      chemEls.forEach(function(e) { e.style.display = 'none'; });
+      showLoading(true, 'PDF 생성 중... (1/2)');
+
+      var jsPDF  = window.jspdf.jsPDF;
+      var margin = 10;
+
+      html2canvas(content, { scale: 2, useCORS: true, backgroundColor: '#ffffff' })
+      .then(function(canvas1) {
+        var doc   = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+        var pageW = doc.internal.pageSize.getWidth()  - margin * 2;
+        var pageH = doc.internal.pageSize.getHeight() - margin * 2;
+        var imgH1 = canvas1.height * pageW / canvas1.width;
+
+        /* 1장 높이가 A4를 넘으면 비율 유지하며 축소 */
+        var drawW1 = pageW, drawH1 = imgH1;
+        if (drawH1 > pageH) {
+          var scale = pageH / drawH1;
+          drawW1 = pageW * scale;
+          drawH1 = pageH;
+        }
+        var offsetX1 = margin + (pageW - drawW1) / 2;
+
+        doc.addImage(canvas1.toDataURL('image/png'), 'PNG', offsetX1, margin, drawW1, drawH1);
+
+        /* 시약 섹션 복원 */
+        chemEls.forEach(function(e) { e.style.display = ''; });
+
+        /* 시약이 없으면 바로 저장 */
+        if (!chems || chems.length === 0) {
+          doc.save('실험실신청서_' + (r['신청ID'] || '') + '.pdf');
+          restoreOverflow();
+          showLoading(false);
+          return;
+        }
+
+        /* 2장: 신청내역 섹션 숨기고 시약만 캡처 */
+        var nonChemEls = Array.from(content.children).filter(function(c) {
+          return chemEls.indexOf(c) === -1;
+        });
+        nonChemEls.forEach(function(c) { c.style.display = 'none'; });
+        showLoading(true, 'PDF 생성 중... (2/2)');
+
+        html2canvas(content, { scale: 2, useCORS: true, backgroundColor: '#ffffff' })
+        .then(function(canvas2) {
+          nonChemEls.forEach(function(c) { c.style.display = ''; });
+          restoreOverflow();
+
+          doc.addPage();
+          var imgH2 = canvas2.height * pageW / canvas2.width;
+          var drawW2 = pageW, drawH2 = imgH2;
+          if (drawH2 > pageH) {
+            var scale2 = pageH / drawH2;
+            drawW2 = pageW * scale2;
+            drawH2 = pageH;
+          }
+          var offsetX2 = margin + (pageW - drawW2) / 2;
+
+          doc.addImage(canvas2.toDataURL('image/png'), 'PNG', offsetX2, margin, drawW2, drawH2);
+          doc.save('실험실신청서_' + (r['신청ID'] || '') + '.pdf');
+          showLoading(false);
+        })
+        .catch(function(err) {
+          nonChemEls.forEach(function(c) { c.style.display = ''; });
+          restoreOverflow();
+          showLoading(false);
+          alert('PDF 2장 생성 오류: ' + (err.message || err));
+        });
+      })
+      .catch(function(err) {
+        chemEls.forEach(function(e) { e.style.display = ''; });
+        restoreOverflow();
+        showLoading(false);
+        alert('PDF 1장 생성 오류: ' + (err.message || err));
+      });
+    }
+
+    /* ══════════════════════════════════════
+       초기화
+       ══════════════════════════════════════ */
+    var urlParamId   = '<?= paramId ?>';
+    var urlParamName = '<?= paramName ?>';
+
+    if (urlParamId && urlParamName) {
+      document.getElementById('repId').value = urlParamId;
+      document.getElementById('repName').value = urlParamName;
+      setTimeout(function() { document.getElementById('queryBtn').click(); }, 300);
+    } else {
+      restoreSession();
+    }
+  </script>
+</body>
+</html>

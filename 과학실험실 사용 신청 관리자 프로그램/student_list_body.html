@@ -1,0 +1,361 @@
+<!-- student_list_body.html -->
+<div class="container">
+<div class="nav-bar">
+  <span class="nav-item" onclick="goToPage('admin')">대시보드</span>
+  <span class="nav-item" onclick="goToPage('common_list')">시약 목록</span>
+  <span class="nav-item active">학생 명단</span>
+  <span class="nav-item" onclick="goToPage('teacher_schedule')">임장 일정</span>
+  <span class="nav-item" onclick="goToPage('report')">보고서</span>
+</div>
+  <!-- 페이지 헤더 -->
+  <div class="page-header no-print">
+    <div>
+      <h1>👥 학생 명단</h1>
+      <p>실험실 사용 학생을 다양한 기준으로 조회하고 출석을 관리합니다</p>
+    </div>
+    <div class="header-actions">
+      <a href="#" onclick="goToAdmin(); return false;" class="btn btn-secondary">← 관리자 페이지</a>
+    </div>
+  </div>
+
+  <!-- 인쇄용 헤더 -->
+  <div id="printHeader" style="display:none;">
+    <h2 style="text-align:center;margin:0 0 8px;">실험실 사용 학생 명단</h2>
+    <p style="text-align:center;font-size:12px;color:#666;" id="printInfo"></p>
+  </div>
+
+  <!-- 조회 조건 -->
+  <div class="controls no-print">
+    <!-- 기간 선택 -->
+    <div class="control-row">
+      <div class="control-group">
+        <label>시작일</label>
+        <input type="date" id="dateFrom">
+      </div>
+      <div class="control-group">
+        <label>종료일</label>
+        <input type="date" id="dateTo">
+      </div>
+      <div class="control-group">
+        <label>빠른 선택</label>
+        <div style="display:flex;gap:8px;">
+          <button class="btn btn-sm btn-secondary" onclick="setQuickDate('today')">오늘</button>
+          <button class="btn btn-sm btn-secondary" onclick="setQuickDate('week')">이번 주</button>
+          <button class="btn btn-sm btn-secondary" onclick="setQuickDate('month')">이번 달</button>
+        </div>
+      </div>
+      <div class="control-group">
+        <label>승인 상태</label>
+        <select id="approvalFilter">
+          <option value="">전체</option>
+          <option value="approved" selected>승인됨 (1차+최종)</option>
+          <option value="final">최종승인</option>
+          <option value="first">1차승인</option>
+          <option value="pending">대기</option>
+          <option value="rejected">반려</option>
+        </select>
+      </div>
+      <button class="btn btn-primary" onclick="loadData()">🔍 조회</button>
+    </div>
+
+    <!-- 필터 -->
+    <div class="control-row" style="border-top:1px solid var(--border-color);padding-top:16px;margin-top:8px;">
+      <div class="control-group">
+        <label>실험·실습실</label>
+        <select id="labFilter">
+          <option value="">전체</option>
+        </select>
+      </div>
+      <div class="control-group">
+        <label>시간대</label>
+        <select id="timeFilter">
+          <option value="">전체</option>
+          <option value="ET">ET</option>
+          <option value="EP1">EP1</option>
+          <option value="7교시">7교시</option>
+        </select>
+      </div>
+      <div class="control-group">
+        <label>역할</label>
+        <select id="roleFilter">
+          <option value="">전체</option>
+          <option value="대표자">대표자만</option>
+          <option value="동반자">동반자만</option>
+        </select>
+      </div>
+      <div class="control-group">
+        <label>학생 검색</label>
+        <input type="text" id="searchInput" placeholder="학번 또는 이름" style="min-width:150px;">
+      </div>
+    </div>
+
+    <!-- 정렬 -->
+    <div class="control-row" style="border-top:1px solid var(--border-color);padding-top:16px;margin-top:8px;">
+      <div class="control-group">
+        <label>1순위 정렬</label>
+        <select id="sort1Key">
+          <option value="날짜" selected>날짜</option>
+          <option value="실험실">실험실</option>
+          <option value="시간">시간</option>
+          <option value="학번">학번</option>
+          <option value="이름">이름</option>
+          <option value="역할">역할</option>
+        </select>
+      </div>
+      <div class="control-group">
+        <label>방향</label>
+        <select id="sort1Dir">
+          <option value="asc">오름차순</option>
+          <option value="desc">내림차순</option>
+        </select>
+      </div>
+      <div class="control-group">
+        <label>2순위 정렬</label>
+        <select id="sort2Key">
+          <option value="">없음</option>
+          <option value="날짜">날짜</option>
+          <option value="실험실" selected>실험실</option>
+          <option value="시간">시간</option>
+          <option value="학번">학번</option>
+          <option value="이름">이름</option>
+          <option value="역할">역할</option>
+        </select>
+      </div>
+      <div class="control-group">
+        <label>방향</label>
+        <select id="sort2Dir">
+          <option value="asc">오름차순</option>
+          <option value="desc">내림차순</option>
+        </select>
+      </div>
+      <div class="control-group">
+        <label>3순위 정렬</label>
+        <select id="sort3Key">
+          <option value="">없음</option>
+          <option value="날짜">날짜</option>
+          <option value="실험실">실험실</option>
+          <option value="시간">시간</option>
+          <option value="학번" selected>학번</option>
+          <option value="이름">이름</option>
+          <option value="역할">역할</option>
+        </select>
+      </div>
+      <div class="control-group">
+        <label>방향</label>
+        <select id="sort3Dir">
+          <option value="asc">오름차순</option>
+          <option value="desc">내림차순</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- 보기 모드 및 내보내기 -->
+    <div class="control-row" style="border-top:1px solid var(--border-color);padding-top:16px;margin-top:8px;">
+      <div class="control-group">
+        <label>그룹 방식</label>
+        <select id="viewMode" onchange="renderTable()">
+          <option value="flat">전체 통합</option>
+          <option value="byLab" selected>실험실별</option>
+          <option value="byDate">날짜별</option>
+          <option value="byTime">시간별</option>
+          <option value="byStudent">학생별 (사용 이력)</option>
+        </select>
+      </div>
+      <div class="control-group">
+        <label>학생 표시</label>
+        <select id="studentDisplayMode" onchange="renderTable()">
+          <option value="individual">개별 학생</option>
+          <option value="teamTable">팀별 테이블</option>
+          <option value="teamCard">팀별 카드</option>
+        </select>
+      </div>
+      <div class="control-group">
+        <label>출석 체크란</label>
+        <select id="showAttendance" onchange="renderTable()">
+          <option value="show">표시</option>
+          <option value="hide">숨김</option>
+        </select>
+      </div>
+      <div style="margin-left:auto;display:flex;gap:8px;">
+        <button class="btn btn-success" onclick="printList()">🖨️ 출석부 인쇄</button>
+        <button class="btn btn-info" onclick="exportCSV()">📊 엑셀 내보내기</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 통계 요약 -->
+  <div class="card no-print" id="summaryCard" style="display:none;">
+    <div style="display:flex;gap:24px;flex-wrap:wrap;">
+      <div><strong>조회 기간:</strong> <span id="summaryPeriod">-</span></div>
+      <div><strong>팀 수:</strong> <span id="summaryTeams" style="color:var(--primary);">0</span>팀</div>
+      <div><strong>총 학생 수:</strong> <span id="summaryTotal">0</span>명</div>
+    </div>
+  </div>
+
+  <!-- 결과 영역 -->
+  <div class="table-container">
+    <div class="table-scroll" id="resultContainer">
+      <div class="loading">
+        <div class="loading-spinner"></div>
+        <span>데이터를 불러오는 중...</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ✅ 팀별 그룹 뷰 스타일 -->
+<style>
+/* 기본 테이블 너비 최적화 */
+.data-table {
+  table-layout: auto;
+  width: 100%;
+}
+
+.data-table th,
+.data-table td {
+  white-space: nowrap;
+}
+
+.data-table .truncate {
+  max-width: 250px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 팀별 테이블 스타일 (방안 1) */
+.team-table {
+  table-layout: auto !important;
+  width: auto !important;
+  min-width: 700px;
+}
+
+.team-table .team-separator td {
+  border-top: 3px solid var(--primary, #007bff) !important;
+}
+
+.team-table .team-row-even {
+  background: var(--bg-primary, #fff);
+}
+
+.team-table .team-row-odd {
+  background: var(--bg-secondary, #f8f9fa);
+}
+
+.team-table td[rowspan] {
+  vertical-align: middle;
+  background: inherit;
+}
+
+.team-table td.truncate {
+  max-width: 250px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 팀별 카드 스타일 (방안 3) */
+.team-card {
+  background: var(--bg-primary, #fff);
+  border: 1px solid var(--border-color, #e0e0e0);
+  border-radius: 8px;
+  margin-bottom: 12px;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+}
+
+.team-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  background: var(--bg-secondary, #f8f9fa);
+  border-bottom: 1px solid var(--border-color, #e0e0e0);
+}
+
+.team-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.team-title {
+  font-weight: 600;
+  color: var(--text-primary, #333);
+  font-size: 14px;
+}
+
+.team-meta {
+  font-size: 12px;
+  color: var(--text-muted, #666);
+}
+
+.team-members {
+  padding: 8px 16px;
+}
+
+.team-member {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border-color, #eee);
+}
+
+.team-member:last-child {
+  border-bottom: none;
+}
+
+.team-member .att-check {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+}
+
+.team-member .badge {
+  min-width: 50px;
+  text-align: center;
+}
+
+.member-id {
+  font-family: monospace;
+  color: var(--text-muted, #666);
+  min-width: 60px;
+}
+
+.member-name {
+  font-weight: 500;
+  color: var(--text-primary, #333);
+}
+
+/* 인쇄용 스타일 */
+@media print {
+  .team-card {
+    page-break-inside: avoid;
+    border: 1px solid #ccc;
+    margin-bottom: 8px;
+  }
+  
+  .team-card-header {
+    background: #f5f5f5 !important;
+  }
+  
+  .team-member .att-check {
+    appearance: none;
+    -webkit-appearance: none;
+    width: 14px;
+    height: 14px;
+    border: 1px solid #333;
+    border-radius: 2px;
+    background: #fff;
+  }
+  
+  .team-table .team-separator td {
+    border-top: 2px solid #333 !important;
+  }
+  
+  .team-table .team-row-odd {
+    background: #f5f5f5 !important;
+  }
+}
+</style>

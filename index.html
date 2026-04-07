@@ -18,6 +18,7 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(
 @keyframes confetti{0%{transform:translateY(0) rotate(0);opacity:1}100%{transform:translateY(500px) rotate(720deg);opacity:0}}
 @keyframes timerPulse{0%,100%{color:var(--err)}50%{color:#fca5a5}}
 @keyframes countIn{from{transform:scale(2);opacity:0}to{transform:scale(1);opacity:1}}
+@keyframes dotPulse{0%,100%{opacity:.3}50%{opacity:1}}
 
 h1{font-size:2.5rem;background:linear-gradient(135deg,#818cf8,#6366f1,#a78bfa);-webkit-background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:10px}
 h2{font-size:1.4rem;color:var(--txt2);margin-bottom:25px;font-weight:400}
@@ -25,6 +26,7 @@ h2{font-size:1.4rem;color:var(--txt2);margin-bottom:25px;font-weight:400}
 .btn{padding:12px 28px;border:none;border-radius:var(--r);font-size:1rem;font-weight:600;cursor:pointer;transition:all .2s;color:#fff;display:inline-flex;align-items:center;gap:8px}
 .btn:hover{transform:translateY(-2px);box-shadow:0 4px 15px rgba(0,0,0,.3)}
 .btn:active{transform:translateY(0)}
+.btn:disabled{opacity:.5;cursor:not-allowed;transform:none!important}
 .btn-pri{background:linear-gradient(135deg,var(--pri),var(--pri2))}
 .btn-sec{background:linear-gradient(135deg,var(--sec),#059669)}
 .btn-acc{background:linear-gradient(135deg,var(--acc),#d97706)}
@@ -54,7 +56,6 @@ h2{font-size:1.4rem;color:var(--txt2);margin-bottom:25px;font-weight:400}
 .settings-row label{color:var(--txt2);font-size:.9rem}
 .settings-row select{padding:8px 12px;border-radius:8px;border:1px solid var(--bg3);background:var(--bg);color:var(--txt);font-size:.9rem;outline:none}
 
-/* Game Header */
 .game-hdr{display:flex;justify-content:space-between;align-items:center;width:100%;max-width:900px;padding:15px 20px;background:var(--bg2);border-radius:var(--r);margin-bottom:15px;flex-wrap:wrap;gap:10px}
 .game-hdr .player-info{display:flex;align-items:center;gap:12px}
 .game-hdr .score{font-size:1.3rem;font-weight:700;color:var(--acc)}
@@ -63,13 +64,9 @@ h2{font-size:1.4rem;color:var(--txt2);margin-bottom:25px;font-weight:400}
 .big-timer{font-size:2.2rem;font-weight:800;padding:8px 20px;border-radius:var(--r);background:var(--bg3);min-width:100px;text-align:center}
 .big-timer.urgent{animation:timerPulse .5s infinite}
 
-/* Question area */
 .q-area{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;width:100%;max-width:900px}
 .q-label{color:var(--txt2);font-size:1rem;margin-bottom:12px}
-
 .num-display{font-size:3.5rem;font-weight:700;letter-spacing:8px;padding:30px 50px;background:var(--bg2);border-radius:var(--r);border:2px solid var(--bg3);margin-bottom:25px;font-family:'Courier New',monospace}
-
-/* Digit select */
 .digit-box{display:flex;gap:4px;font-size:3.2rem;font-family:'Courier New',monospace;margin-bottom:25px;flex-wrap:wrap;justify-content:center}
 .dg{padding:10px 14px;background:var(--bg2);border:2px solid var(--bg3);border-radius:8px;cursor:pointer;transition:all .15s;user-select:none;min-width:50px;text-align:center}
 .dg:hover{border-color:var(--pri)}
@@ -79,12 +76,10 @@ h2{font-size:1.4rem;color:var(--txt2);margin-bottom:25px;font-weight:400}
 .dg.pt{cursor:default;background:transparent;border:none;padding:10px 3px;min-width:16px}
 .dg.miss{border-color:var(--sec);opacity:.55}
 
-/* Instrument */
 .inst-area{display:flex;flex-direction:column;align-items:center;margin-bottom:15px}
 .inst-canvas{background:var(--bg2);border-radius:var(--r);border:1px solid var(--bg3)}
 .inst-lbl{margin-top:6px;color:var(--txt2);font-size:.85rem}
 
-/* Answer */
 .ans-area{display:flex;flex-direction:column;align-items:center;gap:10px;width:100%;max-width:450px}
 .ans-row{display:flex;gap:10px;align-items:center;width:100%}
 .ans-row label{min-width:110px;text-align:right;color:var(--txt2);font-size:.9rem}
@@ -100,12 +95,10 @@ h2{font-size:1.4rem;color:var(--txt2);margin-bottom:25px;font-weight:400}
 
 .combo-pop{position:fixed;top:50%;left:50%;pointer-events:none;font-size:2.2rem;font-weight:900;color:var(--acc);animation:comboFloat 1s ease-out forwards;z-index:100;text-shadow:0 0 20px rgba(245,158,11,.5)}
 
-/* Battle */
 .battle-grid{display:grid;grid-template-columns:1fr 1fr;gap:20px;width:100%;max-width:1100px}
 .battle-side{background:var(--bg2);border-radius:var(--r);padding:20px;display:flex;flex-direction:column;align-items:center;border:2px solid var(--bg3);transition:border-color .3s}
 .battle-side.win{border-color:var(--acc);box-shadow:0 0 20px rgba(245,158,11,.3)}
 
-/* Results */
 .res-box{max-width:600px;width:100%;text-align:center}
 .res-card{background:var(--bg2);border-radius:var(--r);padding:30px;margin-bottom:15px}
 .res-card .final{font-size:2.5rem;font-weight:800;color:var(--acc);margin:10px 0}
@@ -116,11 +109,39 @@ h2{font-size:1.4rem;color:var(--txt2);margin-bottom:25px;font-weight:400}
 .rules-box{background:var(--bg2);border-radius:var(--r);padding:20px;max-width:600px;width:100%;margin-top:30px;border-left:4px solid var(--pri)}
 .rules-box h4{margin-bottom:8px;color:var(--pri)}
 .rules-box li{padding:3px 0;color:var(--txt2);font-size:.88rem;list-style:none}
-.rules-box li::before{content:'• ';color:var(--pri)}
+.rules-box li::before{content:'* ';color:var(--pri)}
 
 .back-btn{position:fixed;top:20px;left:20px;z-index:50}
 .confetti{position:fixed;top:-10px;pointer-events:none;z-index:200}
 .countdown{position:fixed;top:0;left:0;right:0;bottom:0;display:flex;align-items:center;justify-content:center;background:rgba(15,23,42,.85);z-index:300;font-size:5rem;font-weight:900;color:var(--acc);animation:countIn .4s}
+
+/* Online-specific styles */
+.join-box{max-width:400px;width:100%;text-align:center}
+.join-box input{width:100%;padding:14px 18px;border-radius:var(--r);border:2px solid var(--bg3);background:var(--bg);color:var(--txt);font-size:1.1rem;margin-bottom:12px;outline:none;text-align:center}
+.join-box input:focus{border-color:var(--pri)}
+.join-box input.code-input{font-size:2.5rem;letter-spacing:12px;font-weight:700;font-family:'Courier New',monospace}
+
+.waiting-box{max-width:500px;width:100%;text-align:center}
+.waiting-info{background:var(--bg2);border-radius:var(--r);padding:20px;margin:20px 0}
+.waiting-info .room-code{font-size:2rem;font-weight:800;color:var(--acc);margin:8px 0}
+.waiting-info .game-info{color:var(--txt2);font-size:.9rem;margin-top:8px}
+.player-list{list-style:none;margin:15px 0}
+.player-list li{padding:10px 16px;background:var(--bg3);border-radius:8px;margin-bottom:6px;display:flex;align-items:center;gap:10px;font-weight:500}
+.player-list li .dot{width:8px;height:8px;border-radius:50%;background:var(--sec)}
+.waiting-dots{display:inline-flex;gap:3px;margin-left:8px}
+.waiting-dots span{width:6px;height:6px;border-radius:50%;background:var(--txt2);animation:dotPulse 1.2s infinite}
+.waiting-dots span:nth-child(2){animation-delay:.2s}
+.waiting-dots span:nth-child(3){animation-delay:.4s}
+
+.scoreboard{width:100%;max-width:500px;margin:15px 0}
+.sb-item{display:flex;justify-content:space-between;align-items:center;padding:10px 16px;background:var(--bg2);border-radius:8px;margin-bottom:6px;border-left:3px solid var(--bg3)}
+.sb-item.me{border-left-color:var(--pri);background:rgba(99,102,241,.1)}
+.sb-item:first-child{border-left-color:var(--acc)}
+.sb-item .rank{font-weight:800;min-width:30px;color:var(--txt2)}
+.sb-item .name{flex:1;font-weight:600}
+.sb-item .pts{font-weight:700;color:var(--acc)}
+
+.toast{position:fixed;top:20px;right:20px;padding:12px 20px;border-radius:var(--r);background:var(--err);color:#fff;font-weight:600;z-index:400;animation:fadeIn .3s}
 
 @media(max-width:768px){
   h1{font-size:1.8rem}
@@ -131,12 +152,13 @@ h2{font-size:1.4rem;color:var(--txt2);margin-bottom:25px;font-weight:400}
   .ans-row{flex-direction:column;align-items:stretch}
   .ans-row label{text-align:left;min-width:0}
   .big-timer{font-size:1.6rem}
+  .join-box input.code-input{font-size:1.8rem;letter-spacing:8px}
 }
 </style>
 </head>
 <body>
 
-<!-- MENU -->
+<!-- ==================== MENU ==================== -->
 <div id="s-menu" class="screen active">
 <div style="text-align:center;margin-top:50px">
 <div style="font-size:4rem;margin-bottom:15px">🔬</div>
@@ -169,7 +191,7 @@ h2{font-size:1.4rem;color:var(--txt2);margin-bottom:25px;font-weight:400}
 </div>
 </div>
 
-<!-- PLAY MODE -->
+<!-- ==================== PLAY MODE ==================== -->
 <div id="s-play" class="screen">
 <button class="btn btn-ghost btn-sm back-btn" onclick="go('menu')">← 뒤로</button>
 <div style="text-align:center;margin-top:60px">
@@ -177,23 +199,24 @@ h2{font-size:1.4rem;color:var(--txt2);margin-bottom:25px;font-weight:400}
 </div>
 <div class="play-modes">
 <div class="card play-mode-card" onclick="pickPlay('single')">
-<div class="icon">🎮</div><h3>싱글 플레이</h3><p>혼자서 도전! 최고 기록을 세워보세요.</p>
+<div class="icon">🎮</div><h3>싱글 플레이</h3><p>혼자서 도전!<br>서버 없이 바로 플레이</p>
 </div>
 <div class="card play-mode-card" onclick="pickPlay('multi')">
-<div class="icon">👥</div><h3>멀티 플레이</h3><p>친구와 번갈아가며 같은 시간 도전!</p>
+<div class="icon">👥</div><h3>멀티 플레이</h3><p>교사가 만든 방에 참가!<br>같은 시간 동안 경쟁</p>
 </div>
 <div class="card play-mode-card" onclick="pickPlay('battle')">
-<div class="icon">⚔️</div><h3>대전 플레이</h3><p>같은 문제를 누가 더 빨리 맞히나 대결!</p>
+<div class="icon">⚔️</div><h3>대전 플레이</h3><p>1:1 대결!<br>같은 문제를 빠르게 풀자</p>
 </div>
 </div>
 </div>
 
-<!-- SETUP -->
+<!-- ==================== SETUP (single only) ==================== -->
 <div id="s-setup" class="screen">
 <button class="btn btn-ghost btn-sm back-btn" onclick="go('play')">← 뒤로</button>
-<div style="text-align:center;margin-top:60px"><h1>게임 설정</h1><h2 id="setup-sub"></h2></div>
+<div style="text-align:center;margin-top:60px"><h1>게임 설정</h1><h2>싱글 플레이</h2></div>
 <div class="setup-area">
-<div id="p-inputs"></div>
+<label>플레이어 이름</label>
+<input id="p0" value="Player 1" maxlength="12">
 <div class="settings-row" style="margin-top:18px">
 <label>제한 시간:</label>
 <select id="sel-time">
@@ -211,32 +234,83 @@ h2{font-size:1.4rem;color:var(--txt2);margin-bottom:25px;font-weight:400}
 </select>
 </div>
 <div style="text-align:center;margin-top:25px">
-<button class="btn btn-pri btn-lg" onclick="startGame()">🚀 게임 시작!</button>
+<button class="btn btn-pri btn-lg" onclick="startSingleGame()">🚀 게임 시작!</button>
 </div>
 </div>
 </div>
 
-<!-- GAME (single/multi) -->
+<!-- ==================== JOIN (online) ==================== -->
+<div id="s-join" class="screen">
+<button class="btn btn-ghost btn-sm back-btn" onclick="go('play')">← 뒤로</button>
+<div style="text-align:center;margin-top:80px">
+<div style="font-size:3rem;margin-bottom:15px">🌐</div>
+<h1>방 참가하기</h1>
+<h2>교사가 알려준 방 코드를 입력하세요</h2>
+</div>
+<div class="join-box">
+<label style="display:block;margin-bottom:4px;color:var(--txt2);font-size:.9rem">이름</label>
+<input id="join-name" placeholder="이름을 입력하세요" maxlength="12">
+<label style="display:block;margin-bottom:4px;color:var(--txt2);font-size:.9rem;margin-top:8px">방 코드 (4자리)</label>
+<input id="join-code" class="code-input" placeholder="0000" maxlength="4" inputmode="numeric">
+<div style="margin-top:18px">
+<button class="btn btn-pri btn-lg" id="btn-join" onclick="joinRoom()">🚀 참가하기</button>
+</div>
+<div id="join-error" style="color:var(--err);margin-top:12px;font-size:.9rem;display:none"></div>
+</div>
+</div>
+
+<!-- ==================== WAITING ROOM (online) ==================== -->
+<div id="s-waiting" class="screen">
+<div style="text-align:center;margin-top:60px">
+<div style="font-size:3rem;margin-bottom:15px">⏳</div>
+<h1>대기실</h1>
+<h2>교사가 게임을 시작할 때까지 기다려주세요</h2>
+</div>
+<div class="waiting-box">
+<div class="waiting-info">
+<div style="color:var(--txt2);font-size:.85rem">방 코드</div>
+<div class="room-code" id="w-code">----</div>
+<div class="game-info" id="w-info">게임 모드 로딩중...</div>
+</div>
+<h3 style="margin-bottom:8px">참가자 <span id="w-count">0</span>명</h3>
+<ul class="player-list" id="w-players"></ul>
+<div style="color:var(--txt2);font-size:.9rem">
+교사가 시작하면 자동으로 게임이 시작됩니다
+<div class="waiting-dots"><span></span><span></span><span></span></div>
+</div>
+</div>
+</div>
+
+<!-- ==================== ONLINE GAME ==================== -->
+<div id="s-online" class="screen">
+<div class="game-hdr" id="o-hdr"></div>
+<div class="q-area" id="o-qarea"></div>
+<div id="o-fb" style="width:100%;display:flex;justify-content:center"></div>
+<div class="scoreboard" id="o-sb"></div>
+</div>
+
+<!-- ==================== ONLINE RESULTS ==================== -->
+<div id="s-oresults" class="screen">
+<div style="text-align:center;margin-top:40px"><div style="font-size:3rem;margin-bottom:10px">🏆</div><h1>게임 결과</h1></div>
+<div class="res-box" id="ores-box"></div>
+<div style="display:flex;gap:15px;margin-top:20px">
+<button class="btn btn-ghost btn-lg" onclick="go('menu')">메뉴로</button>
+</div>
+</div>
+
+<!-- ==================== SINGLE GAME ==================== -->
 <div id="s-game" class="screen">
 <div class="game-hdr" id="g-hdr"></div>
 <div class="q-area" id="g-qarea"></div>
 <div id="g-fb" style="width:100%;display:flex;justify-content:center"></div>
 </div>
 
-<!-- BATTLE -->
-<div id="s-battle" class="screen">
-<div class="game-hdr" id="b-hdr"></div>
-<div id="b-qdisplay" style="text-align:center;margin:10px 0;width:100%;max-width:900px"></div>
-<div class="battle-grid" id="b-grid"></div>
-<div id="b-fb" style="width:100%;display:flex;justify-content:center;margin-top:8px"></div>
-</div>
-
-<!-- RESULTS -->
+<!-- ==================== SINGLE RESULTS ==================== -->
 <div id="s-results" class="screen">
 <div style="text-align:center;margin-top:40px"><div style="font-size:3rem;margin-bottom:10px">🏆</div><h1>게임 결과</h1></div>
 <div class="res-box" id="res-box"></div>
 <div style="display:flex;gap:15px;margin-top:20px">
-<button class="btn btn-pri btn-lg" onclick="startGame()">다시 하기</button>
+<button class="btn btn-pri btn-lg" onclick="startSingleGame()">다시 하기</button>
 <button class="btn btn-ghost btn-lg" onclick="go('menu')">메뉴로</button>
 </div>
 </div>
@@ -245,470 +319,726 @@ h2{font-size:1.4rem;color:var(--txt2);margin-bottom:25px;font-weight:400}
 <div id="countdown" class="countdown" style="display:none"></div>
 
 <script>
-// ===== STATE =====
-const S={gm:1,pm:'single',ps:[],pi:0,diff:'medium',tl:60,timeLeft:0,timer:null,
-  solved:0,combo:0,maxCombo:0,answered:false,qStart:0,currentNum:null,currentMeas:null,
-  battleAns:[false,false]};
+// ============================================================
+//  STATE
+// ============================================================
+const S = {
+  gm: 1, pm: 'single', diff: 'medium', tl: 60,
+  // Single-play state
+  ps: [], pi: 0, timeLeft: 0, timer: null,
+  answered: false, qStart: 0, currentNum: null, currentMeas: null,
+  // Online state
+  ws: null, myId: null, roomCode: null, onlinePlayers: [],
+  onlineGameMode: 1, onlinePlayMode: 'multi'
+};
 
-// ===== NAV =====
-function go(id){document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));document.getElementById('s-'+id).classList.add('active')}
-const gTitles={1:'🔢 유효숫자 개수 세기',2:'🎯 유효숫자 찾기',3:'📏 측정값 읽기'};
-function pickGame(m){S.gm=m;document.getElementById('game-title').textContent=gTitles[m];go('play')}
-function pickPlay(m){
-  S.pm=m;const inp=document.getElementById('p-inputs');
-  if(m==='single'){document.getElementById('setup-sub').textContent='이름을 입력하세요';
-    inp.innerHTML='<label>플레이어</label><input id="p0" value="Player 1" maxlength="12">';}
-  else if(m==='multi'){document.getElementById('setup-sub').textContent='플레이어 이름 입력 (2~4명)';inp.innerHTML='';
-    for(let i=0;i<4;i++)inp.innerHTML+=`<label>플레이어 ${i+1}${i>=2?' (선택)':''}</label><input id="p${i}" value="${i<2?'Player '+(i+1):''}" placeholder="${i>=2?'비워두면 참여 안 함':''}" maxlength="12">`;}
-  else{document.getElementById('setup-sub').textContent='두 명의 이름을 입력하세요';
-    inp.innerHTML='<label>플레이어 1</label><input id="p0" value="Player 1" maxlength="12"><label>플레이어 2</label><input id="p1" value="Player 2" maxlength="12">';}
-  go('setup');
+// ============================================================
+//  NAV
+// ============================================================
+function go(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById('s-' + id).classList.add('active');
+}
+const gTitles = { 1: '🔢 유효숫자 개수 세기', 2: '🎯 유효숫자 찾기', 3: '📏 측정값 읽기' };
+
+function pickGame(m) {
+  S.gm = m;
+  document.getElementById('game-title').textContent = gTitles[m];
+  go('play');
 }
 
-// ===== SIGFIG LOGIC =====
-function analyze(str){
-  let s=str.replace(/^[+-]/,'');const hasDot=s.includes('.');const digs=[];
-  for(let i=0;i<s.length;i++){const c=s[i];if(c==='.'){digs.push({c:'.',i,sig:false,pt:true});continue}
-    if(c>='0'&&c<='9')digs.push({c,i,sig:false,pt:false})}
-  const nd=digs.filter(d=>!d.pt);let fNZ=-1,lNZ=-1;
-  for(let i=0;i<nd.length;i++){if(nd[i].c!=='0'){if(fNZ<0)fNZ=i;lNZ=i}}
-  if(fNZ<0){nd.length&&(nd[nd.length-1].sig=true)}
-  else{for(let i=0;i<nd.length;i++){if(i<fNZ)nd[i].sig=false;else if(i<=lNZ)nd[i].sig=true;else nd[i].sig=hasDot}}
-  return{digs,nd,count:nd.filter(d=>d.sig).length}
-}
-
-// ===== NUMBER POOLS (대폭 확장) =====
-const pools={
-easy:[
-'3','7','25','42','89','6.1','3.7','0.5','0.8','1.5',
-'16','34','91','73','58','4.2','9.3','2.6','8.4','5.9',
-'123','456','789','234','567','12','99','0.45','0.73','7.3',
-'2.0','3.0','5.0','8.0','1.0','14','67','0.31','0.62','4.8',
-'510','270','38','0.9','6.5','47','82','0.17','0.28','3.4',
-],
-medium:[
-'0.0034','0.0072','0.0091','0.00056','0.0018','0.0045','0.00083','0.0067',
-'100.0','200.0','300.0','70.0','50.0','40.0','10.0','80.0',
-'3.040','5.060','2.010','8.070','1.030','9.020','4.050','7.080',
-'0.502','0.709','0.304','0.608','0.901','0.107','0.805','0.203',
-'1200','3400','5600','2500','6800','7200','4100','9300',
-'30.06','50.09','10.03','70.01','20.08','40.05','60.07','80.02',
-'0.0780','0.0340','0.0560','0.0120','0.0910','0.0450','0.0670','0.0230',
-'6500','8200','4700','1300','9100','3600','2800','5400',
-'20.10','30.20','40.50','50.30','60.40','70.80','80.60','10.90',
-],
-hard:[
-'0.001020','0.003040','0.005060','0.002010','0.007080','0.009010',
-'10.0040','20.0060','30.0020','50.0080','40.0010','60.0050',
-'300600','502000','701000','103000','204000','805000',
-'0.00008050','0.00003020','0.00006040','0.00001090','0.00005010',
-'20010.0','30020.0','50040.0','10070.0','40060.0',
-'0.0000340','0.0000560','0.0000120','0.0000890','0.0000710',
-'104000','207000','308000','506000','901000',
-'60.0200','30.0500','80.0100','20.0700','40.0300',
-'0.003004','0.005007','0.001009','0.008002','0.006003',
-'1000.00','2000.00','3000.00','5000.00','4000.00',
-'0.00100200','0.00300400','0.00500600','0.00200100','0.00700800',
-'5006000','2003000','8001000','3004000','7002000',
-'0.0700800','0.0300400','0.0500200','0.0100600','0.0900100',
-'20.0060','40.0030','60.0080','10.0020','30.0050',
-'0.0000010','0.0000030','0.0000050','0.0000020','0.0000070',
-'400.010','600.020','800.050','200.030','900.040',
-'30200','50400','70100','20300','80600',
-'100200.0','200300.0','400500.0','300100.0','500200.0',
-'7000.040','3000.020','5000.060','1000.080','9000.010',
-]};
-
-function randNum(d){if(d==='mixed')d=['easy','medium','hard'][Math.floor(Math.random()*3)];
-  const p=pools[d];return p[Math.floor(Math.random()*p.length)]}
-
-// ===== MEASUREMENT =====
-function genMeas(d){
-  const types=['ruler','cylinder','thermometer'];
-  const t=types[Math.floor(Math.random()*types.length)];
-  let val,dv,unit,sd;
-  if(t==='ruler'){
-    const b=d==='easy'?Math.random()*5+1:d==='hard'?Math.random()*12+1:Math.random()*8+1;
-    val=Math.floor(b*100)/100;dv=val.toFixed(2);unit='cm';sd=0.1;
-  }else if(t==='cylinder'){
-    const b=d==='easy'?Math.random()*30+10:d==='hard'?Math.random()*80+5:Math.random()*50+10;
-    val=Math.floor(b*10)/10;dv=val.toFixed(1);unit='mL';sd=1;
-  }else{
-    const b=d==='easy'?Math.random()*30+15:d==='hard'?Math.random()*80-10:Math.random()*50+10;
-    val=Math.floor(b*10)/10;dv=val.toFixed(1);unit='°C';sd=1;
+function pickPlay(m) {
+  S.pm = m;
+  if (m === 'single') {
+    go('setup');
+  } else {
+    // Online: go to join screen
+    go('join');
+    const nameEl = document.getElementById('join-name');
+    if (!nameEl.value) nameEl.focus();
+    else document.getElementById('join-code').focus();
   }
-  return{type:t,val,dv,unit,sd,sf:analyze(dv).count}
 }
 
-function drawInst(cv,m){
-  const ctx=cv.getContext('2d'),w=cv.width,h=cv.height;ctx.clearRect(0,0,w,h);
-  if(m.type==='ruler')drawRuler(ctx,w,h,m);
-  else if(m.type==='cylinder')drawCyl(ctx,w,h,m);
-  else drawTherm(ctx,w,h,m);
-}
-
-function drawRuler(ctx,w,h,m){
-  const pad=60,rH=65,rY=h/2-rH/2,v=m.val;
-  const s0=Math.max(0,Math.floor(v-3)),e0=s0+6,px=(w-pad*2)/(e0-s0);
-  ctx.fillStyle='#fef3c7';ctx.strokeStyle='#d97706';ctx.lineWidth=2;
-  ctx.beginPath();roundRect(ctx,pad-10,rY,w-pad*2+20,rH,6);ctx.fill();ctx.stroke();
-  ctx.fillStyle='#1e293b';ctx.strokeStyle='#78350f';ctx.lineWidth=1;ctx.font='11px sans-serif';ctx.textAlign='center';
-  for(let mm=s0*10;mm<=e0*10;mm++){
-    const x=pad+(mm/10-s0)*px;if(x<pad-5||x>w-pad+5)continue;
-    const isCm=mm%10===0,is5=mm%5===0,tH=isCm?28:is5?18:10;
-    ctx.beginPath();ctx.moveTo(x,rY+rH);ctx.lineTo(x,rY+rH-tH);ctx.stroke();
-    if(isCm)ctx.fillText((mm/10)+'',x,rY+rH+16);
+// ============================================================
+//  SIGFIG LOGIC (client-side for single play)
+// ============================================================
+function analyze(str) {
+  let s = str.replace(/^[+-]/, ''); const hasDot = s.includes('.'); const digs = [];
+  for (let i = 0; i < s.length; i++) {
+    const c = s[i];
+    if (c === '.') { digs.push({ c: '.', i, sig: false, pt: true }); continue; }
+    if (c >= '0' && c <= '9') digs.push({ c, i, sig: false, pt: false });
   }
-  ctx.fillText('cm',w-pad+25,rY+rH+16);
-  const ax=pad+(v-s0)*px;
-  ctx.fillStyle='#ef4444';ctx.beginPath();ctx.moveTo(ax,rY-5);ctx.lineTo(ax-7,rY-22);ctx.lineTo(ax+7,rY-22);ctx.closePath();ctx.fill();
-  ctx.beginPath();ctx.moveTo(ax,rY-22);ctx.lineTo(ax,rY-38);ctx.strokeStyle='#ef4444';ctx.lineWidth=2;ctx.stroke();
-  ctx.font='bold 12px sans-serif';ctx.fillText('읽으세요',ax,rY-42);
+  const nd = digs.filter(d => !d.pt); let fNZ = -1, lNZ = -1;
+  for (let i = 0; i < nd.length; i++) { if (nd[i].c !== '0') { if (fNZ < 0) fNZ = i; lNZ = i; } }
+  if (fNZ < 0) { nd.length && (nd[nd.length - 1].sig = true); }
+  else { for (let i = 0; i < nd.length; i++) { if (i < fNZ) nd[i].sig = false; else if (i <= lNZ) nd[i].sig = true; else nd[i].sig = hasDot; } }
+  return { digs, nd, count: nd.filter(d => d.sig).length };
 }
 
-function drawCyl(ctx,w,h,m){
-  const v=m.val,cW=90,cy=35,cH=h-75,cx=w/2;
-  const mx=Math.ceil(v/10)*10+10,mn=Math.max(0,mx-60),pp=cH/(mx-mn);
-  ctx.strokeStyle='#0284c7';ctx.lineWidth=2;ctx.fillStyle='#e0f2fe';
-  ctx.beginPath();ctx.moveTo(cx-cW/2,cy);ctx.lineTo(cx-cW/2,cy+cH);
-  ctx.quadraticCurveTo(cx-cW/2,cy+cH+14,cx,cy+cH+14);
-  ctx.quadraticCurveTo(cx+cW/2,cy+cH+14,cx+cW/2,cy+cH);ctx.lineTo(cx+cW/2,cy);ctx.stroke();
-  const lY=cy+cH-(v-mn)*pp;
-  ctx.fillStyle='rgba(59,130,246,.25)';ctx.beginPath();
-  ctx.moveTo(cx-cW/2+2,lY);ctx.quadraticCurveTo(cx,lY+7,cx+cW/2-2,lY);
-  ctx.lineTo(cx+cW/2-2,cy+cH);ctx.quadraticCurveTo(cx+cW/2-2,cy+cH+12,cx,cy+cH+12);
-  ctx.quadraticCurveTo(cx-cW/2+2,cy+cH+12,cx-cW/2+2,cy+cH);ctx.closePath();ctx.fill();
-  ctx.strokeStyle='#2563eb';ctx.lineWidth=2;ctx.beginPath();
-  ctx.moveTo(cx-cW/2+2,lY);ctx.quadraticCurveTo(cx,lY+7,cx+cW/2-2,lY);ctx.stroke();
-  ctx.strokeStyle='#0284c7';ctx.fillStyle='#1e293b';ctx.font='10px sans-serif';ctx.textAlign='right';ctx.lineWidth=1;
-  for(let vv=mn;vv<=mx;vv++){
-    const y=cy+cH-(vv-mn)*pp;if(y<cy||y>cy+cH)continue;
-    const maj=vv%10===0,mid=vv%5===0,tl=maj?14:mid?9:4;
-    ctx.beginPath();ctx.moveTo(cx-cW/2,y);ctx.lineTo(cx-cW/2-tl,y);ctx.stroke();
-    if(maj)ctx.fillText(vv+'',cx-cW/2-17,y+3);
+// ============================================================
+//  NUMBER POOLS
+// ============================================================
+const pools = {
+  easy: [
+    '3','7','25','42','89','6.1','3.7','0.5','0.8','1.5',
+    '16','34','91','73','58','4.2','9.3','2.6','8.4','5.9',
+    '123','456','789','234','567','12','99','0.45','0.73','7.3',
+    '2.0','3.0','5.0','8.0','1.0','14','67','0.31','0.62','4.8',
+    '510','270','38','0.9','6.5','47','82','0.17','0.28','3.4',
+  ],
+  medium: [
+    '0.0034','0.0072','0.0091','0.00056','0.0018','0.0045','0.00083','0.0067',
+    '100.0','200.0','300.0','70.0','50.0','40.0','10.0','80.0',
+    '3.040','5.060','2.010','8.070','1.030','9.020','4.050','7.080',
+    '0.502','0.709','0.304','0.608','0.901','0.107','0.805','0.203',
+    '1200','3400','5600','2500','6800','7200','4100','9300',
+    '30.06','50.09','10.03','70.01','20.08','40.05','60.07','80.02',
+    '0.0780','0.0340','0.0560','0.0120','0.0910','0.0450','0.0670','0.0230',
+    '20.10','30.20','40.50','50.30','60.40','70.80','80.60','10.90',
+  ],
+  hard: [
+    '0.001020','0.003040','0.005060','0.002010','0.007080','0.009010',
+    '10.0040','20.0060','30.0020','50.0080','40.0010','60.0050',
+    '300600','502000','701000','103000','204000','805000',
+    '0.00008050','0.00003020','0.00006040','0.00001090','0.00005010',
+    '20010.0','30020.0','50040.0','10070.0','40060.0',
+    '0.0000340','0.0000560','0.0000120','0.0000890','0.0000710',
+    '60.0200','30.0500','80.0100','20.0700','40.0300',
+    '0.003004','0.005007','0.001009','0.008002','0.006003',
+    '1000.00','2000.00','3000.00','5000.00','4000.00',
+    '0.00100200','0.00300400','0.00500600','0.00200100','0.00700800',
+  ]
+};
+function randNum(d) {
+  if (d === 'mixed') d = ['easy', 'medium', 'hard'][Math.floor(Math.random() * 3)];
+  const p = pools[d]; return p[Math.floor(Math.random() * p.length)];
+}
+
+// ============================================================
+//  MEASUREMENT (client-side for single + canvas drawing for online)
+// ============================================================
+function genMeas(d) {
+  const types = ['ruler', 'cylinder', 'thermometer'];
+  const t = types[Math.floor(Math.random() * types.length)];
+  let val, dv, unit, sd;
+  if (t === 'ruler') {
+    const b = d === 'easy' ? Math.random() * 5 + 1 : d === 'hard' ? Math.random() * 12 + 1 : Math.random() * 8 + 1;
+    val = Math.floor(b * 100) / 100; dv = val.toFixed(2); unit = 'cm'; sd = 0.1;
+  } else if (t === 'cylinder') {
+    const b = d === 'easy' ? Math.random() * 30 + 10 : d === 'hard' ? Math.random() * 80 + 5 : Math.random() * 50 + 10;
+    val = Math.floor(b * 10) / 10; dv = val.toFixed(1); unit = 'mL'; sd = 1;
+  } else {
+    const b = d === 'easy' ? Math.random() * 30 + 15 : d === 'hard' ? Math.random() * 80 - 10 : Math.random() * 50 + 10;
+    val = Math.floor(b * 10) / 10; dv = val.toFixed(1); unit = '\u00B0C'; sd = 1;
   }
-  ctx.font='11px sans-serif';ctx.textAlign='center';ctx.fillText('mL',cx,cy-8);
-  ctx.fillStyle='#ef4444';ctx.font='bold 11px sans-serif';ctx.textAlign='left';
-  ctx.fillText('← 읽으세요',cx+cW/2+8,lY+4);
+  return { type: t, val, dv, unit, sd, sf: analyze(dv).count };
 }
 
-function drawTherm(ctx,w,h,m){
-  const v=m.val,bR=18,tW=14,cx=w/2,tT=28,tB=h-55,tH=tB-tT;
-  const mx=Math.ceil(v/10)*10+10,mn=mx-60,pp=tH/(mx-mn);
-  ctx.strokeStyle='#6b7280';ctx.lineWidth=2;ctx.fillStyle='#f9fafb';
-  ctx.beginPath();ctx.moveTo(cx-tW/2,tT);ctx.lineTo(cx-tW/2,tB);
-  ctx.arc(cx,tB+4,bR,Math.PI,0,true);ctx.lineTo(cx+tW/2,tT);
-  ctx.arc(cx,tT,tW/2,0,Math.PI,true);ctx.closePath();ctx.fill();ctx.stroke();
-  const mY=tB-(v-mn)*pp;
-  ctx.fillStyle='#ef4444';ctx.beginPath();
-  ctx.moveTo(cx-tW/2+3,Math.max(tT+4,mY));ctx.lineTo(cx-tW/2+3,tB);
-  ctx.arc(cx,tB+4,bR-4,Math.PI,0,true);ctx.lineTo(cx+tW/2-3,Math.max(tT+4,mY));ctx.closePath();ctx.fill();
-  ctx.beginPath();ctx.arc(cx,tB+4,bR-4,0,Math.PI*2);ctx.fill();
-  ctx.strokeStyle='#374151';ctx.fillStyle='#1e293b';ctx.font='10px sans-serif';ctx.textAlign='left';ctx.lineWidth=1;
-  for(let t=mn;t<=mx;t++){
-    const y=tB-(t-mn)*pp;if(y<tT+4||y>tB)continue;
-    const maj=t%10===0,mid=t%5===0,tl=maj?14:mid?9:4;
-    ctx.beginPath();ctx.moveTo(cx+tW/2+2,y);ctx.lineTo(cx+tW/2+2+tl,y);ctx.stroke();
-    if(maj)ctx.fillText(t+'°C',cx+tW/2+19,y+3);
+function drawInst(cv, m) {
+  const ctx = cv.getContext('2d'), w = cv.width, h = cv.height;
+  ctx.clearRect(0, 0, w, h);
+  if (m.type === 'ruler') drawRuler(ctx, w, h, m);
+  else if (m.type === 'cylinder') drawCyl(ctx, w, h, m);
+  else drawTherm(ctx, w, h, m);
+}
+
+// The measurement value can come from server (online) as m.value or from local as m.val
+function getMeasVal(m) { return m.val !== undefined ? m.val : m.value; }
+
+function drawRuler(ctx, w, h, m) {
+  const pad = 60, rH = 65, rY = h / 2 - rH / 2, v = getMeasVal(m);
+  const s0 = Math.max(0, Math.floor(v - 3)), e0 = s0 + 6, px = (w - pad * 2) / (e0 - s0);
+  ctx.fillStyle = '#fef3c7'; ctx.strokeStyle = '#d97706'; ctx.lineWidth = 2;
+  ctx.beginPath(); roundRect(ctx, pad - 10, rY, w - pad * 2 + 20, rH, 6); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = '#1e293b'; ctx.strokeStyle = '#78350f'; ctx.lineWidth = 1;
+  ctx.font = '11px sans-serif'; ctx.textAlign = 'center';
+  for (let mm = s0 * 10; mm <= e0 * 10; mm++) {
+    const x = pad + (mm / 10 - s0) * px; if (x < pad - 5 || x > w - pad + 5) continue;
+    const isCm = mm % 10 === 0, is5 = mm % 5 === 0, tH = isCm ? 28 : is5 ? 18 : 10;
+    ctx.beginPath(); ctx.moveTo(x, rY + rH); ctx.lineTo(x, rY + rH - tH); ctx.stroke();
+    if (isCm) ctx.fillText((mm / 10) + '', x, rY + rH + 16);
   }
-  ctx.fillStyle='#2563eb';ctx.font='bold 11px sans-serif';ctx.textAlign='right';
-  ctx.fillText('읽으세요 →',cx-tW/2-8,mY+4);
-  ctx.strokeStyle='#2563eb';ctx.lineWidth=1;ctx.setLineDash([3,3]);
-  ctx.beginPath();ctx.moveTo(cx-tW/2-3,mY);ctx.lineTo(cx-tW/2+1,mY);ctx.stroke();ctx.setLineDash([]);
+  ctx.fillText('cm', w - pad + 25, rY + rH + 16);
+  const ax = pad + (v - s0) * px;
+  ctx.fillStyle = '#ef4444'; ctx.beginPath();
+  ctx.moveTo(ax, rY - 5); ctx.lineTo(ax - 7, rY - 22); ctx.lineTo(ax + 7, rY - 22); ctx.closePath(); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(ax, rY - 22); ctx.lineTo(ax, rY - 38);
+  ctx.strokeStyle = '#ef4444'; ctx.lineWidth = 2; ctx.stroke();
+  ctx.font = 'bold 12px sans-serif'; ctx.fillText('읽으세요', ax, rY - 42);
 }
 
-function roundRect(ctx,x,y,w,h,r){
-  ctx.moveTo(x+r,y);ctx.lineTo(x+w-r,y);ctx.quadraticCurveTo(x+w,y,x+w,y+r);
-  ctx.lineTo(x+w,y+h-r);ctx.quadraticCurveTo(x+w,y+h,x+w-r,y+h);
-  ctx.lineTo(x+r,y+h);ctx.quadraticCurveTo(x,y+h,x,y+h-r);
-  ctx.lineTo(x,y+r);ctx.quadraticCurveTo(x,y,x+r,y);ctx.closePath();
-}
-
-// ===== START GAME =====
-function startGame(){
-  S.ps=[];
-  if(S.pm==='single'){
-    const el=document.getElementById('p0');
-    S.ps.push(mkP(el?el.value.trim()||'Player 1':'Player 1'));
-  }else if(S.pm==='multi'){
-    for(let i=0;i<4;i++){const el=document.getElementById('p'+i);if(el&&el.value.trim())S.ps.push(mkP(el.value.trim()))}
-    if(S.ps.length<2){alert('최소 2명이 필요합니다.');return}
-  }else{
-    for(let i=0;i<2;i++){const el=document.getElementById('p'+i);S.ps.push(mkP(el?el.value.trim()||'Player '+(i+1):'Player '+(i+1)))}
+function drawCyl(ctx, w, h, m) {
+  const v = getMeasVal(m), cW = 90, cy = 35, cH = h - 75, cx = w / 2;
+  const mx = Math.ceil(v / 10) * 10 + 10, mn = Math.max(0, mx - 60), pp = cH / (mx - mn);
+  ctx.strokeStyle = '#0284c7'; ctx.lineWidth = 2; ctx.fillStyle = '#e0f2fe';
+  ctx.beginPath(); ctx.moveTo(cx - cW / 2, cy); ctx.lineTo(cx - cW / 2, cy + cH);
+  ctx.quadraticCurveTo(cx - cW / 2, cy + cH + 14, cx, cy + cH + 14);
+  ctx.quadraticCurveTo(cx + cW / 2, cy + cH + 14, cx + cW / 2, cy + cH);
+  ctx.lineTo(cx + cW / 2, cy); ctx.stroke();
+  const lY = cy + cH - (v - mn) * pp;
+  ctx.fillStyle = 'rgba(59,130,246,.25)'; ctx.beginPath();
+  ctx.moveTo(cx - cW / 2 + 2, lY); ctx.quadraticCurveTo(cx, lY + 7, cx + cW / 2 - 2, lY);
+  ctx.lineTo(cx + cW / 2 - 2, cy + cH);
+  ctx.quadraticCurveTo(cx + cW / 2 - 2, cy + cH + 12, cx, cy + cH + 12);
+  ctx.quadraticCurveTo(cx - cW / 2 + 2, cy + cH + 12, cx - cW / 2 + 2, cy + cH);
+  ctx.closePath(); ctx.fill();
+  ctx.strokeStyle = '#2563eb'; ctx.lineWidth = 2; ctx.beginPath();
+  ctx.moveTo(cx - cW / 2 + 2, lY); ctx.quadraticCurveTo(cx, lY + 7, cx + cW / 2 - 2, lY); ctx.stroke();
+  ctx.strokeStyle = '#0284c7'; ctx.fillStyle = '#1e293b';
+  ctx.font = '10px sans-serif'; ctx.textAlign = 'right'; ctx.lineWidth = 1;
+  for (let vv = mn; vv <= mx; vv++) {
+    const y = cy + cH - (vv - mn) * pp; if (y < cy || y > cy + cH) continue;
+    const maj = vv % 10 === 0, mid = vv % 5 === 0, tl = maj ? 14 : mid ? 9 : 4;
+    ctx.beginPath(); ctx.moveTo(cx - cW / 2, y); ctx.lineTo(cx - cW / 2 - tl, y); ctx.stroke();
+    if (maj) ctx.fillText(vv + '', cx - cW / 2 - 17, y + 3);
   }
-  S.tl=parseInt(document.getElementById('sel-time').value);
-  S.diff=document.getElementById('sel-diff').value;
-  S.pi=0;
-  S.ps.forEach(p=>{p.score=0;p.solved=0;p.correct=0;p.wrong=0;p.combo=0;p.maxCombo=0});
-
-  if(S.pm==='battle'){go('battle');countdown(()=>startBattleRound())}
-  else{go('game');countdown(()=>startPlayerTurn())}
+  ctx.font = '11px sans-serif'; ctx.textAlign = 'center'; ctx.fillText('mL', cx, cy - 8);
+  ctx.fillStyle = '#ef4444'; ctx.font = 'bold 11px sans-serif'; ctx.textAlign = 'left';
+  ctx.fillText('← 읽으세요', cx + cW / 2 + 8, lY + 4);
 }
 
-function mkP(n){return{name:n,score:0,solved:0,correct:0,wrong:0,combo:0,maxCombo:0}}
-
-function countdown(cb){
-  const el=document.getElementById('countdown');el.style.display='flex';
-  let n=3;el.textContent=n;
-  const iv=setInterval(()=>{n--;if(n>0){el.textContent=n;el.style.animation='none';el.offsetHeight;el.style.animation='countIn .4s'}
-    else{clearInterval(iv);el.textContent='GO!';setTimeout(()=>{el.style.display='none';cb()},400)}},700);
+function drawTherm(ctx, w, h, m) {
+  const v = getMeasVal(m), bR = 18, tW = 14, cx = w / 2, tT = 28, tB = h - 55, tH = tB - tT;
+  const mx = Math.ceil(v / 10) * 10 + 10, mn = mx - 60, pp = tH / (mx - mn);
+  ctx.strokeStyle = '#6b7280'; ctx.lineWidth = 2; ctx.fillStyle = '#f9fafb';
+  ctx.beginPath(); ctx.moveTo(cx - tW / 2, tT); ctx.lineTo(cx - tW / 2, tB);
+  ctx.arc(cx, tB + 4, bR, Math.PI, 0, true); ctx.lineTo(cx + tW / 2, tT);
+  ctx.arc(cx, tT, tW / 2, 0, Math.PI, true); ctx.closePath(); ctx.fill(); ctx.stroke();
+  const mY = tB - (v - mn) * pp;
+  ctx.fillStyle = '#ef4444'; ctx.beginPath();
+  ctx.moveTo(cx - tW / 2 + 3, Math.max(tT + 4, mY)); ctx.lineTo(cx - tW / 2 + 3, tB);
+  ctx.arc(cx, tB + 4, bR - 4, Math.PI, 0, true);
+  ctx.lineTo(cx + tW / 2 - 3, Math.max(tT + 4, mY)); ctx.closePath(); ctx.fill();
+  ctx.beginPath(); ctx.arc(cx, tB + 4, bR - 4, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = '#374151'; ctx.fillStyle = '#1e293b';
+  ctx.font = '10px sans-serif'; ctx.textAlign = 'left'; ctx.lineWidth = 1;
+  for (let t = mn; t <= mx; t++) {
+    const y = tB - (t - mn) * pp; if (y < tT + 4 || y > tB) continue;
+    const maj = t % 10 === 0, mid = t % 5 === 0, tl = maj ? 14 : mid ? 9 : 4;
+    ctx.beginPath(); ctx.moveTo(cx + tW / 2 + 2, y); ctx.lineTo(cx + tW / 2 + 2 + tl, y); ctx.stroke();
+    if (maj) ctx.fillText(t + '\u00B0C', cx + tW / 2 + 19, y + 3);
+  }
+  ctx.fillStyle = '#2563eb'; ctx.font = 'bold 11px sans-serif'; ctx.textAlign = 'right';
+  ctx.fillText('읽으세요 →', cx - tW / 2 - 8, mY + 4);
+  ctx.strokeStyle = '#2563eb'; ctx.lineWidth = 1; ctx.setLineDash([3, 3]);
+  ctx.beginPath(); ctx.moveTo(cx - tW / 2 - 3, mY); ctx.lineTo(cx - tW / 2 + 1, mY); ctx.stroke();
+  ctx.setLineDash([]);
 }
 
-// ===== SINGLE / MULTI =====
-function startPlayerTurn(){
-  const p=S.ps[S.pi];p.score=0;p.solved=0;p.correct=0;p.wrong=0;p.combo=0;p.maxCombo=0;
-  S.timeLeft=S.tl;S.answered=false;
+function roundRect(ctx, x, y, w, h, r) {
+  ctx.moveTo(x + r, y); ctx.lineTo(x + w - r, y);
+  ctx.quadraticCurveTo(x + w, y, x + w, y + r); ctx.lineTo(x + w, y + h - r);
+  ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h); ctx.lineTo(x + r, y + h);
+  ctx.quadraticCurveTo(x, y + h, x, y + h - r); ctx.lineTo(x, y + r);
+  ctx.quadraticCurveTo(x, y, x + r, y); ctx.closePath();
+}
+
+// ============================================================
+//  SINGLE PLAY GAME
+// ============================================================
+function startSingleGame() {
+  const el = document.getElementById('p0');
+  S.ps = [mkP(el ? el.value.trim() || 'Player 1' : 'Player 1')];
+  S.tl = parseInt(document.getElementById('sel-time').value);
+  S.diff = document.getElementById('sel-diff').value;
+  S.pi = 0;
+  S.ps[0].score = 0; S.ps[0].solved = 0; S.ps[0].correct = 0; S.ps[0].wrong = 0;
+  S.ps[0].combo = 0; S.ps[0].maxCombo = 0;
+  go('game');
+  countdown(() => startPlayerTurn());
+}
+
+function mkP(n) { return { name: n, score: 0, solved: 0, correct: 0, wrong: 0, combo: 0, maxCombo: 0 }; }
+
+function countdown(cb) {
+  const el = document.getElementById('countdown'); el.style.display = 'flex';
+  let n = 3; el.textContent = n;
+  const iv = setInterval(() => {
+    n--;
+    if (n > 0) { el.textContent = n; el.style.animation = 'none'; el.offsetHeight; el.style.animation = 'countIn .4s'; }
+    else { clearInterval(iv); el.textContent = 'GO!'; setTimeout(() => { el.style.display = 'none'; cb(); }, 400); }
+  }, 700);
+}
+
+function startPlayerTurn() {
+  const p = S.ps[S.pi];
+  S.timeLeft = S.tl; S.answered = false;
   clearInterval(S.timer);
-  S.timer=setInterval(()=>{
-    S.timeLeft--;updateTimer();
-    if(S.timeLeft<=0){clearInterval(S.timer);endTurn()}
-  },1000);
+  S.timer = setInterval(() => {
+    S.timeLeft--; updateTimer();
+    if (S.timeLeft <= 0) { clearInterval(S.timer); endSingleGame(); }
+  }, 1000);
   nextQ();
 }
 
-function nextQ(){
-  S.answered=false;S.qStart=Date.now();
-  const d=S.diff==='mixed'?['easy','medium','hard'][Math.floor(Math.random()*3)]:S.diff;
-  const p=S.ps[S.pi];
-  const hdr=document.getElementById('g-hdr');
-  hdr.innerHTML=`<div class="player-info"><span style="font-weight:600">${p.name}</span>
-    <span class="score">⭐ ${p.score}</span><span class="combo">${p.combo>1?'🔥 '+p.combo+'콤보':''}</span></div>
+function nextQ() {
+  S.answered = false; S.qStart = Date.now();
+  const d = S.diff === 'mixed' ? ['easy', 'medium', 'hard'][Math.floor(Math.random() * 3)] : S.diff;
+  const p = S.ps[S.pi];
+  const hdr = document.getElementById('g-hdr');
+  hdr.innerHTML = `<div class="player-info"><span style="font-weight:600">${esc(p.name)}</span>
+    <span class="score">⭐ ${p.score}</span><span class="combo">${p.combo > 1 ? '🔥 ' + p.combo + '콤보' : ''}</span></div>
     <div class="solved">✅ ${p.correct}문제</div><div class="big-timer">${S.timeLeft}초</div>`;
-  document.getElementById('g-fb').innerHTML='';
+  document.getElementById('g-fb').innerHTML = '';
 
-  if(S.gm===1){
-    const ns=randNum(d);S.currentNum=ns;const a=analyze(ns);
-    document.getElementById('g-qarea').innerHTML=`<div class="q-label">유효숫자는 몇 개?</div>
-      <div class="num-display">${ns}</div>
+  if (S.gm === 1) {
+    const ns = randNum(d); S.currentNum = ns;
+    document.getElementById('g-qarea').innerHTML = `<div class="q-label">유효숫자는 몇 개?</div>
+      <div class="num-display">${esc(ns)}</div>
       <div class="ans-area"><div class="ans-row"><label>개수:</label>
       <input type="number" class="ans-inp" id="g-ans" min="1" max="20" placeholder="?" autofocus></div>
       <button class="btn btn-pri" onclick="submitG()">제출</button></div>`;
-    const inp=document.getElementById('g-ans');inp.focus();inp.onkeydown=e=>{if(e.key==='Enter')submitG()};
-  }else if(S.gm===2){
-    const ns=randNum(d);S.currentNum=ns;const a=analyze(ns);
-    let h='<div class="q-label">유효숫자를 모두 클릭하세요!</div><div class="digit-box" id="g-digs">';
-    a.digs.forEach((d,i)=>{if(d.pt)h+=`<div class="dg pt">.</div>`;
-      else h+=`<div class="dg" data-i="${i}" onclick="togDig(this)">${d.c}</div>`});
-    h+='</div><div class="ans-area"><button class="btn btn-pri" onclick="submitG()">제출</button></div>';
-    document.getElementById('g-qarea').innerHTML=h;
-  }else{
-    const ms=genMeas(d);S.currentMeas=ms;
-    const cW=Math.min(460,window.innerWidth-50),cH=ms.type==='ruler'?190:320;
-    document.getElementById('g-qarea').innerHTML=`<div class="q-label">측정값과 유효숫자 개수를 입력하세요!</div>
+    const inp = document.getElementById('g-ans'); inp.focus();
+    inp.onkeydown = e => { if (e.key === 'Enter') submitG(); };
+  } else if (S.gm === 2) {
+    const ns = randNum(d); S.currentNum = ns; const a = analyze(ns);
+    let h = '<div class="q-label">유효숫자를 모두 클릭하세요!</div><div class="digit-box" id="g-digs">';
+    a.digs.forEach((d, i) => {
+      if (d.pt) h += '<div class="dg pt">.</div>';
+      else h += `<div class="dg" data-i="${i}" onclick="togDig(this)">${d.c}</div>`;
+    });
+    h += '</div><div class="ans-area"><button class="btn btn-pri" onclick="submitG()">제출</button></div>';
+    document.getElementById('g-qarea').innerHTML = h;
+  } else {
+    const ms = genMeas(d); S.currentMeas = ms;
+    const cW = Math.min(460, window.innerWidth - 50), cH = ms.type === 'ruler' ? 190 : 320;
+    document.getElementById('g-qarea').innerHTML = `<div class="q-label">측정값과 유효숫자 개수를 입력하세요!</div>
       <div class="inst-area"><canvas id="g-cv" class="inst-canvas" width="${cW}" height="${cH}"></canvas>
-      <div class="inst-lbl">${ms.type==='ruler'?'자 (최소 눈금: 1mm)':ms.type==='cylinder'?'눈금실린더 (최소 눈금: 1mL)':'온도계 (최소 눈금: 1°C)'}</div></div>
+      <div class="inst-lbl">${ms.type === 'ruler' ? '자 (최소 눈금: 1mm)' : ms.type === 'cylinder' ? '눈금실린더 (최소 눈금: 1mL)' : '온도계 (최소 눈금: 1\u00B0C)'}</div></div>
       <div class="ans-area">
-      <div class="ans-row"><label>측정값 (${ms.unit}):</label><input type="text" class="ans-inp" id="g-meas" placeholder="예: ${ms.type==='ruler'?'3.45':'25.3'}" autofocus></div>
+      <div class="ans-row"><label>측정값 (${esc(ms.unit)}):</label><input type="text" class="ans-inp" id="g-meas" placeholder="예: ${ms.type === 'ruler' ? '3.45' : '25.3'}" autofocus></div>
       <div class="ans-row"><label>유효숫자 개수:</label><input type="number" class="ans-inp" id="g-sf" min="1" max="20" placeholder="?"></div>
       <button class="btn btn-pri" onclick="submitG()">제출</button></div>`;
-    setTimeout(()=>drawInst(document.getElementById('g-cv'),ms),30);
-    const mi=document.getElementById('g-meas');mi.focus();
-    mi.onkeydown=e=>{if(e.key==='Enter')document.getElementById('g-sf').focus()};
-    document.getElementById('g-sf').onkeydown=e=>{if(e.key==='Enter')submitG()};
+    setTimeout(() => drawInst(document.getElementById('g-cv'), ms), 30);
+    const mi = document.getElementById('g-meas'); mi.focus();
+    mi.onkeydown = e => { if (e.key === 'Enter') document.getElementById('g-sf').focus(); };
+    document.getElementById('g-sf').onkeydown = e => { if (e.key === 'Enter') submitG(); };
   }
 }
 
-function togDig(el){if(!S.answered)el.classList.toggle('sel')}
+function togDig(el) { if (!S.answered) el.classList.toggle('sel'); }
 
-function submitG(){
-  if(S.answered||S.timeLeft<=0)return;S.answered=true;
-  const p=S.ps[S.pi];let ok=false,exp='';
-  if(S.gm===1){
-    const a=analyze(S.currentNum),ans=parseInt(document.getElementById('g-ans').value);
-    ok=ans===a.count;
-    exp=`${S.currentNum} → 유효숫자: ${a.nd.filter(d=>d.sig).map(d=>d.c).join(', ')} (${a.count}개)`;
-    document.getElementById('g-ans').classList.add(ok?'ok':'no');
-  }else if(S.gm===2){
-    const a=analyze(S.currentNum),digs=document.querySelectorAll('#g-digs .dg:not(.pt)');
-    let allOk=true;const nd=a.nd;
-    digs.forEach((el,i)=>{const ex=nd[i]?.sig,sel=el.classList.contains('sel');
-      if(sel&&ex)el.classList.add('ok');else if(sel&&!ex){el.classList.add('no');allOk=false}
-      else if(!sel&&ex){el.classList.add('miss');allOk=false}el.style.cursor='default'});
-    ok=allOk;exp=`유효숫자: ${nd.filter(d=>d.sig).map(d=>d.c).join(', ')} (${a.count}개)`;
-  }else{
-    const ms=S.currentMeas,mv=parseFloat(document.getElementById('g-meas').value),sv=parseInt(document.getElementById('g-sf').value);
-    const tol=ms.type==='ruler'?0.03:0.2;
-    const mOk=!isNaN(mv)&&Math.abs(mv-ms.val)<=tol,sOk=sv===ms.sf;ok=mOk&&sOk;
-    document.getElementById('g-meas').classList.add(mOk?'ok':'no');
-    document.getElementById('g-sf').classList.add(sOk?'ok':'no');
-    exp=`정답: ${ms.dv} ${ms.unit} (유효숫자 ${ms.sf}개)`;
+function submitG() {
+  if (S.answered || S.timeLeft <= 0) return; S.answered = true;
+  const p = S.ps[S.pi]; let ok = false, exp = '';
+  if (S.gm === 1) {
+    const a = analyze(S.currentNum), ans = parseInt(document.getElementById('g-ans').value);
+    ok = ans === a.count;
+    exp = `${S.currentNum} → 유효숫자: ${a.nd.filter(d => d.sig).map(d => d.c).join(', ')} (${a.count}개)`;
+    document.getElementById('g-ans').classList.add(ok ? 'ok' : 'no');
+  } else if (S.gm === 2) {
+    const a = analyze(S.currentNum), digs = document.querySelectorAll('#g-digs .dg:not(.pt)');
+    let allOk = true; const nd = a.nd;
+    digs.forEach((el, i) => {
+      const ex = nd[i]?.sig, sel = el.classList.contains('sel');
+      if (sel && ex) el.classList.add('ok');
+      else if (sel && !ex) { el.classList.add('no'); allOk = false; }
+      else if (!sel && ex) { el.classList.add('miss'); allOk = false; }
+      el.style.cursor = 'default';
+    });
+    ok = allOk; exp = `유효숫자: ${nd.filter(d => d.sig).map(d => d.c).join(', ')} (${a.count}개)`;
+  } else {
+    const ms = S.currentMeas, mv = parseFloat(document.getElementById('g-meas').value), sv = parseInt(document.getElementById('g-sf').value);
+    const tol = ms.type === 'ruler' ? 0.03 : 0.2;
+    const mOk = !isNaN(mv) && Math.abs(mv - ms.val) <= tol, sOk = sv === ms.sf; ok = mOk && sOk;
+    document.getElementById('g-meas').classList.add(mOk ? 'ok' : 'no');
+    document.getElementById('g-sf').classList.add(sOk ? 'ok' : 'no');
+    exp = `정답: ${ms.dv} ${ms.unit} (유효숫자 ${ms.sf}개)`;
   }
   p.solved++;
-  if(ok){p.correct++;p.combo++;if(p.combo>p.maxCombo)p.maxCombo=p.combo;
-    const elapsed=(Date.now()-S.qStart)/1000;let pts=100+Math.max(0,Math.floor((10-elapsed)*5))+Math.min((p.combo-1)*20,100);
-    p.score+=pts;showFB('g-fb',true,`+${pts}점! ${exp}`,p.combo);
-  }else{p.wrong++;p.combo=0;showFB('g-fb',false,exp,0)}
-  // Update header
-  document.querySelector('#g-hdr .score').textContent='⭐ '+p.score;
-  const ce=document.querySelector('#g-hdr .combo');if(ce)ce.textContent=p.combo>1?'🔥 '+p.combo+'콤보':'';
-  document.querySelector('#g-hdr .solved').textContent='✅ '+p.correct+'문제';
-  // Auto next after short delay
-  setTimeout(()=>{if(S.timeLeft>0)nextQ()},ok?600:1200);
+  if (ok) {
+    p.correct++; p.combo++; if (p.combo > p.maxCombo) p.maxCombo = p.combo;
+    const elapsed = (Date.now() - S.qStart) / 1000;
+    let pts = 100 + Math.max(0, Math.floor((10 - elapsed) * 5)) + Math.min((p.combo - 1) * 20, 100);
+    p.score += pts; showFB('g-fb', true, `+${pts}점! ${exp}`, p.combo);
+  } else { p.wrong++; p.combo = 0; showFB('g-fb', false, exp, 0); }
+  document.querySelector('#g-hdr .score').textContent = '⭐ ' + p.score;
+  const ce = document.querySelector('#g-hdr .combo'); if (ce) ce.textContent = p.combo > 1 ? '🔥 ' + p.combo + '콤보' : '';
+  document.querySelector('#g-hdr .solved').textContent = '✅ ' + p.correct + '문제';
+  setTimeout(() => { if (S.timeLeft > 0) nextQ(); }, ok ? 600 : 1200);
 }
 
-function updateTimer(){
-  document.querySelectorAll('.big-timer').forEach(el=>{el.textContent=S.timeLeft+'초';el.classList.toggle('urgent',S.timeLeft<=5)})}
-
-function endTurn(){
-  if(S.pm==='multi'&&S.pi<S.ps.length-1){
-    S.pi++;
-    const p=S.ps[S.pi];
-    document.getElementById('g-qarea').innerHTML=`<div style="text-align:center"><h2 style="color:var(--acc);margin-bottom:20px">${p.name} 차례!</h2>
-      <button class="btn btn-pri btn-lg" onclick="countdown(()=>startPlayerTurn())">준비!</button></div>`;
-    document.getElementById('g-fb').innerHTML='';
-    document.getElementById('g-hdr').innerHTML=`<div class="player-info"><span style="font-weight:600">${p.name}</span></div><div class="big-timer">대기</div>`;
-  }else{endGame()}
+function updateTimer() {
+  document.querySelectorAll('.big-timer').forEach(el => {
+    el.textContent = S.timeLeft + '초';
+    el.classList.toggle('urgent', S.timeLeft <= 5);
+  });
 }
 
-// ===== BATTLE MODE =====
-function startBattleRound(){
-  S.timeLeft=S.tl;S.ps.forEach(p=>{p.score=0;p.solved=0;p.correct=0;p.wrong=0;p.combo=0;p.maxCombo=0});
-  clearInterval(S.timer);
-  S.timer=setInterval(()=>{S.timeLeft--;updateTimer();if(S.timeLeft<=0){clearInterval(S.timer);endGame()}},1000);
-  nextBQ();
+function endSingleGame() {
+  clearInterval(S.timer); go('results');
+  const p = S.ps[0];
+  document.getElementById('res-box').innerHTML = `<div class="res-card"><div style="font-size:3rem">🏆</div>
+    <div style="font-size:1.3rem;font-weight:700;margin:10px 0">${esc(p.name)}</div>
+    <div class="final">${p.score}점</div>
+    <div class="stats">맞은 문제: <b>${p.correct}개</b> / ${p.solved}개<br>
+    정답률: <b>${p.solved ? Math.round(p.correct / p.solved * 100) : 0}%</b><br>
+    최대 콤보: <b>${p.maxCombo}회</b><br>
+    제한 시간: <b>${S.tl}초</b></div></div>`;
+  if (p.correct >= 10) spawnConfetti();
 }
 
-function nextBQ(){
-  S.battleAns=[false,false];S.qStart=Date.now();
-  const d=S.diff==='mixed'?['easy','medium','hard'][Math.floor(Math.random()*3)]:S.diff;
-  // Header
-  const hdr=document.getElementById('b-hdr');
-  hdr.innerHTML=`<div class="player-info"><span style="font-weight:600">${S.ps[0].name}</span><span class="score">⭐ ${S.ps[0].score}</span></div>
-    <div class="big-timer">${S.timeLeft}초</div>
-    <div class="player-info"><span style="font-weight:600">${S.ps[1].name}</span><span class="score">⭐ ${S.ps[1].score}</span></div>`;
-  document.getElementById('b-fb').innerHTML='';
-
-  if(S.gm===1||S.gm===2){
-    const ns=randNum(d);S.currentNum=ns;
-    document.getElementById('b-qdisplay').innerHTML=`<div class="q-label">${S.gm===1?'유효숫자 개수를 맞혀보세요!':'유효숫자를 모두 찾으세요!'}</div>
-      <div class="num-display" style="display:inline-block">${ns}</div>`;
-  }else{
-    const ms=genMeas(d);S.currentMeas=ms;
-    const cW=Math.min(420,window.innerWidth-60),cH=ms.type==='ruler'?170:280;
-    document.getElementById('b-qdisplay').innerHTML=`<div class="q-label">측정값과 유효숫자를 입력하세요!</div>
-      <canvas id="b-cv" class="inst-canvas" width="${cW}" height="${cH}"></canvas>
-      <div class="inst-lbl">${ms.type==='ruler'?'자 (최소 눈금: 1mm)':ms.type==='cylinder'?'눈금실린더 (최소 눈금: 1mL)':'온도계 (최소 눈금: 1°C)'}</div>`;
-    setTimeout(()=>drawInst(document.getElementById('b-cv'),ms),30);
+// ============================================================
+//  FEEDBACK / EFFECTS
+// ============================================================
+function showFB(id, ok, text, combo) {
+  document.getElementById(id).innerHTML = `<div class="fb ${ok ? 'ok' : 'no'}">${ok ? '✅ 정답!' : '❌ 오답!'}<div class="exp">${text}</div></div>`;
+  if (combo >= 2) showCombo(combo);
+}
+function showCombo(n) {
+  const el = document.createElement('div'); el.className = 'combo-pop'; el.textContent = `🔥 ${n} COMBO!`;
+  document.body.appendChild(el); setTimeout(() => el.remove(), 1000);
+}
+function spawnConfetti() {
+  const cols = ['#ef4444', '#f59e0b', '#10b981', '#6366f1', '#ec4899', '#06b6d4'];
+  for (let i = 0; i < 30; i++) {
+    const el = document.createElement('div'); el.className = 'confetti';
+    el.style.left = Math.random() * 100 + 'vw';
+    el.style.background = cols[Math.floor(Math.random() * 6)];
+    el.style.width = el.style.height = (Math.random() * 8 + 4) + 'px';
+    el.style.borderRadius = Math.random() > .5 ? '50%' : '2px';
+    el.style.animation = `confetti ${Math.random() * 2 + 1.5}s ease-out ${Math.random() * .5}s forwards`;
+    document.body.appendChild(el); setTimeout(() => el.remove(), 4000);
   }
-  // Battle sides
-  const bg=document.getElementById('b-grid');bg.innerHTML='';
-  for(let i=0;i<2;i++){
-    const sd=document.createElement('div');sd.className='battle-side';sd.id='bs-'+i;
-    let ih=`<h3>${S.ps[i].name} <span style="font-size:.8rem;color:var(--txt2)">✅${S.ps[i].correct}</span></h3>`;
-    if(S.gm===1){
-      ih+=`<div class="ans-area" style="width:100%"><div class="ans-row"><label>개수:</label>
-        <input type="number" class="ans-inp" id="b-a${i}" min="1" max="20" placeholder="?"></div>
-        <button class="btn btn-pri btn-sm" onclick="bSubmit(${i})">제출</button></div>`;
-    }else if(S.gm===2){
-      const a=analyze(S.currentNum);
-      ih+='<div class="digit-box" id="b-dg'+i+'" style="font-size:1.8rem;justify-content:center">';
-      a.digs.forEach((dd,di)=>{if(dd.pt)ih+='<div class="dg pt" style="font-size:1.8rem">.</div>';
-        else ih+=`<div class="dg" style="font-size:1.8rem;padding:6px 9px;min-width:32px" data-i="${di}" onclick="bTogDig(this,${i})">${dd.c}</div>`});
-      ih+='</div><button class="btn btn-pri btn-sm" style="margin-top:8px" onclick="bSubmit('+i+')">제출</button>';
-    }else{
-      const ms=S.currentMeas;
-      ih+=`<div class="ans-area" style="width:100%">
-        <div class="ans-row"><label>측정값(${ms.unit}):</label><input type="text" class="ans-inp" id="b-m${i}" placeholder="?" style="font-size:1rem"></div>
-        <div class="ans-row"><label>유효숫자:</label><input type="number" class="ans-inp" id="b-s${i}" min="1" max="20" placeholder="?" style="font-size:1rem"></div>
-        <button class="btn btn-pri btn-sm" onclick="bSubmit(${i})">제출</button></div>`;
+}
+function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+function showToast(msg) {
+  const el = document.createElement('div'); el.className = 'toast'; el.textContent = msg;
+  document.body.appendChild(el); setTimeout(() => el.remove(), 3000);
+}
+
+// ============================================================
+//  ONLINE MULTIPLAYER - WebSocket
+// ============================================================
+function connectWS() {
+  if (S.ws && S.ws.readyState <= 1) return; // already connected/connecting
+  const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  S.ws = new WebSocket(proto + '//' + location.host);
+
+  S.ws.onopen = () => { console.log('WS connected'); };
+
+  S.ws.onclose = () => {
+    console.log('WS disconnected');
+    // If we were in a game, show a message
+    const cur = document.querySelector('.screen.active');
+    if (cur && (cur.id === 's-waiting' || cur.id === 's-online')) {
+      showToast('서버 연결이 끊어졌습니다.');
+      setTimeout(() => go('menu'), 2000);
     }
-    sd.innerHTML=ih;bg.appendChild(sd);
-  }
-  // Enter handlers
-  for(let i=0;i<2;i++){
-    const ae=document.getElementById('b-a'+i);if(ae)ae.onkeydown=e=>{if(e.key==='Enter')bSubmit(i)};
-    const se=document.getElementById('b-s'+i);if(se)se.onkeydown=e=>{if(e.key==='Enter')bSubmit(i)};
-    const me=document.getElementById('b-m'+i);if(me)me.onkeydown=e=>{if(e.key==='Enter'){const s=document.getElementById('b-s'+i);if(s)s.focus()}};
-  }
-  const f=document.getElementById('b-a0')||document.getElementById('b-m0');if(f)f.focus();
+  };
+
+  S.ws.onerror = () => {};
+
+  S.ws.onmessage = (ev) => {
+    let msg;
+    try { msg = JSON.parse(ev.data); } catch { return; }
+    handleServerMsg(msg);
+  };
 }
 
-function bTogDig(el,pi){if(!S.battleAns[pi])el.classList.toggle('sel')}
+function wsSend(msg) {
+  if (S.ws && S.ws.readyState === 1) S.ws.send(JSON.stringify(msg));
+}
 
-function bSubmit(pi){
-  if(S.battleAns[pi]||S.timeLeft<=0)return;S.battleAns[pi]=true;
-  const p=S.ps[pi];let ok=false;
-  if(S.gm===1){
-    const a=analyze(S.currentNum),ans=parseInt(document.getElementById('b-a'+pi).value);
-    ok=ans===a.count;document.getElementById('b-a'+pi).classList.add(ok?'ok':'no');
-  }else if(S.gm===2){
-    const a=analyze(S.currentNum),nd=a.nd,digs=document.querySelectorAll('#b-dg'+pi+' .dg:not(.pt)');
-    let allOk=true;
-    digs.forEach((el,i)=>{const ex=nd[i]?.sig,sel=el.classList.contains('sel');
-      if(sel&&ex)el.classList.add('ok');else if(sel&&!ex){el.classList.add('no');allOk=false}
-      else if(!sel&&ex){el.classList.add('miss');allOk=false}});
-    ok=allOk;
-  }else{
-    const ms=S.currentMeas,mv=parseFloat((document.getElementById('b-m'+pi).value||'').trim()),sv=parseInt(document.getElementById('b-s'+pi).value);
-    const tol=ms.type==='ruler'?0.03:0.2;
-    const mOk=!isNaN(mv)&&Math.abs(mv-ms.val)<=tol,sOk=sv===ms.sf;ok=mOk&&sOk;
-    document.getElementById('b-m'+pi).classList.add(mOk?'ok':'no');
-    document.getElementById('b-s'+pi).classList.add(sOk?'ok':'no');
+function joinRoom() {
+  const name = document.getElementById('join-name').value.trim();
+  const code = document.getElementById('join-code').value.trim();
+  const errEl = document.getElementById('join-error');
+  errEl.style.display = 'none';
+
+  if (!name) { errEl.textContent = '이름을 입력해주세요.'; errEl.style.display = 'block'; return; }
+  if (!code || code.length !== 4) { errEl.textContent = '4자리 방 코드를 입력해주세요.'; errEl.style.display = 'block'; return; }
+
+  connectWS();
+  // Wait for connection then send join
+  const sendJoin = () => {
+    if (S.ws.readyState === 1) {
+      wsSend({ type: 'join', code, name });
+    } else if (S.ws.readyState === 0) {
+      setTimeout(sendJoin, 100);
+    } else {
+      errEl.textContent = '서버에 연결할 수 없습니다.';
+      errEl.style.display = 'block';
+    }
+  };
+  setTimeout(sendJoin, 200);
+}
+
+// ============================================================
+//  HANDLE SERVER MESSAGES
+// ============================================================
+let onlineAnswered = false;
+
+function handleServerMsg(msg) {
+  switch (msg.type) {
+    case 'error':
+      showToast(msg.msg);
+      const errEl = document.getElementById('join-error');
+      if (errEl) { errEl.textContent = msg.msg; errEl.style.display = 'block'; }
+      break;
+
+    case 'room:joined':
+      S.roomCode = msg.code;
+      S.onlineGameMode = msg.gameMode;
+      S.onlinePlayMode = msg.playMode;
+      S.onlinePlayers = msg.players;
+      // Find my ID (last joined)
+      if (msg.players.length > 0) S.myId = msg.players[msg.players.length - 1].id;
+      go('waiting');
+      updateWaitingRoom(msg);
+      break;
+
+    case 'room:players':
+      S.onlinePlayers = msg.players;
+      updateWaitingPlayerList(msg.players);
+      break;
+
+    case 'room:kicked':
+      showToast('방에서 퇴장되었습니다.');
+      go('menu');
+      break;
+
+    case 'game:countdown':
+      handleCountdown(msg.n);
+      break;
+
+    case 'game:question':
+      handleOnlineQuestion(msg);
+      break;
+
+    case 'game:result':
+      handleOnlineResult(msg);
+      break;
+
+    case 'game:scores':
+      updateOnlineScoreboard(msg.players);
+      break;
+
+    case 'game:tick':
+      S.timeLeft = msg.timeLeft;
+      updateTimer();
+      break;
+
+    case 'game:over':
+      handleGameOver(msg.players);
+      break;
+
+    case 'game:stopped':
+      showToast('교사가 게임을 종료했습니다.');
+      go('menu');
+      break;
   }
-  p.solved++;const sd=document.getElementById('bs-'+pi);
-  if(ok){p.correct++;p.combo++;if(p.combo>p.maxCombo)p.maxCombo=p.combo;
-    const el=(Date.now()-S.qStart)/1000;let pts=100+Math.max(0,Math.floor((8-el)*8))+Math.min((p.combo-1)*25,120);
-    if(!S.battleAns[1-pi])pts+=50; // 먼저 맞추면 보너스
-    p.score+=pts;sd.innerHTML+=`<div class="fb ok" style="margin-top:8px">✅ +${pts}점</div>`;
-    if(p.combo>=2)showCombo(p.combo);
-  }else{p.wrong++;p.combo=0;sd.innerHTML+=`<div class="fb no" style="margin-top:8px">❌</div>`}
-  // Update header scores
-  document.querySelectorAll('#b-hdr .score')[pi].textContent='⭐ '+p.score;
+}
 
-  if(S.battleAns[0]&&S.battleAns[1]){
-    const a=S.gm===3?S.currentMeas:analyze(S.currentNum);
-    const exp=S.gm===3?`정답: ${a.dv} ${a.unit} (유효숫자 ${a.sf}개)`
-      :`유효숫자: ${a.nd.filter(d=>d.sig).map(d=>d.c).join(', ')} (${a.count}개)`;
-    document.getElementById('b-fb').innerHTML=`<div class="fb" style="background:var(--bg2);border:1px solid var(--bg3);color:var(--txt)">${exp}</div>`;
-    setTimeout(()=>{if(S.timeLeft>0)nextBQ()},1000);
+// ============================================================
+//  WAITING ROOM
+// ============================================================
+function updateWaitingRoom(msg) {
+  const gmNames = { 1: '유효숫자 개수 세기', 2: '유효숫자 찾기', 3: '측정값 읽기' };
+  const pmNames = { multi: '멀티 플레이', battle: '대전 플레이' };
+  const diffNames = { easy: '쉬움', medium: '보통', hard: '어려움', mixed: '혼합' };
+
+  document.getElementById('w-code').textContent = msg.code;
+  document.getElementById('w-info').innerHTML =
+    `${gmNames[msg.gameMode] || '?'} | ${pmNames[msg.playMode] || '?'} | ` +
+    `${msg.settings.timeLimit}초 | ${diffNames[msg.settings.difficulty] || '?'}`;
+  updateWaitingPlayerList(msg.players);
+}
+
+function updateWaitingPlayerList(players) {
+  document.getElementById('w-count').textContent = players.length;
+  const ul = document.getElementById('w-players');
+  ul.innerHTML = '';
+  players.forEach(p => {
+    const li = document.createElement('li');
+    li.innerHTML = `<span class="dot"></span>${esc(p.name)}${p.id === S.myId ? ' <span style="color:var(--pri);font-size:.8rem">(나)</span>' : ''}`;
+    ul.appendChild(li);
+  });
+}
+
+// ============================================================
+//  ONLINE GAME FLOW
+// ============================================================
+function handleCountdown(n) {
+  go('online');
+  const el = document.getElementById('countdown');
+  el.style.display = 'flex';
+  if (n > 0) {
+    el.textContent = n;
+    el.style.animation = 'none'; el.offsetHeight; el.style.animation = 'countIn .4s';
+  } else {
+    el.textContent = 'GO!';
+    setTimeout(() => { el.style.display = 'none'; }, 500);
   }
 }
 
-// ===== FEEDBACK =====
-function showFB(id,ok,text,combo){
-  document.getElementById(id).innerHTML=`<div class="fb ${ok?'ok':'no'}">${ok?'✅ 정답!':'❌ 오답!'}<div class="exp">${text}</div></div>`;
-  if(combo>=2)showCombo(combo);
-}
-function showCombo(n){
-  const el=document.createElement('div');el.className='combo-pop';el.textContent=`🔥 ${n} COMBO!`;
-  document.body.appendChild(el);setTimeout(()=>el.remove(),1000);
-}
+function handleOnlineQuestion(msg) {
+  onlineAnswered = false;
+  document.getElementById('o-fb').innerHTML = '';
+  const gm = msg.gameMode;
 
-// ===== END GAME =====
-function endGame(){
-  clearInterval(S.timer);go('results');
-  const rb=document.getElementById('res-box');
-  const sorted=[...S.ps].sort((a,b)=>b.score-a.score);
-  if(S.ps.length===1){
-    const p=S.ps[0];
-    rb.innerHTML=`<div class="res-card"><div style="font-size:3rem">🏆</div>
-      <div style="font-size:1.3rem;font-weight:700;margin:10px 0">${p.name}</div>
-      <div class="final">${p.score}점</div>
-      <div class="stats">맞은 문제: <b>${p.correct}개</b> / ${p.solved}개<br>
-      정답률: <b>${p.solved?Math.round(p.correct/p.solved*100):0}%</b><br>
-      최대 콤보: <b>${p.maxCombo}회</b><br>
-      제한 시간: <b>${S.tl}초</b></div></div>`;
-  }else{
-    let h='';sorted.forEach((p,i)=>{
-      const em=i===0?'🥇':i===1?'🥈':i===2?'🥉':'🏅';
-      const acc=p.solved?Math.round(p.correct/p.solved*100):0;
-      h+=`<div class="res-item" style="${i===0?'border:2px solid var(--acc)':''}">
-        <div style="display:flex;align-items:center;gap:12px"><span style="font-size:1.5rem">${em}</span>
-        <div><div style="font-weight:700">${p.name}</div>
-        <div style="color:var(--txt2);font-size:.82rem">정답 ${p.correct}개 (${acc}%) · 콤보 ${p.maxCombo}회</div></div></div>
-        <div style="font-size:1.3rem;font-weight:800;color:var(--acc)">${p.score}점</div></div>`});
-    rb.innerHTML=h;
+  // Header
+  const myP = S.onlinePlayers.find(p => p.id === S.myId) || { name: '나', score: 0, correct: 0, combo: 0 };
+  document.getElementById('o-hdr').innerHTML = `
+    <div class="player-info">
+      <span style="font-weight:600">${esc(myP.name)}</span>
+      <span class="score">⭐ ${myP.score}</span>
+      <span class="combo">${myP.combo > 1 ? '🔥 ' + myP.combo + '콤보' : ''}</span>
+    </div>
+    <div class="solved">✅ ${myP.correct}문제</div>
+    <div class="big-timer">${S.timeLeft}초</div>`;
+
+  const qa = document.getElementById('o-qarea');
+
+  if (gm === 1) {
+    qa.innerHTML = `<div class="q-label">유효숫자는 몇 개?</div>
+      <div class="num-display">${esc(msg.numStr)}</div>
+      <div class="ans-area"><div class="ans-row"><label>개수:</label>
+      <input type="number" class="ans-inp" id="o-ans" min="1" max="20" placeholder="?" autofocus></div>
+      <button class="btn btn-pri" onclick="submitOnline()">제출</button></div>`;
+    const inp = document.getElementById('o-ans'); inp.focus();
+    inp.onkeydown = e => { if (e.key === 'Enter') submitOnline(); };
+
+  } else if (gm === 2) {
+    let h = '<div class="q-label">유효숫자를 모두 클릭하세요!</div><div class="digit-box" id="o-digs">';
+    msg.digits.forEach((d, i) => {
+      if (d.pt) h += '<div class="dg pt">.</div>';
+      else h += `<div class="dg" data-i="${i}" onclick="oTogDig(this)">${d.c}</div>`;
+    });
+    h += '</div><div class="ans-area"><button class="btn btn-pri" onclick="submitOnline()">제출</button></div>';
+    qa.innerHTML = h;
+
+  } else if (gm === 3) {
+    const m = msg.measurement;
+    const cW = Math.min(460, window.innerWidth - 50), cH = m.type === 'ruler' ? 190 : 320;
+    qa.innerHTML = `<div class="q-label">측정값과 유효숫자 개수를 입력하세요!</div>
+      <div class="inst-area"><canvas id="o-cv" class="inst-canvas" width="${cW}" height="${cH}"></canvas>
+      <div class="inst-lbl">${m.type === 'ruler' ? '자 (최소 눈금: 1mm)' : m.type === 'cylinder' ? '눈금실린더 (최소 눈금: 1mL)' : '온도계 (최소 눈금: 1\u00B0C)'}</div></div>
+      <div class="ans-area">
+      <div class="ans-row"><label>측정값 (${esc(m.unit)}):</label><input type="text" class="ans-inp" id="o-meas" placeholder="예: ${m.type === 'ruler' ? '3.45' : '25.3'}" autofocus></div>
+      <div class="ans-row"><label>유효숫자 개수:</label><input type="number" class="ans-inp" id="o-sf" min="1" max="20" placeholder="?"></div>
+      <button class="btn btn-pri" onclick="submitOnline()">제출</button></div>`;
+    setTimeout(() => drawInst(document.getElementById('o-cv'), m), 30);
+    const mi = document.getElementById('o-meas'); mi.focus();
+    mi.onkeydown = e => { if (e.key === 'Enter') document.getElementById('o-sf').focus(); };
+    document.getElementById('o-sf').onkeydown = e => { if (e.key === 'Enter') submitOnline(); };
   }
-  if(sorted[0].correct>=10)spawnConfetti();
 }
 
-function spawnConfetti(){
-  const cols=['#ef4444','#f59e0b','#10b981','#6366f1','#ec4899','#06b6d4'];
-  for(let i=0;i<30;i++){const el=document.createElement('div');el.className='confetti';
-    el.style.left=Math.random()*100+'vw';el.style.background=cols[Math.floor(Math.random()*6)];
-    el.style.width=el.style.height=(Math.random()*8+4)+'px';el.style.borderRadius=Math.random()>.5?'50%':'2px';
-    el.style.animation=`confetti ${Math.random()*2+1.5}s ease-out ${Math.random()*.5}s forwards`;
-    document.body.appendChild(el);setTimeout(()=>el.remove(),4000)}
+function oTogDig(el) { if (!onlineAnswered) el.classList.toggle('sel'); }
+
+function submitOnline() {
+  if (onlineAnswered) return;
+  onlineAnswered = true;
+
+  const cur = document.querySelector('.screen.active');
+  if (!cur || cur.id !== 's-online') return;
+
+  // Determine which game mode from the current question
+  const ansEl = document.getElementById('o-ans');
+  const digsEl = document.getElementById('o-digs');
+  const measEl = document.getElementById('o-meas');
+
+  if (ansEl) {
+    // Game mode 1
+    wsSend({ type: 'answer', count: parseInt(ansEl.value) || 0 });
+  } else if (digsEl) {
+    // Game mode 2
+    const digs = digsEl.querySelectorAll('.dg');
+    const selected = [];
+    digs.forEach(d => {
+      if (d.classList.contains('pt')) selected.push(false);
+      else selected.push(d.classList.contains('sel'));
+    });
+    wsSend({ type: 'answer', selected });
+  } else if (measEl) {
+    // Game mode 3
+    const sfEl = document.getElementById('o-sf');
+    wsSend({
+      type: 'answer',
+      measValue: parseFloat(measEl.value) || 0,
+      sigFigs: parseInt(sfEl.value) || 0
+    });
+  }
+}
+
+function handleOnlineResult(msg) {
+  const fbEl = document.getElementById('o-fb');
+  if (msg.correct) {
+    fbEl.innerHTML = `<div class="fb ok">✅ 정답! +${msg.points}점<div class="exp">${esc(msg.explanation)}</div></div>`;
+    // Find my player and update combo display
+    const myP = (msg.scores || []).find(p => p.id === S.myId);
+    if (myP && myP.combo >= 2) showCombo(myP.combo);
+  } else {
+    fbEl.innerHTML = `<div class="fb no">❌ 오답!<div class="exp">${esc(msg.explanation)}</div></div>`;
+  }
+
+  // Update player data
+  if (msg.scores) S.onlinePlayers = msg.scores;
+
+  // Update header
+  const myP = (msg.scores || S.onlinePlayers).find(p => p.id === S.myId);
+  if (myP) {
+    const hdr = document.getElementById('o-hdr');
+    hdr.innerHTML = `
+      <div class="player-info">
+        <span style="font-weight:600">${esc(myP.name)}</span>
+        <span class="score">⭐ ${myP.score}</span>
+        <span class="combo">${myP.combo > 1 ? '🔥 ' + myP.combo + '콤보' : ''}</span>
+      </div>
+      <div class="solved">✅ ${myP.correct}문제</div>
+      <div class="big-timer">${S.timeLeft}초</div>`;
+  }
+}
+
+function updateOnlineScoreboard(players) {
+  S.onlinePlayers = players;
+  const sorted = [...players].sort((a, b) => b.score - a.score);
+  const sb = document.getElementById('o-sb');
+  let h = '';
+  sorted.forEach((p, i) => {
+    const isMe = p.id === S.myId;
+    const em = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : (i + 1);
+    h += `<div class="sb-item${isMe ? ' me' : ''}">
+      <span class="rank">${em}</span>
+      <span class="name">${esc(p.name)}${isMe ? ' (나)' : ''}</span>
+      <span style="color:var(--txt2);font-size:.85rem;margin-right:10px">✅${p.correct}</span>
+      <span class="pts">${p.score}점</span>
+    </div>`;
+  });
+  sb.innerHTML = h;
+}
+
+// ============================================================
+//  GAME OVER (online)
+// ============================================================
+function handleGameOver(players) {
+  go('oresults');
+  const rb = document.getElementById('ores-box');
+  let h = '';
+  players.forEach((p, i) => {
+    const em = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : '🏅';
+    const isMe = p.id === S.myId;
+    h += `<div class="res-item" style="${i === 0 ? 'border:2px solid var(--acc)' : ''}${isMe ? ';background:rgba(99,102,241,.15)' : ''}">
+      <div style="display:flex;align-items:center;gap:12px">
+        <span style="font-size:1.5rem">${em}</span>
+        <div>
+          <div style="font-weight:700">${esc(p.name)}${isMe ? ' <span style="color:var(--pri);font-size:.8rem">(나)</span>' : ''}</div>
+          <div style="color:var(--txt2);font-size:.82rem">정답 ${p.correct}개 | 최대 콤보 ${p.combo}회</div>
+        </div>
+      </div>
+      <div style="font-size:1.3rem;font-weight:800;color:var(--acc)">${p.score}점</div>
+    </div>`;
+  });
+  rb.innerHTML = h;
+
+  // Check if I won
+  if (players.length > 0 && players[0].id === S.myId && players.length > 1) {
+    spawnConfetti();
+  }
 }
 </script>
 </body>

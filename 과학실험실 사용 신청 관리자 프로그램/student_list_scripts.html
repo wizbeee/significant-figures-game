@@ -1,0 +1,1198 @@
+<script>
+/* =========================================================
+ * 학생 명단 페이지 스크립트
+ * ========================================================= */
+
+let ALL_DATA = [];        // 서버 원본 데이터
+let STUDENT_DATA = [];    // 가공된 학생 데이터
+let FILTERED_DATA = [];   // 필터링된 데이터
+let LAB_LIST = [];
+
+/* ===== 초기화 ===== */
+document.addEventListener('DOMContentLoaded', function() {
+  setQuickDate('today');
+  
+  // 검색 입력 이벤트
+  let timer;
+  $('#searchInput').addEventListener('input', () => {
+    clearTimeout(timer);
+    timer = setTimeout(() => applyFiltersAndRender(), 300);
+  });
+  
+  loadData();
+});
+
+/* ===== 빠른 날짜 선택 ===== */
+function setQuickDate(type) {
+  const today = new Date();
+  today.setHours(0,0,0,0);
+  let from, to;
+  
+  if (type === 'today') {
+    from = to = today;
+  } else if (type === 'week') {
+    const day = today.getDay();
+    from = new Date(today); from.setDate(today.getDate() - day);
+    to = new Date(from); to.setDate(from.getDate() + 6);
+  } else if (type === 'month') {
+    from = new Date(today.getFullYear(), today.getMonth(), 1);
+    to = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+  }
+  
+  const fmt = d => { const y=d.getFullYear(), m=String(d.getMonth()+1).padStart(2,'0'), day=String(d.getDate()).padStart(2,'0'); return `${y}-${m}-${day}`; };
+  $('#dateFrom').value = fmt(from);
+  $('#dateTo').value = fmt(to);
+}
+
+/* ===== 데이터 로드 ===== */
+function loadData() {
+  showLoading('#resultContainer', '학생 데이터를 불러오는 중...');
+  
+  google.script.run
+    .withSuccessHandler(data => {
+      ALL_DATA = data || [];
+      updateLabFilter();
+      processData();
+      applyFiltersAndRender();
+    })
+    .withFailureHandler(err => {
+      $('#resultContainer').innerHTML = `<div class="empty-state"><div class="empty-icon">❌</div><div class="empty-text">데이터 로드 실패</div><div style="font-size:13px;">${err.message||err}</div></div>`;
+    })
+    .getApplicationsForPeriod($('#dateFrom').value, $('#dateTo').value);
+}
+
+/* ===== 실험실 필터 업데이트 ===== */
+function updateLabFilter() {
+  const labs = new Set();
+  ALL_DATA.forEach(app => { if (app['신청실험실']) labs.add(app['신청실험실']); });
+  LAB_LIST = Array.from(labs).sort();
+  
+  $('#labFilter').innerHTML = '<option value="">전체</option>' + 
+    LAB_LIST.map(lab => `<option value="${escapeHtml(lab)}">${escapeHtml(lab)}</option>`).join('');
+}
+
+/* ===== 데이터 처리 ===== */
+// 신청서별 데이터 (대표자 + 동반자 목록)
+let APP_DATA = [];
+
+function processData() {
+  const approvalFilter = $('#approvalFilter').value;
+  
+  // 승인 상태 필터
+  let filtered = ALL_DATA.filter(app => {
+    const status = getStatus(app);
+    if (approvalFilter === '') return true; // 전체
+    if (approvalFilter === 'approved' && status !== '1차승인' && status !== '최종승인') return false;
+    if (approvalFilter === 'final' && status !== '최종승인') return false;
+    if (approvalFilter === 'first' && status !== '1차승인') return false;
+    if (approvalFilter === 'pending' && status !== '대기') return false;
+    if (approvalFilter === 'rejected' && status !== '반려') return false;
+    return true;
+  });
+  
+  // 신청서별 데이터 생성 (조회 모드용)
+  APP_DATA = [];
+  
+  // 학생별 개별 데이터 (출석부 모드용)
+  STUDENT_DATA = [];
+  
+  filtered.forEach(app => {
+    const date = formatDate(app['실험할날짜']);
+    const lab = app['신청실험실'] || '';
+    const time = app['신청시간'] || '';
+    const title = app['실험제목'] || '';
+    const status = getStatus(app);
+    const appId = app['신청ID'] || '';
+    
+    // 동반자 파싱 (✅ 개선: 숫자=학번, 한글=이름으로 분리)
+    const companions = [];
+    const companionStr = String(app['동반자명단'] || '');
+    if (companionStr.trim()) {
+      // 숫자(학번)와 한글(이름) 패턴으로 분리: "20129 김영우 20203 최재영" 또는 "20129 김영우, 20203 최재영"
+      // 숫자 뒤에 한글이 오는 패턴 매칭
+      const regex = /(\d+)\s*([가-힣]+)/g;
+      let match;
+      while ((match = regex.exec(companionStr)) !== null) {
+        const studentId = match[1];
+        const name = match[2];
+        if (studentId && name) {
+          companions.push({ 학번: studentId, 이름: name });
+        }
+      }
+    }
+    
+    // 신청서별 데이터 (조회용)
+    APP_DATA.push({
+      날짜: date,
+      실험실: lab,
+      시간: time,
+      대표학번: app['대표자학번'] || '',
+      대표이름: app['대표자이름'] || '',
+      동반자목록: companions,
+      동반자이름: companions.map(c => c.이름).filter(n => n).join(', '),
+      실험제목: title,
+      상태: status,
+      신청ID: appId
+    });
+    
+    // 대표자 (출석부용)
+    STUDENT_DATA.push({
+      날짜: date,
+      실험실: lab,
+      시간: time,
+      학번: app['대표자학번'] || '',
+      이름: app['대표자이름'] || '',
+      역할: '대표자',
+      실험제목: title,
+      상태: status,
+      신청ID: appId
+    });
+    
+    // 동반자 (출석부용)
+    companions.forEach(c => {
+      STUDENT_DATA.push({
+        날짜: date,
+        실험실: lab,
+        시간: time,
+        학번: c.학번,
+        이름: c.이름,
+        역할: '동반자',
+        실험제목: title,
+        상태: status,
+        신청ID: appId
+      });
+    });
+  });
+}
+
+/* ===== 상태 계산 ===== */
+function getStatus(app) {
+  const first = app['지도승인여부'];
+  const final = app['최종승인여부'];
+  if (final === '승인') return '최종승인';
+  if (final === '반려') return '반려';
+  if (first === '승인') return '1차승인';
+  if (first === '반려') return '반려';
+  return '대기';
+}
+
+// 필터링된 신청서 데이터 (조회용)
+let FILTERED_APP_DATA = [];
+
+/* ===== 필터 및 정렬 적용 ===== */
+function applyFiltersAndRender() {
+  const labFilter = $('#labFilter').value;
+  const timeFilter = $('#timeFilter').value;
+  const roleFilter = $('#roleFilter').value;
+  const search = $('#searchInput').value.trim().toLowerCase();
+  const showAtt = $('#showAttendance').value === 'show';
+  
+  // 출석부 모드 (개별 학생 행)
+  FILTERED_DATA = STUDENT_DATA.filter(s => {
+    if (labFilter && s.실험실 !== labFilter) return false;
+    if (timeFilter && !String(s.시간||'').split(/[,\s]+/).map(t=>t.trim()).includes(timeFilter)) return false;
+    if (roleFilter && s.역할 !== roleFilter) return false;
+    if (search && !s.학번.toLowerCase().includes(search) && !s.이름.toLowerCase().includes(search)) return false;
+    return true;
+  });
+  
+  // 조회 모드 (신청서 단위)
+  FILTERED_APP_DATA = APP_DATA.filter(a => {
+    if (labFilter && a.실험실 !== labFilter) return false;
+    if (timeFilter && !String(a.시간||'').split(/[,\s]+/).map(t=>t.trim()).includes(timeFilter)) return false;
+    // 검색: 대표자 또는 동반자 이름에 포함
+    if (search) {
+      const inLeader = a.대표학번.toLowerCase().includes(search) || a.대표이름.toLowerCase().includes(search);
+      const inCompanion = a.동반자이름.toLowerCase().includes(search);
+      if (!inLeader && !inCompanion) return false;
+    }
+    return true;
+  });
+  
+  applySorting();
+  renderTable();
+  updateSummary();
+}
+
+/* ===== 정렬 ===== */
+function applySorting() {
+  const s1k = $('#sort1Key').value;
+  const s1d = $('#sort1Dir').value;
+  const s2k = $('#sort2Key').value;
+  const s2d = $('#sort2Dir').value;
+  const s3k = $('#sort3Key').value;
+  const s3d = $('#sort3Dir').value;
+  
+  // 출석부용 데이터 정렬
+  FILTERED_DATA.sort((a, b) => {
+    if (s1k) { const c = cmp(a, b, s1k); if (c !== 0) return s1d === 'asc' ? c : -c; }
+    if (s2k) { const c = cmp(a, b, s2k); if (c !== 0) return s2d === 'asc' ? c : -c; }
+    if (s3k) { const c = cmp(a, b, s3k); if (c !== 0) return s3d === 'asc' ? c : -c; }
+    return 0;
+  });
+  
+  // 조회용 데이터 정렬
+  FILTERED_APP_DATA.sort((a, b) => {
+    if (s1k) { const c = cmpApp(a, b, s1k); if (c !== 0) return s1d === 'asc' ? c : -c; }
+    if (s2k) { const c = cmpApp(a, b, s2k); if (c !== 0) return s2d === 'asc' ? c : -c; }
+    if (s3k) { const c = cmpApp(a, b, s3k); if (c !== 0) return s3d === 'asc' ? c : -c; }
+    return 0;
+  });
+}
+
+function cmp(a, b, key) {
+  if (key === '날짜') {
+    const da = new Date(a[key]), db = new Date(b[key]);
+    if (isNaN(da) && isNaN(db)) return 0;
+    if (isNaN(da)) return 1; if (isNaN(db)) return -1;
+    return da - db;
+  }
+  if (key === '시간') {
+    const order = { 'ET': 1, 'EP1': 2, '7교시': 3 };
+    return (order[a[key]] || 99) - (order[b[key]] || 99);
+  }
+  if (key === '역할') {
+    return a[key] === '대표자' ? -1 : b[key] === '대표자' ? 1 : 0;
+  }
+  return String(a[key]||'').localeCompare(String(b[key]||''), 'ko');
+}
+
+function cmpApp(a, b, key) {
+  // 신청서 데이터용 비교 (학번→대표학번, 이름→대표이름)
+  const keyMap = { '학번': '대표학번', '이름': '대표이름' };
+  const actualKey = keyMap[key] || key;
+  
+  if (actualKey === '날짜') {
+    const da = new Date(a[actualKey]), db = new Date(b[actualKey]);
+    if (isNaN(da) && isNaN(db)) return 0;
+    if (isNaN(da)) return 1; if (isNaN(db)) return -1;
+    return da - db;
+  }
+  if (actualKey === '시간') {
+    const order = { 'ET': 1, 'EP1': 2, '7교시': 3 };
+    return (order[a[actualKey]] || 99) - (order[b[actualKey]] || 99);
+  }
+  return String(a[actualKey]||'').localeCompare(String(b[actualKey]||''), 'ko');
+}
+
+/* ===== 렌더링 ===== */
+function renderTable() {
+  const container = $('#resultContainer');
+  const viewMode = $('#viewMode').value;
+  const showAtt = $('#showAttendance').value === 'show';
+  const displayMode = $('#studentDisplayMode')?.value || 'individual';
+  
+  if (showAtt) {
+    // 출석부 모드
+    if (FILTERED_DATA.length === 0) {
+      showEmpty(container, '조회된 학생이 없습니다', '기간이나 필터 조건을 확인해 주세요');
+      return;
+    }
+    
+    let html = '';
+    
+    // ✅ 팀별 테이블 표시 모드
+    if (displayMode === 'teamTable') {
+      if (viewMode === 'flat') {
+        html = createTeamTableView('전체', true);
+      } else if (viewMode === 'byStudent') {
+        html = createStudentView(true);
+      } else {
+        const groupKey = viewMode === 'byLab' ? '실험실' : viewMode === 'byDate' ? '날짜' : '시간';
+        html = createTeamTableByKeyView(groupKey, true);
+      }
+    }
+    // ✅ 팀별 카드 표시 모드
+    else if (displayMode === 'teamCard') {
+      if (viewMode === 'flat') {
+        html = createTeamGroupedView('전체', true);
+      } else if (viewMode === 'byStudent') {
+        html = createStudentView(true);
+      } else {
+        const groupKey = viewMode === 'byLab' ? '실험실' : viewMode === 'byDate' ? '날짜' : '시간';
+        html = createTeamGroupedByKeyView(groupKey, true);
+      }
+    }
+    // 개별 학생 표시 모드 (기존)
+    else {
+      if (viewMode === 'flat') {
+        html = createAttendanceTableHtml(FILTERED_DATA, true);
+      } else if (viewMode === 'byStudent') {
+        html = createStudentView(true);
+      } else {
+        const groupKey = viewMode === 'byLab' ? '실험실' : viewMode === 'byDate' ? '날짜' : '시간';
+        html = createAttendanceGroupedView(groupKey);
+      }
+    }
+    container.innerHTML = html;
+  } else {
+    // 조회 모드 (동반자 이름만 나열)
+    if (FILTERED_APP_DATA.length === 0) {
+      showEmpty(container, '조회된 신청이 없습니다', '기간이나 필터 조건을 확인해 주세요');
+      return;
+    }
+    
+    let html = '';
+    if (viewMode === 'flat') {
+      html = createViewTableHtml(FILTERED_APP_DATA, true);
+    } else if (viewMode === 'byStudent') {
+      html = createStudentView(false);
+    } else {
+      const groupKey = viewMode === 'byLab' ? '실험실' : viewMode === 'byDate' ? '날짜' : '시간';
+      html = createViewGroupedView(groupKey);
+    }
+    container.innerHTML = html;
+  }
+}
+
+/* ===== 출석부 모드 테이블 (개별 학생) ===== */
+function createAttendanceTableHtml(data, showAll, excludeCol = '') {
+  // ✅ 수정: 역할을 이름 앞으로 이동
+  // ✅ 수정: 역할 → 학번 → 이름 순서
+  const cols = ['날짜','실험실','시간','역할','학번','이름','실험제목','상태'];
+  const dispCols = showAll ? cols : cols.filter(c => c !== excludeCol);
+  
+  const ths = dispCols.map(c => {
+    const style = ['시간','역할','상태'].includes(c) ? ' style="text-align:center;"' : '';
+    return `<th${style}>${c}</th>`;
+  }).join('') + '<th style="text-align:center;width:60px;">출석</th>';
+  
+  const rows = data.map(item => {
+    const tds = dispCols.map(c => {
+      if (c === '시간') return `<td style="text-align:center;">${escapeHtml(item[c])}</td>`;
+      if (c === '역할') return `<td style="text-align:center;"><span class="badge ${item[c]==='대표자'?'badge-final':'badge-approved'}">${item[c]}</span></td>`;
+      if (c === '상태') {
+        const cls = item[c]==='최종승인'?'badge-final':item[c]==='1차승인'?'badge-approved':item[c]==='반려'?'badge-rejected':'badge-pending';
+        return `<td style="text-align:center;"><span class="badge ${cls}">${item[c]}</span></td>`;
+      }
+      if (c === '실험제목') return `<td class="truncate" title="${escapeHtml(item[c])}">${escapeHtml(item[c])}</td>`;
+      return `<td>${escapeHtml(item[c])}</td>`;
+    }).join('');
+    
+    const attTd = '<td style="text-align:center;"><input type="checkbox" class="att-check"><span class="attendance-box" style="display:none;"></span></td>';
+    return `<tr>${tds}${attTd}</tr>`;
+  }).join('');
+  
+  return `<table class="data-table"><thead><tr>${ths}</tr></thead><tbody>${rows}</tbody></table>`;
+}
+
+function createAttendanceGroupedView(groupKey) {
+  const groups = new Map();
+  FILTERED_DATA.forEach(item => {
+    const gk = item[groupKey] || '미지정';
+    if (!groups.has(gk)) groups.set(gk, []);
+    groups.get(gk).push(item);
+  });
+  
+  const sorted = Array.from(groups.entries()).sort((a, b) => {
+    if (groupKey === '시간') {
+      const order = { 'ET': 1, 'EP1': 2, '7교시': 3 };
+      return (order[a[0]] || 99) - (order[b[0]] || 99);
+    }
+    return String(a[0]).localeCompare(String(b[0]), 'ko');
+  });
+  
+  let html = '';
+  sorted.forEach(([gname, items]) => {
+    const icon = groupKey === '실험실' ? '🔬' : groupKey === '날짜' ? '📅' : '⏰';
+    // ✅ 수정: 팀 수(대표자 수), 학생 수(전체)
+    const teamCount = items.filter(i => i.역할 === '대표자').length;
+    const studentCount = items.length;
+    
+    // ✅ 수정: 실험실별이 아닌 경우 실험실 컬럼 유지
+    const excludeCol = groupKey;
+    
+    html += `
+      <div class="group-header">
+        <span class="group-title">${icon} ${escapeHtml(gname)}</span>
+        <span style="font-size:13px;color:var(--text-muted);">${teamCount}팀, ${studentCount}명</span>
+      </div>
+      ${createAttendanceTableHtml(items, false, excludeCol)}
+    `;
+  });
+  
+  return html;
+}
+
+/* ===== 조회 모드 테이블 (신청서 단위, 동반자 이름만) ===== */
+function createViewTableHtml(data, showAll, excludeCol = '') {
+  const cols = ['날짜','실험실','시간','대표자','동반자','실험제목','상태'];
+  const dispCols = showAll ? cols : cols.filter(c => c !== excludeCol);
+  
+  const ths = dispCols.map(c => {
+    const style = ['시간','상태'].includes(c) ? ' style="text-align:center;"' : '';
+    return `<th${style}>${c}</th>`;
+  }).join('');
+  
+  const rows = data.map(item => {
+    const tds = dispCols.map(c => {
+      if (c === '시간') return `<td style="text-align:center;">${escapeHtml(item[c])}</td>`;
+      if (c === '대표자') return `<td>${escapeHtml(item.대표이름)}</td>`;
+      if (c === '동반자') {
+        const names = item.동반자이름 || '-';
+        return `<td class="truncate" title="${escapeHtml(names)}">${escapeHtml(names)}</td>`;
+      }
+      if (c === '상태') {
+        const cls = item[c]==='최종승인'?'badge-final':item[c]==='1차승인'?'badge-approved':item[c]==='반려'?'badge-rejected':'badge-pending';
+        return `<td style="text-align:center;"><span class="badge ${cls}">${item[c]}</span></td>`;
+      }
+      if (c === '실험제목') return `<td class="truncate" title="${escapeHtml(item[c])}">${escapeHtml(item[c])}</td>`;
+      return `<td>${escapeHtml(item[c])}</td>`;
+    }).join('');
+    
+    return `<tr>${tds}</tr>`;
+  }).join('');
+  
+  return `<table class="data-table"><thead><tr>${ths}</tr></thead><tbody>${rows}</tbody></table>`;
+}
+
+function createViewGroupedView(groupKey) {
+  const groups = new Map();
+  FILTERED_APP_DATA.forEach(item => {
+    const gk = item[groupKey] || '미지정';
+    if (!groups.has(gk)) groups.set(gk, []);
+    groups.get(gk).push(item);
+  });
+  
+  const sorted = Array.from(groups.entries()).sort((a, b) => {
+    if (groupKey === '시간') {
+      const order = { 'ET': 1, 'EP1': 2, '7교시': 3 };
+      return (order[a[0]] || 99) - (order[b[0]] || 99);
+    }
+    return String(a[0]).localeCompare(String(b[0]), 'ko');
+  });
+  
+  let html = '';
+  sorted.forEach(([gname, items]) => {
+    const icon = groupKey === '실험실' ? '🔬' : groupKey === '날짜' ? '📅' : '⏰';
+    const totalStudents = items.reduce((sum, i) => sum + 1 + i.동반자목록.length, 0);
+    
+    html += `
+      <div class="group-header">
+        <span class="group-title">${icon} ${escapeHtml(gname)}</span>
+        <span style="font-size:13px;color:var(--text-muted);">${items.length}건 (총 ${totalStudents}명)</span>
+      </div>
+      ${createViewTableHtml(items, false, groupKey)}
+    `;
+  });
+  
+  return html;
+}
+
+/* ===== 기존 함수들 (유지) ===== */
+function createGroupedView(groupKey, showAtt) {
+  const groups = new Map();
+  FILTERED_DATA.forEach(item => {
+    const gk = item[groupKey] || '미지정';
+    if (!groups.has(gk)) groups.set(gk, []);
+    groups.get(gk).push(item);
+  });
+  
+  const sorted = Array.from(groups.entries()).sort((a, b) => {
+    if (groupKey === '시간') {
+      const order = { 'ET': 1, 'EP1': 2, '7교시': 3 };
+      return (order[a[0]] || 99) - (order[b[0]] || 99);
+    }
+    return String(a[0]).localeCompare(String(b[0]), 'ko');
+  });
+  
+  let html = '';
+  sorted.forEach(([gname, items]) => {
+    const icon = groupKey === '실험실' ? '🔬' : groupKey === '날짜' ? '📅' : '⏰';
+    // ✅ 수정: 팀 수(대표자 수), 학생 수(전체)
+    const teamCount = items.filter(i => i.역할 === '대표자').length;
+    const studentCount = items.length;
+    
+    html += `
+      <div class="group-header">
+        <span class="group-title">${icon} ${escapeHtml(gname)}</span>
+        <span style="font-size:13px;color:var(--text-muted);">${teamCount}팀, ${studentCount}명</span>
+      </div>
+      ${createTableHtml(items, showAtt, false, groupKey)}
+    `;
+  });
+  
+  return html;
+}
+
+function createStudentView(showAtt) {
+  const studentMap = new Map();
+  FILTERED_DATA.forEach(item => {
+    const key = `${item.학번}|${item.이름}`;
+    if (!studentMap.has(key)) {
+      studentMap.set(key, { 학번: item.학번, 이름: item.이름, list: [] });
+    }
+    studentMap.get(key).list.push(item);
+  });
+  
+  const students = Array.from(studentMap.values()).sort((a, b) => 
+    String(a.학번).localeCompare(String(b.학번), 'ko')
+  );
+  
+  let html = '';
+  students.forEach(st => {
+    const leader = st.list.filter(i => i.역할 === '대표자').length;
+    const companion = st.list.filter(i => i.역할 === '동반자').length;
+    
+    const rows = st.list.map(item => `
+      <tr>
+        <td>${escapeHtml(item.날짜)}</td>
+        <td>${escapeHtml(item.실험실)}</td>
+        <td style="text-align:center;">${escapeHtml(item.시간)}</td>
+        <td style="text-align:center;"><span class="badge ${item.역할==='대표자'?'badge-final':'badge-approved'}">${item.역할}</span></td>
+        <td class="truncate" title="${escapeHtml(item.실험제목)}">${escapeHtml(item.실험제목)}</td>
+        ${showAtt?'<td style="text-align:center;"><input type="checkbox" class="att-check"><span class="attendance-box" style="display:none;"></span></td>':''}
+      </tr>
+    `).join('');
+    
+    html += `
+      <div class="group-header">
+        <span class="group-title">👤 ${escapeHtml(st.학번)} ${escapeHtml(st.이름)}</span>
+        <span style="font-size:13px;color:var(--text-muted);">총 ${st.list.length}건 (대표 ${leader}, 동반 ${companion})</span>
+      </div>
+      <table class="data-table">
+        <thead><tr><th>날짜</th><th>실험실</th><th style="text-align:center;">시간</th><th style="text-align:center;">역할</th><th>실험제목</th>${showAtt?'<th style="text-align:center;width:60px;">출석</th>':''}</tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    `;
+  });
+  
+  return html;
+}
+
+/* ===== ✅ 팀별 테이블 뷰 (방안 1: 테이블 + 구분선) ===== */
+function createTeamTableView(title, showAtt) {
+  // 신청ID 기준으로 팀 그룹핑
+  const teamMap = new Map();
+  
+  FILTERED_DATA.forEach(item => {
+    const appId = item.신청ID || '';
+    if (!teamMap.has(appId)) {
+      teamMap.set(appId, {
+        신청ID: appId,
+        날짜: item.날짜,
+        실험실: item.실험실,
+        시간: item.시간,
+        실험제목: item.실험제목,
+        상태: item.상태,
+        members: []
+      });
+    }
+    teamMap.get(appId).members.push(item);
+  });
+  
+  // 팀 목록 정렬 (날짜 → 시간 → 실험실)
+  const teams = Array.from(teamMap.values()).sort((a, b) => {
+    const dateComp = String(a.날짜).localeCompare(String(b.날짜));
+    if (dateComp !== 0) return dateComp;
+    const timeOrder = { 'ET': 1, 'EP1': 2, '7교시': 3 };
+    const timeComp = (timeOrder[a.시간] || 99) - (timeOrder[b.시간] || 99);
+    if (timeComp !== 0) return timeComp;
+    return String(a.실험실).localeCompare(String(b.실험실), 'ko');
+  });
+  
+  const totalTeams = teams.length;
+  const totalStudents = FILTERED_DATA.length;
+  
+  let html = `<div class="group-header"><span class="group-title">📋 ${title}</span><span style="font-size:13px;color:var(--text-muted);">${totalTeams}팀, ${totalStudents}명</span></div>`;
+  
+  // 전체 통합이므로 실험실 컬럼 표시 (excludeCol = '')
+  html += createTeamTable(teams, showAtt, '');
+  
+  return html;
+}
+
+function createTeamTableByKeyView(groupKey, showAtt) {
+  // 먼저 그룹키로 그룹핑
+  const groups = new Map();
+  FILTERED_DATA.forEach(item => {
+    const gk = item[groupKey] || '미지정';
+    if (!groups.has(gk)) groups.set(gk, []);
+    groups.get(gk).push(item);
+  });
+  
+  const sorted = Array.from(groups.entries()).sort((a, b) => {
+    if (groupKey === '시간') {
+      const order = { 'ET': 1, 'EP1': 2, '7교시': 3 };
+      return (order[a[0]] || 99) - (order[b[0]] || 99);
+    }
+    return String(a[0]).localeCompare(String(b[0]), 'ko');
+  });
+  
+  let html = '';
+  sorted.forEach(([gname, items]) => {
+    const icon = groupKey === '실험실' ? '🔬' : groupKey === '날짜' ? '📅' : '⏰';
+    
+    // 해당 그룹 내에서 팀으로 그룹핑
+    const teamMap = new Map();
+    items.forEach(item => {
+      const appId = item.신청ID || '';
+      if (!teamMap.has(appId)) {
+        teamMap.set(appId, {
+          신청ID: appId,
+          날짜: item.날짜,
+          실험실: item.실험실,
+          시간: item.시간,
+          실험제목: item.실험제목,
+          상태: item.상태,
+          members: []
+        });
+      }
+      teamMap.get(appId).members.push(item);
+    });
+    
+    const teams = Array.from(teamMap.values()).sort((a, b) => {
+      const dateComp = String(a.날짜).localeCompare(String(b.날짜));
+      if (dateComp !== 0) return dateComp;
+      const timeOrder = { 'ET': 1, 'EP1': 2, '7교시': 3 };
+      return (timeOrder[a.시간] || 99) - (timeOrder[b.시간] || 99);
+    });
+    
+    const teamCount = teams.length;
+    const studentCount = items.length;
+    
+    html += `<div class="group-header"><span class="group-title">${icon} ${escapeHtml(gname)}</span><span style="font-size:13px;color:var(--text-muted);">${teamCount}팀, ${studentCount}명</span></div>`;
+    
+    // ✅ 수정: 실험실별일 때만 실험실 제외, 나머지는 실험실 표시
+    html += createTeamTable(teams, showAtt, groupKey);
+  });
+  
+  return html;
+}
+
+function createTeamTable(teams, showAtt, excludeCol = '') {
+  const attHeader = showAtt ? '<th style="text-align:center;width:45px;">출석</th>' : '';
+  const showLab = excludeCol !== '실험실';
+  
+  let html = `
+    <table class="data-table team-table" style="table-layout:auto;width:auto;min-width:100%;">
+      <thead>
+        <tr>
+          <th style="width:90px;">날짜</th>
+          ${showLab ? '<th style="width:80px;">실험실</th>' : ''}
+          <th style="width:50px;text-align:center;">시간</th>
+          <th style="text-align:center;width:55px;">역할</th>
+          <th style="width:60px;">학번</th>
+          <th style="width:70px;">이름</th>
+          <th style="max-width:300px;">실험제목</th>
+          <th style="text-align:center;width:65px;">상태</th>
+          ${attHeader}
+        </tr>
+      </thead>
+      <tbody>
+  `;
+  
+  teams.forEach((team, teamIdx) => {
+    // 대표자와 동반자 분리
+    const leader = team.members.find(m => m.역할 === '대표자');
+    const companions = team.members.filter(m => m.역할 === '동반자').sort((a, b) => 
+      String(a.학번).localeCompare(String(b.학번), 'ko')
+    );
+    
+    const allMembers = leader ? [leader, ...companions] : companions;
+    const memberCount = allMembers.length;
+    const statusCls = team.상태==='최종승인'?'badge-final':team.상태==='1차승인'?'badge-approved':team.상태==='반려'?'badge-rejected':'badge-pending';
+    
+    allMembers.forEach((member, idx) => {
+      const isFirst = idx === 0;
+      const rowClass = teamIdx % 2 === 0 ? 'team-row-even' : 'team-row-odd';
+      const borderClass = isFirst && teamIdx > 0 ? 'team-separator' : '';
+      
+      html += `<tr class="${rowClass} ${borderClass}">`;
+      
+      // 첫 행에만 날짜, 실험실, 시간, 실험제목, 상태 표시 (rowspan)
+      if (isFirst) {
+        html += `<td rowspan="${memberCount}">${escapeHtml(team.날짜)}</td>`;
+        if (showLab) {
+          html += `<td rowspan="${memberCount}">${escapeHtml(team.실험실)}</td>`;
+        }
+        html += `<td rowspan="${memberCount}" style="text-align:center;">${escapeHtml(team.시간)}</td>`;
+      }
+      
+      // 역할, 학번, 이름은 항상 표시
+      const roleCls = member.역할 === '대표자' ? 'badge-final' : 'badge-approved';
+      html += `<td style="text-align:center;"><span class="badge ${roleCls}">${member.역할}</span></td>`;
+      html += `<td>${escapeHtml(member.학번)}</td>`;
+      html += `<td>${escapeHtml(member.이름)}</td>`;
+      
+      // 첫 행에만 실험제목, 상태 표시 (rowspan)
+      if (isFirst) {
+        html += `<td rowspan="${memberCount}" class="truncate" title="${escapeHtml(team.실험제목)}">${escapeHtml(team.실험제목)}</td>`;
+        html += `<td rowspan="${memberCount}" style="text-align:center;"><span class="badge ${statusCls}">${team.상태}</span></td>`;
+      }
+      
+      // 출석 체크는 각 행마다
+      if (showAtt) {
+        html += `<td style="text-align:center;"><input type="checkbox" class="att-check"></td>`;
+      }
+      
+      html += '</tr>';
+    });
+  });
+  
+  html += '</tbody></table>';
+  return html;
+}
+
+/* ===== ✅ 팀별 카드 뷰 (방안 3: 카드 형태) ===== */
+function createTeamGroupedView(title, showAtt) {
+  // 신청ID 기준으로 팀 그룹핑
+  const teamMap = new Map();
+  
+  FILTERED_DATA.forEach(item => {
+    const appId = item.신청ID || '';
+    if (!teamMap.has(appId)) {
+      teamMap.set(appId, {
+        신청ID: appId,
+        날짜: item.날짜,
+        실험실: item.실험실,
+        시간: item.시간,
+        실험제목: item.실험제목,
+        상태: item.상태,
+        members: []
+      });
+    }
+    teamMap.get(appId).members.push(item);
+  });
+  
+  // 팀 목록 정렬 (날짜 → 시간 → 실험실)
+  const teams = Array.from(teamMap.values()).sort((a, b) => {
+    const dateComp = String(a.날짜).localeCompare(String(b.날짜));
+    if (dateComp !== 0) return dateComp;
+    const timeOrder = { 'ET': 1, 'EP1': 2, '7교시': 3 };
+    const timeComp = (timeOrder[a.시간] || 99) - (timeOrder[b.시간] || 99);
+    if (timeComp !== 0) return timeComp;
+    return String(a.실험실).localeCompare(String(b.실험실), 'ko');
+  });
+  
+  const totalTeams = teams.length;
+  const totalStudents = FILTERED_DATA.length;
+  
+  let html = `<div class="group-header"><span class="group-title">📋 ${title}</span><span style="font-size:13px;color:var(--text-muted);">${totalTeams}팀, ${totalStudents}명</span></div>`;
+  
+  // 전체 통합이므로 모든 정보 표시 (excludeCol = '')
+  teams.forEach(team => {
+    html += createTeamCard(team, showAtt, '');
+  });
+  
+  return html;
+}
+
+function createTeamGroupedByKeyView(groupKey, showAtt) {
+  // 먼저 그룹키로 그룹핑
+  const groups = new Map();
+  FILTERED_DATA.forEach(item => {
+    const gk = item[groupKey] || '미지정';
+    if (!groups.has(gk)) groups.set(gk, []);
+    groups.get(gk).push(item);
+  });
+  
+  const sorted = Array.from(groups.entries()).sort((a, b) => {
+    if (groupKey === '시간') {
+      const order = { 'ET': 1, 'EP1': 2, '7교시': 3 };
+      return (order[a[0]] || 99) - (order[b[0]] || 99);
+    }
+    return String(a[0]).localeCompare(String(b[0]), 'ko');
+  });
+  
+  let html = '';
+  sorted.forEach(([gname, items]) => {
+    const icon = groupKey === '실험실' ? '🔬' : groupKey === '날짜' ? '📅' : '⏰';
+    
+    // 해당 그룹 내에서 팀으로 그룹핑
+    const teamMap = new Map();
+    items.forEach(item => {
+      const appId = item.신청ID || '';
+      if (!teamMap.has(appId)) {
+        teamMap.set(appId, {
+          신청ID: appId,
+          날짜: item.날짜,
+          실험실: item.실험실,
+          시간: item.시간,
+          실험제목: item.실험제목,
+          상태: item.상태,
+          members: []
+        });
+      }
+      teamMap.get(appId).members.push(item);
+    });
+    
+    const teams = Array.from(teamMap.values()).sort((a, b) => {
+      const dateComp = String(a.날짜).localeCompare(String(b.날짜));
+      if (dateComp !== 0) return dateComp;
+      const timeOrder = { 'ET': 1, 'EP1': 2, '7교시': 3 };
+      return (timeOrder[a.시간] || 99) - (timeOrder[b.시간] || 99);
+    });
+    
+    const teamCount = teams.length;
+    const studentCount = items.length;
+    
+    html += `<div class="group-header"><span class="group-title">${icon} ${escapeHtml(gname)}</span><span style="font-size:13px;color:var(--text-muted);">${teamCount}팀, ${studentCount}명</span></div>`;
+    
+    // ✅ 수정: 실험실별일 때만 실험실 제외, 나머지는 실험실 표시
+    teams.forEach(team => {
+      html += createTeamCard(team, showAtt, groupKey);
+    });
+  });
+  
+  return html;
+}
+
+function createTeamCard(team, showAtt, excludeCol = '') {
+  // 대표자와 동반자 분리
+  const leader = team.members.find(m => m.역할 === '대표자');
+  const companions = team.members.filter(m => m.역할 === '동반자').sort((a, b) => 
+    String(a.학번).localeCompare(String(b.학번), 'ko')
+  );
+  
+  const statusCls = team.상태==='최종승인'?'badge-final':team.상태==='1차승인'?'badge-approved':team.상태==='반려'?'badge-rejected':'badge-pending';
+  
+  // ✅ 수정: excludeCol에 따라 메타 정보 구성
+  let metaParts = [];
+  if (excludeCol !== '날짜') metaParts.push(escapeHtml(team.날짜));
+  if (excludeCol !== '실험실') metaParts.push(escapeHtml(team.실험실));
+  if (excludeCol !== '시간') metaParts.push(escapeHtml(team.시간));
+  const metaStr = metaParts.join(' | ');
+  
+  // 팀 카드 생성
+  let html = `
+    <div class="team-card">
+      <div class="team-card-header">
+        <div class="team-info">
+          <span class="team-title">${escapeHtml(team.실험제목 || '-')}</span>
+          <span class="team-meta">${metaStr}</span>
+        </div>
+        <span class="badge ${statusCls}">${team.상태}</span>
+      </div>
+      <div class="team-members">
+  `;
+  
+  // 대표자
+  if (leader) {
+    html += `
+      <div class="team-member leader">
+        ${showAtt ? '<input type="checkbox" class="att-check">' : ''}
+        <span class="badge badge-final">대표자</span>
+        <span class="member-id">${escapeHtml(leader.학번)}</span>
+        <span class="member-name">${escapeHtml(leader.이름)}</span>
+      </div>
+    `;
+  }
+  
+  // 동반자
+  companions.forEach(c => {
+    html += `
+      <div class="team-member companion">
+        ${showAtt ? '<input type="checkbox" class="att-check">' : ''}
+        <span class="badge badge-approved">동반자</span>
+        <span class="member-id">${escapeHtml(c.학번)}</span>
+        <span class="member-name">${escapeHtml(c.이름)}</span>
+      </div>
+    `;
+  });
+  
+  html += `
+      </div>
+    </div>
+  `;
+  
+  return html;
+}
+
+function createTableHtml(data, showAtt, showAll, excludeCol = '') {
+  // ✅ 수정: 역할을 학번 앞으로 이동
+  const cols = ['날짜','실험실','시간','역할','학번','이름','실험제목','상태'];
+  const dispCols = showAll ? cols : cols.filter(c => c !== excludeCol);
+  
+  const ths = dispCols.map(c => {
+    const style = ['시간','역할','상태'].includes(c) ? ' style="text-align:center;"' : '';
+    return `<th${style}>${c}</th>`;
+  }).join('') + (showAtt ? '<th style="text-align:center;width:60px;">출석</th>' : '');
+  
+  const rows = data.map(item => {
+    const tds = dispCols.map(c => {
+      if (c === '시간') return `<td style="text-align:center;">${escapeHtml(item[c])}</td>`;
+      if (c === '역할') return `<td style="text-align:center;"><span class="badge ${item[c]==='대표자'?'badge-final':'badge-approved'}">${item[c]}</span></td>`;
+      if (c === '상태') {
+        const cls = item[c]==='최종승인'?'badge-final':item[c]==='1차승인'?'badge-approved':item[c]==='반려'?'badge-rejected':'badge-pending';
+        return `<td style="text-align:center;"><span class="badge ${cls}">${item[c]}</span></td>`;
+      }
+      if (c === '실험제목') return `<td class="truncate" title="${escapeHtml(item[c])}">${escapeHtml(item[c])}</td>`;
+      return `<td>${escapeHtml(item[c])}</td>`;
+    }).join('');
+    
+    const attTd = showAtt ? '<td style="text-align:center;"><input type="checkbox" class="att-check"><span class="attendance-box" style="display:none;"></span></td>' : '';
+    return `<tr>${tds}${attTd}</tr>`;
+  }).join('');
+  
+  return `<table class="data-table"><thead><tr>${ths}</tr></thead><tbody>${rows}</tbody></table>`;
+}
+
+/* ===== 요약 업데이트 ===== */
+function updateSummary() {
+  const card = $('#summaryCard');
+  const from = $('#dateFrom').value || '-';
+  const to = $('#dateTo').value || '-';
+  
+  // ✅ 수정: 팀 수 = 대표자 수, 학생 수 = 전체 인원
+  const teamCount = FILTERED_DATA.filter(s => s.역할 === '대표자').length;
+  const studentCount = FILTERED_DATA.length;
+  
+  $('#summaryPeriod').textContent = `${from} ~ ${to}`;
+  $('#summaryTotal').textContent = studentCount;
+  $('#summaryTeams').textContent = teamCount;
+  
+  $('#printInfo').textContent = `기간: ${from} ~ ${to} | 인쇄일: ${new Date().toLocaleString('ko-KR')}`;
+  
+  card.style.display = 'block';
+}
+
+/* ===== 인쇄 (별도 양식) ===== */
+function printList() {
+  const from = $('#dateFrom').value || '-';
+  const to = $('#dateTo').value || '-';
+  const viewMode = $('#viewMode').value;
+  const showAtt = $('#showAttendance').value === 'show';
+  
+  // 인쇄용 HTML 생성
+  let printHtml = `
+    <html>
+    <head>
+      <meta charset="UTF-8">
+      <title>학생 명단 인쇄</title>
+      <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Malgun Gothic', sans-serif; padding: 20px; font-size: 11px; }
+        h1 { text-align: center; font-size: 18px; margin-bottom: 8px; }
+        .info { text-align: center; color: #666; margin-bottom: 16px; font-size: 10px; }
+        .group-header { background: #f0f0f0; padding: 6px 10px; margin: 12px 0 6px; font-weight: bold; font-size: 12px; border-left: 3px solid #333; }
+        table { width: 100%; border-collapse: collapse; margin-bottom: 12px; }
+        th, td { border: 1px solid #ccc; padding: 5px 8px; text-align: left; }
+        th { background: #f5f5f5; font-weight: bold; font-size: 10px; }
+        td { font-size: 10px; }
+        .center { text-align: center; }
+        .att-box { width: 18px; height: 18px; border: 1px solid #333; display: inline-block; }
+        .badge { padding: 2px 6px; border-radius: 3px; font-size: 9px; }
+        .badge-leader { background: #e3f2fd; color: #1565c0; }
+        .badge-companion { background: #e8f5e9; color: #2e7d32; }
+        @media print {
+          body { padding: 10px; }
+          .group-header { break-inside: avoid; }
+          tr { break-inside: avoid; }
+        }
+      </style>
+    </head>
+    <body>
+      <h1>👥 실험실 사용 학생 명단</h1>
+      <p class="info">조회 기간: ${escapeHtml(from)} ~ ${escapeHtml(to)} | 인쇄일: ${new Date().toLocaleString('ko-KR')}</p>
+  `;
+  
+  if (showAtt) {
+    // 출석부 모드
+    printHtml += createPrintAttendanceHtml(viewMode);
+  } else {
+    // 조회 모드
+    printHtml += createPrintViewHtml(viewMode);
+  }
+  
+  printHtml += `
+    </body>
+    </html>
+  `;
+  
+  // 새 창에서 인쇄
+  const printWindow = window.open('', '_blank', 'width=800,height=600');
+  printWindow.document.write(printHtml);
+  printWindow.document.close();
+  printWindow.focus();
+  setTimeout(() => {
+    printWindow.print();
+    printWindow.close();
+  }, 300);
+}
+
+function createPrintAttendanceHtml(viewMode) {
+  let html = '';
+
+  // 시간대별 그룹화 (모든 viewMode에서 시간대별 분리)
+  const timeGroups = {};
+  FILTERED_DATA.forEach(function(item) {
+    const times = String(item.시간 || '').split(/[,\s]+/).map(function(t) { return t.trim(); }).filter(Boolean);
+    if (times.length === 0) times.push('기타');
+    times.forEach(function(t) {
+      if (!timeGroups[t]) timeGroups[t] = [];
+      timeGroups[t].push(item);
+    });
+  });
+
+  // 시간 정렬 순서
+  const timeOrder = ['ET', 'EP1', '7교시'];
+  const sortedTimes = Object.keys(timeGroups).sort(function(a, b) {
+    return (timeOrder.indexOf(a) === -1 ? 99 : timeOrder.indexOf(a)) - (timeOrder.indexOf(b) === -1 ? 99 : timeOrder.indexOf(b));
+  });
+
+  sortedTimes.forEach(function(time) {
+    const timeItems = timeGroups[time];
+    html += `<h3 style="margin-top:20px; page-break-before:auto;">[ ${escapeHtml(time)} ] 출석부 (${timeItems.length}명)</h3>`;
+
+    if (viewMode === 'flat' || viewMode === 'byStudent') {
+      // 전체 통합 또는 학생별 - 시간대 내에서 그룹 없이 출력
+      html += createPrintAttendanceTable(timeItems, '시간');
+    } else {
+      // 그룹별 출력 (시간대 내에서 추가 그룹화)
+      const groupKey = viewMode === 'byLab' ? '실험실' : viewMode === 'byDate' ? '날짜' : '시간';
+
+      if (groupKey === '시간') {
+        // 시간별 그룹이면 이미 시간대별로 분리했으므로 테이블만 출력
+        html += createPrintAttendanceTable(timeItems, '시간');
+      } else {
+        const groups = new Map();
+        timeItems.forEach(item => {
+          const gk = item[groupKey] || '미지정';
+          if (!groups.has(gk)) groups.set(gk, []);
+          groups.get(gk).push(item);
+        });
+
+        const sorted = Array.from(groups.entries()).sort((a, b) => {
+          return String(a[0]).localeCompare(String(b[0]), 'ko');
+        });
+
+        sorted.forEach(([gname, items]) => {
+          const icon = groupKey === '실험실' ? '🔬' : '📅';
+          html += `<div class="group-header">${icon} ${escapeHtml(gname)} (${items.length}명)</div>`;
+          html += createPrintAttendanceTable(items, groupKey);
+        });
+      }
+    }
+  });
+
+  return html;
+}
+
+function createPrintAttendanceTable(data, excludeCol = '') {
+  // ✅ 수정: 역할을 이름 앞으로 이동
+  // ✅ 수정: 역할 → 학번 → 이름 순서
+  const cols = ['날짜','실험실','시간','역할','학번','이름','출석'];
+  const dispCols = excludeCol ? cols.filter(c => c !== excludeCol) : cols;
+  
+  const ths = dispCols.map(c => `<th>${c}</th>`).join('');
+  
+  const rows = data.map(item => {
+    const tds = dispCols.map(c => {
+      if (c === '출석') return `<td class="center"><span class="att-box"></span></td>`;
+      if (c === '역할') return `<td class="center"><span class="badge ${item[c]==='대표자'?'badge-leader':'badge-companion'}">${item[c]}</span></td>`;
+      if (c === '시간') return `<td class="center">${escapeHtml(item[c])}</td>`;
+      return `<td>${escapeHtml(item[c])}</td>`;
+    }).join('');
+    return `<tr>${tds}</tr>`;
+  }).join('');
+  
+  return `<table><thead><tr>${ths}</tr></thead><tbody>${rows}</tbody></table>`;
+}
+
+function createPrintViewHtml(viewMode) {
+  let html = '';
+  
+  if (viewMode === 'flat' || viewMode === 'byStudent') {
+    html += createPrintViewTable(FILTERED_APP_DATA);
+  } else {
+    const groupKey = viewMode === 'byLab' ? '실험실' : viewMode === 'byDate' ? '날짜' : '시간';
+    const groups = new Map();
+    FILTERED_APP_DATA.forEach(item => {
+      const gk = item[groupKey] || '미지정';
+      if (!groups.has(gk)) groups.set(gk, []);
+      groups.get(gk).push(item);
+    });
+    
+    const sorted = Array.from(groups.entries()).sort((a, b) => {
+      if (groupKey === '시간') {
+        const order = { 'ET': 1, 'EP1': 2, '7교시': 3 };
+        return (order[a[0]] || 99) - (order[b[0]] || 99);
+      }
+      return String(a[0]).localeCompare(String(b[0]), 'ko');
+    });
+    
+    sorted.forEach(([gname, items]) => {
+      const icon = groupKey === '실험실' ? '🔬' : groupKey === '날짜' ? '📅' : '⏰';
+      const totalStudents = items.reduce((sum, i) => sum + 1 + i.동반자목록.length, 0);
+      html += `<div class="group-header">${icon} ${escapeHtml(gname)} (${items.length}건, ${totalStudents}명)</div>`;
+      html += createPrintViewTable(items, groupKey);
+    });
+  }
+  
+  return html;
+}
+
+function createPrintViewTable(data, excludeCol = '') {
+  const cols = ['날짜','실험실','시간','대표자','동반자','실험제목'];
+  const dispCols = excludeCol ? cols.filter(c => c !== excludeCol) : cols;
+  
+  const ths = dispCols.map(c => `<th>${c}</th>`).join('');
+  
+  const rows = data.map(item => {
+    const tds = dispCols.map(c => {
+      if (c === '대표자') return `<td>${escapeHtml(item.대표이름)}</td>`;
+      if (c === '동반자') return `<td>${escapeHtml(item.동반자이름 || '-')}</td>`;
+      if (c === '시간') return `<td class="center">${escapeHtml(item[c])}</td>`;
+      return `<td>${escapeHtml(item[c])}</td>`;
+    }).join('');
+    return `<tr>${tds}</tr>`;
+  }).join('');
+  
+  return `<table><thead><tr>${ths}</tr></thead><tbody>${rows}</tbody></table>`;
+}
+
+/* ===== CSV 내보내기 ===== */
+function exportCSV() {
+  if (FILTERED_DATA.length === 0) { alert('내보낼 데이터가 없습니다.'); return; }
+  
+  const esc = v => {
+    const s = String(v ?? '');
+    return s.includes(',') || s.includes('"') || s.includes('\n') ? `"${s.replace(/"/g,'""')}"` : s;
+  };
+  
+  const headers = ['날짜','실험실','시간','학번','이름','역할','실험제목','상태'];
+  const rows = [headers.join(',')];
+  FILTERED_DATA.forEach(item => {
+    rows.push(headers.map(h => esc(item[h])).join(','));
+  });
+  
+  const blob = new Blob(['\uFEFF' + rows.join('\n')], { type: 'text/csv;charset=utf-8;' });
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(blob);
+  link.download = `학생명단_${$('#dateFrom').value}_${$('#dateTo').value}.csv`;
+  link.click();
+}
+
+/* ===== 이벤트 바인딩 ===== */
+['approvalFilter','labFilter','timeFilter','roleFilter','sort1Key','sort1Dir','sort2Key','sort2Dir','sort3Key','sort3Dir','viewMode','showAttendance'].forEach(id => {
+  const el = $('#' + id);
+  if (el) el.addEventListener('change', () => {
+    if (id === 'approvalFilter') { processData(); }
+    applyFiltersAndRender();
+  });
+});
+
+/* ===== 관리자 페이지로 이동 ===== */
+function goToAdmin() {
+  if (typeof APP_BASE_URL !== 'undefined' && APP_BASE_URL) {
+    window.top.location.href = APP_BASE_URL + '?view=admin';
+  } else {
+    google.script.run
+      .withSuccessHandler(function(url) {
+        window.top.location.href = url + '?view=admin';
+      })
+      .withFailureHandler(function(err) {
+        alert('페이지 이동 실패: ' + (err.message || err));
+      })
+      .getAppUrl();
+  }
+}
+
+function goToPage(view) {
+  google.script.run
+    .withSuccessHandler(function(url) { window.top.location.href = url + '?view=' + view; })
+    .withFailureHandler(function() { alert('페이지 이동 실패'); })
+    .getAppUrl();
+}
+</script>

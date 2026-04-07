@@ -1,0 +1,792 @@
+<script>
+/* =========================================================
+ * 임장 일정 페이지 스크립트
+ * ========================================================= */
+
+// 전역 데이터
+let ALL_DATA = [];        // 서버에서 받은 전체 신청 데이터
+let SCHEDULE_DATA = [];   // 가공된 일정 데이터
+let FILTERED_DATA = [];   // 필터링된 데이터
+let VIEW_MODE = 'table';  // 'table' | 'calendar'
+let CURRENT_MONTH = new Date(); // 달력 현재 월
+
+/* =========================================================
+ * 초기화
+ * ========================================================= */
+document.addEventListener('DOMContentLoaded', function() {
+  // 기본 날짜 설정 (이번 주)
+  setQuickDate('week');
+  
+  // 교사 목록 로드
+  loadTeacherList();
+  
+  // 데이터 로드
+  loadData();
+});
+
+/* =========================================================
+ * 교사 목록 로드
+ * ========================================================= */
+let TEACHER_LIST = [];
+let SELECTED_TEACHERS = []; // 선택된 교사 목록
+
+function loadTeacherList() {
+  google.script.run
+    .withSuccessHandler(function(list) {
+      TEACHER_LIST = list || [];
+      const container = document.getElementById('teacherCheckboxes');
+      if (!container) return;
+      
+      container.innerHTML = '';
+      
+      TEACHER_LIST.forEach(t => {
+        const name = t.name || '';
+        const label = document.createElement('label');
+        label.className = 'dropdown-item';
+        label.innerHTML = `<input type="checkbox" value="${escapeHtml(name)}" onchange="updateTeacherSelection()"> ${escapeHtml(name)}`;
+        container.appendChild(label);
+      });
+    })
+    .withFailureHandler(function(err) {
+      console.error('교사 목록 로드 실패:', err);
+    })
+    .getTeacherListForEdit();
+}
+
+/* ===== 드롭다운 토글 ===== */
+function toggleTeacherDropdown() {
+  const menu = document.getElementById('teacherDropdownMenu');
+  if (menu) {
+    menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
+  }
+}
+
+// 외부 클릭 시 드롭다운 닫기
+document.addEventListener('click', function(e) {
+  const dropdown = document.getElementById('teacherDropdown');
+  if (dropdown && !dropdown.contains(e.target)) {
+    const menu = document.getElementById('teacherDropdownMenu');
+    if (menu) menu.style.display = 'none';
+  }
+});
+
+/* ===== 전체 선택/해제 ===== */
+function toggleAllTeachers() {
+  const allCheckbox = document.getElementById('teacherAll');
+  const checkboxes = document.querySelectorAll('#teacherCheckboxes input[type="checkbox"]');
+  
+  if (allCheckbox.checked) {
+    // 전체 선택 → 개별 체크박스 모두 해제
+    checkboxes.forEach(cb => cb.checked = false);
+  }
+  
+  updateTeacherSelection();
+}
+
+/* ===== 교사 선택 업데이트 ===== */
+function updateTeacherSelection() {
+  const allCheckbox = document.getElementById('teacherAll');
+  const checkboxes = document.querySelectorAll('#teacherCheckboxes input[type="checkbox"]:checked');
+  const label = document.getElementById('teacherDropdownLabel');
+  
+  SELECTED_TEACHERS = Array.from(checkboxes).map(cb => cb.value);
+  
+  if (SELECTED_TEACHERS.length === 0) {
+    // 아무도 선택 안됨 → 전체로 설정
+    allCheckbox.checked = true;
+    label.textContent = '전체';
+  } else {
+    allCheckbox.checked = false;
+    if (SELECTED_TEACHERS.length === 1) {
+      label.textContent = SELECTED_TEACHERS[0];
+    } else {
+      label.textContent = `${SELECTED_TEACHERS[0]} 외 ${SELECTED_TEACHERS.length - 1}명`;
+    }
+  }
+  
+  // 데이터 다시 처리
+  processData();
+  applyFiltersAndRender();
+}
+
+/* ===== 선택된 교사 목록 가져오기 ===== */
+function getSelectedTeachers() {
+  return SELECTED_TEACHERS.length > 0 ? SELECTED_TEACHERS : [];
+}
+
+/* =========================================================
+ * 빠른 날짜 선택
+ * ========================================================= */
+function setQuickDate(type) {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  let from, to;
+  
+  switch(type) {
+    case 'today':
+      from = to = today;
+      break;
+    case 'week':
+      const dayOfWeek = today.getDay();
+      from = new Date(today);
+      from.setDate(today.getDate() - dayOfWeek);
+      to = new Date(from);
+      to.setDate(from.getDate() + 6);
+      break;
+    case 'month':
+      from = new Date(today.getFullYear(), today.getMonth(), 1);
+      to = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+      break;
+  }
+  
+  document.getElementById('dateFrom').value = formatDateInput(from);
+  document.getElementById('dateTo').value = formatDateInput(to);
+  
+  CURRENT_MONTH = new Date(from);
+}
+
+function formatDateInput(d) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+/* =========================================================
+ * 데이터 로드
+ * ========================================================= */
+function loadData() {
+  const container = document.getElementById('tableContainer');
+  showLoading(container, '일정 데이터를 불러오는 중...');
+  
+  const dateFrom = document.getElementById('dateFrom').value;
+  const dateTo = document.getElementById('dateTo').value;
+  
+  google.script.run
+    .withSuccessHandler(function(data) {
+      ALL_DATA = data || [];
+      updateLabFilter();
+      processData();
+      applyFiltersAndRender();
+    })
+    .withFailureHandler(function(err) {
+      container.innerHTML = `<div class="empty-state"><div class="icon">❌</div><div class="message">데이터 로드 실패: ${err.message || err}</div></div>`;
+    })
+    .getApplicationsForPeriod(dateFrom, dateTo);
+}
+
+/* =========================================================
+ * 데이터 처리 - 일정 목록 생성
+ * ========================================================= */
+function processData() {
+  const approvalFilter = document.getElementById('approvalFilter').value;
+  
+  // 선택된 교사 목록 가져오기 (새로운 체크박스 방식)
+  const selectedTeachers = getSelectedTeachers();
+  
+  // 승인 상태 필터링
+  let filtered = ALL_DATA.slice();
+  
+  if (approvalFilter === 'approved') {
+    filtered = filtered.filter(a => {
+      const status = calcStatus(a);
+      return status === '1차승인' || status === '최종승인';
+    });
+  }
+  
+  // 지도교사 필터링 (복수 선택 지원)
+  if (selectedTeachers.length > 0) {
+    filtered = filtered.filter(a => 
+      selectedTeachers.includes(String(a['지도교사이름'] || ''))
+    );
+  }
+  
+  // 일정 데이터 생성
+  SCHEDULE_DATA = filtered.map(app => {
+    // 임장 필요 여부 판단 (시약에 교사임장여부: "필요"가 있는지)
+    const chemicals = app.chemicals || [];
+    const needPresence = chemicals.some(c => c['교사임장여부'] === '필요');
+    
+    return {
+      신청ID: app['신청ID'] || '',
+      날짜: formatDate(app['실험할날짜']),
+      rawDate: app['실험할날짜'],
+      실험실: app['신청실험실'] || '',
+      시간: app['신청시간'] || '',
+      지도교사: app['지도교사이름'] || '',
+      지도교사이메일: app['지도교사이메일'] || '',
+      대표학생: app['대표자이름'] || '',
+      대표학번: app['대표자학번'] || '',
+      실험제목: app['실험제목'] || '',
+      임장필요: needPresence,
+      임장시작: app['임장지도 시작시간'] || '',
+      임장종료: app['임장지도 종료시간'] || '',
+      상태: calcStatus(app)
+    };
+  });
+}
+
+/* =========================================================
+ * 상태 계산
+ * ========================================================= */
+function calcStatus(app) {
+  const first = app['지도승인여부'];
+  const final = app['최종승인여부'];
+  
+  if (final === '승인') return '최종승인';
+  if (final === '반려') return '반려';
+  if (first === '승인') return '1차승인';
+  if (first === '반려') return '반려';
+  return '대기';
+}
+
+/* =========================================================
+ * 필터 및 정렬 적용
+ * ========================================================= */
+function applyFiltersAndRender() {
+  const presenceFilter = document.getElementById('presenceFilter').value;
+  const labFilter = document.getElementById('labFilter').value;
+  const timeFilter = document.getElementById('timeFilter').value;
+  
+  // 필터링
+  FILTERED_DATA = SCHEDULE_DATA.filter(s => {
+    if (presenceFilter === 'need' && !s.임장필요) return false;
+    if (presenceFilter === 'noneed' && s.임장필요) return false;
+    if (labFilter && s.실험실 !== labFilter) return false;
+    if (timeFilter && !String(s.시간||'').split(/[,\s]+/).map(function(t){return t.trim();}).includes(timeFilter)) return false;
+    return true;
+  });
+  
+  // 정렬
+  applySorting();
+  
+  // 렌더링
+  if (VIEW_MODE === 'table') {
+    renderTable();
+  } else {
+    renderCalendar();
+  }
+  
+  updateSummary();
+}
+
+/* =========================================================
+ * 정렬
+ * ========================================================= */
+function applySorting() {
+  const sortKey = document.getElementById('sortKey').value;
+  const sortDir = document.getElementById('sortDir').value;
+  
+  FILTERED_DATA.sort((a, b) => {
+    let cmp = 0;
+    
+    if (sortKey === '날짜') {
+      const da = new Date(a.rawDate), db = new Date(b.rawDate);
+      if (isNaN(da) && isNaN(db)) cmp = 0;
+      else if (isNaN(da)) cmp = 1;
+      else if (isNaN(db)) cmp = -1;
+      else cmp = da - db;
+    } else if (sortKey === '시간') {
+      const order = { 'ET': 1, 'EP1': 2, '7교시': 3 };
+      cmp = (order[a.시간] || 99) - (order[b.시간] || 99);
+    } else {
+      cmp = String(a[sortKey] || '').localeCompare(String(b[sortKey] || ''), 'ko');
+    }
+    
+    return sortDir === 'asc' ? cmp : -cmp;
+  });
+}
+
+/* =========================================================
+ * 보기 모드 전환
+ * ========================================================= */
+function setViewMode(mode) {
+  VIEW_MODE = mode;
+  
+  const tableBtn = document.getElementById('viewTableBtn');
+  const calendarBtn = document.getElementById('viewCalendarBtn');
+  const tableContainer = document.getElementById('tableContainer').parentElement;
+  const calendarContainer = document.getElementById('calendarContainer');
+  
+  if (mode === 'table') {
+    tableBtn.classList.remove('btn-secondary');
+    tableBtn.classList.add('btn-primary');
+    calendarBtn.classList.remove('btn-primary');
+    calendarBtn.classList.add('btn-secondary');
+    tableContainer.style.display = 'block';
+    calendarContainer.style.display = 'none';
+    renderTable();
+  } else {
+    calendarBtn.classList.remove('btn-secondary');
+    calendarBtn.classList.add('btn-primary');
+    tableBtn.classList.remove('btn-primary');
+    tableBtn.classList.add('btn-secondary');
+    tableContainer.style.display = 'none';
+    calendarContainer.style.display = 'block';
+    renderCalendar();
+  }
+}
+
+/* =========================================================
+ * 테이블 렌더링
+ * ========================================================= */
+function renderTable() {
+  const container = document.getElementById('tableContainer');
+  
+  if (FILTERED_DATA.length === 0) {
+    showEmpty(container, '조회된 일정이 없습니다.', '조회 조건을 변경해 보세요.');
+    return;
+  }
+  
+  const rows = FILTERED_DATA.map(item => {
+    const presenceBadge = item.임장필요 
+      ? '<span class="status-badge status-pending">필요</span>'
+      : '<span class="status-badge status-approved">불필요</span>';
+    
+    const timeDisplay = item.임장시작 || item.임장종료 
+      ? `${item.임장시작 || '-'} ~ ${item.임장종료 || '-'}`
+      : '-';
+    
+    return `
+      <tr>
+        <td>${escapeHtml(item.날짜)}</td>
+        <td>${escapeHtml(item.실험실)}</td>
+        <td class="text-center">${escapeHtml(item.시간)}</td>
+        <td>${escapeHtml(item.지도교사)}</td>
+        <td>${escapeHtml(item.대표학생)}</td>
+        <td class="truncate" title="${escapeHtml(item.실험제목)}">${escapeHtml(item.실험제목)}</td>
+        <td class="text-center">${presenceBadge}</td>
+        <td class="text-center">${timeDisplay}</td>
+        <td class="text-center">
+          <button class="btn btn-small btn-secondary" onclick="openEdit('${item.신청ID}')">수정</button>
+        </td>
+      </tr>
+    `;
+  }).join('');
+  
+  container.innerHTML = `
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>날짜</th>
+          <th>실험실</th>
+          <th class="text-center">시간</th>
+          <th>지도교사</th>
+          <th>대표학생</th>
+          <th>실험제목</th>
+          <th class="text-center">임장필요</th>
+          <th class="text-center">임장시간</th>
+          <th class="text-center">관리</th>
+        </tr>
+      </thead>
+      <tbody>${rows}</tbody>
+    </table>
+  `;
+}
+
+/* =========================================================
+ * 달력 렌더링
+ * ========================================================= */
+function renderCalendar() {
+  const container = document.getElementById('calendarContainer');
+  
+  const year = CURRENT_MONTH.getFullYear();
+  const month = CURRENT_MONTH.getMonth();
+  
+  const firstDay = new Date(year, month, 1);
+  const lastDay = new Date(year, month + 1, 0);
+  const startDay = firstDay.getDay();
+  const totalDays = lastDay.getDate();
+  
+  // 이전 달 마지막 날들
+  const prevMonthLastDay = new Date(year, month, 0).getDate();
+  
+  // 날짜별 일정 맵 생성
+  const scheduleMap = new Map();
+  FILTERED_DATA.forEach(item => {
+    const dateKey = item.날짜;
+    if (!scheduleMap.has(dateKey)) {
+      scheduleMap.set(dateKey, []);
+    }
+    scheduleMap.get(dateKey).push(item);
+  });
+  
+  // 여러 교사 선택 또는 전체 선택 시 교사명 표시 여부
+  const selectedTeachers = getSelectedTeachers();
+  // ✅ 수정: 전체(0명) 또는 여러 명(2명 이상) 선택 시 지도교사 표시
+  const showTeacherName = selectedTeachers.length !== 1;
+  
+  // 달력 생성
+  let calendarDays = '';
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  
+  // 이전 달
+  for (let i = startDay - 1; i >= 0; i--) {
+    const day = prevMonthLastDay - i;
+    calendarDays += `<div class="calendar-day other-month"><div class="calendar-day-number">${day}</div></div>`;
+  }
+  
+  // 현재 달
+  for (let day = 1; day <= totalDays; day++) {
+    const currentDate = new Date(year, month, day);
+    const dateStr = formatDateInput(currentDate);
+    const isToday = currentDate.getTime() === today.getTime();
+    const events = scheduleMap.get(dateStr) || [];
+    
+    const eventHtml = events.slice(0, 3).map(e => {
+      const cls = e.임장필요 ? 'need-presence' : 'no-presence';
+      // 여러 교사 선택 시 괄호로 교사명 표시
+      const teacherSuffix = showTeacherName && e.지도교사 ? ` (${e.지도교사})` : '';
+      return `<div class="calendar-event ${cls}" onclick="openEdit('${e.신청ID}')" title="${e.시간} ${e.실험실} - ${e.대표학생}${teacherSuffix}">${e.시간} ${e.대표학생}${teacherSuffix}</div>`;
+    }).join('');
+    
+    // ✅ 수정: 클릭 가능한 더보기 링크
+    const moreHtml = events.length > 3 ? `<div class="calendar-more-link" onclick="showDaySchedulePopup('${dateStr}', event)">+${events.length - 3}건 더보기</div>` : '';
+    
+    calendarDays += `
+      <div class="calendar-day ${isToday ? 'today' : ''}">
+        <div class="calendar-day-number">${day}</div>
+        ${eventHtml}
+        ${moreHtml}
+      </div>
+    `;
+  }
+  
+  // 다음 달
+  const remainingDays = 42 - (startDay + totalDays);
+  for (let i = 1; i <= remainingDays; i++) {
+    calendarDays += `<div class="calendar-day other-month"><div class="calendar-day-number">${i}</div></div>`;
+  }
+  
+  const monthNames = ['1월', '2월', '3월', '4월', '5월', '6월', '7월', '8월', '9월', '10월', '11월', '12월'];
+  
+  container.innerHTML = `
+    <div class="calendar-container">
+      <div class="calendar-header">
+        <button class="btn btn-icon btn-secondary" onclick="changeMonth(-1)">◀</button>
+        <div class="calendar-title">${year}년 ${monthNames[month]}</div>
+        <button class="btn btn-icon btn-secondary" onclick="changeMonth(1)">▶</button>
+      </div>
+      <div class="calendar-grid">
+        <div class="calendar-day-header">일</div>
+        <div class="calendar-day-header">월</div>
+        <div class="calendar-day-header">화</div>
+        <div class="calendar-day-header">수</div>
+        <div class="calendar-day-header">목</div>
+        <div class="calendar-day-header">금</div>
+        <div class="calendar-day-header">토</div>
+        ${calendarDays}
+      </div>
+      <div class="calendar-legend">
+        <div class="calendar-legend-item">
+          <div class="legend-box need"></div>
+          <span>임장 필요</span>
+        </div>
+        <div class="calendar-legend-item">
+          <div class="legend-box no-need"></div>
+          <span>임장 불필요</span>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function changeMonth(delta) {
+  CURRENT_MONTH.setMonth(CURRENT_MONTH.getMonth() + delta);
+  renderCalendar();
+}
+
+/* =========================================================
+ * 요약 정보 업데이트
+ * ========================================================= */
+function updateSummary() {
+  const card = document.getElementById('summaryCard');
+  const dateFrom = document.getElementById('dateFrom').value || '미지정';
+  const dateTo = document.getElementById('dateTo').value || '미지정';
+  
+  // 선택된 교사 목록 가져오기 (새로운 체크박스 방식)
+  const selectedTeachers = getSelectedTeachers();
+  const teacherName = selectedTeachers.length > 0 ? selectedTeachers.join(', ') : '전체';
+  
+  const needCount = FILTERED_DATA.filter(s => s.임장필요).length;
+  const noNeedCount = FILTERED_DATA.filter(s => !s.임장필요).length;
+  
+  document.getElementById('summaryPeriod').textContent = `${dateFrom} ~ ${dateTo}`;
+  document.getElementById('summaryTeacher').textContent = teacherName;
+  document.getElementById('summaryTotal').textContent = FILTERED_DATA.length;
+  document.getElementById('summaryNeed').textContent = needCount;
+  document.getElementById('summaryNoNeed').textContent = noNeedCount;
+  
+  // 인쇄용
+  document.getElementById('printTeacher').textContent = `지도교사: ${teacherName}`;
+  document.getElementById('printPeriod').textContent = `기간: ${dateFrom} ~ ${dateTo}`;
+  document.getElementById('printDate').textContent = `인쇄일: ${new Date().toLocaleString('ko-KR')}`;
+  
+  card.style.display = 'block';
+}
+
+/* =========================================================
+ * 수정 모달
+ * ========================================================= */
+function openEdit(appId) {
+  const item = SCHEDULE_DATA.find(s => s.신청ID === appId);
+  if (!item) {
+    alert('해당 일정을 찾을 수 없습니다.');
+    return;
+  }
+  
+  document.getElementById('editAppId').value = appId;
+  document.getElementById('editStudent').value = `${item.대표학번} ${item.대표학생}`;
+  document.getElementById('editTitle').value = item.실험제목;
+  document.getElementById('editTeacher').value = item.지도교사;
+  document.getElementById('editLab').value = item.실험실;
+  document.getElementById('editDate').value = item.날짜;
+  document.getElementById('editTime').value = item.시간;
+  document.getElementById('editStartTime').value = item.임장시작 || '';
+  document.getElementById('editEndTime').value = item.임장종료 || '';
+  
+  showModal('editModal');
+}
+
+function saveEdit() {
+  const appId = document.getElementById('editAppId').value;
+  const teacher = document.getElementById('editTeacher').value.trim();
+  const lab = document.getElementById('editLab').value;
+  const date = document.getElementById('editDate').value;
+  const time = document.getElementById('editTime').value;
+  const startTime = document.getElementById('editStartTime').value;
+  const endTime = document.getElementById('editEndTime').value;
+  
+  if (!teacher || !lab || !date || !time) {
+    alert('필수 항목을 모두 입력해주세요.');
+    return;
+  }
+  
+  const updates = {
+    '지도교사이름': teacher,
+    '신청실험실': lab,
+    '실험할날짜': date,
+    '신청시간': time,
+    '임장지도 시작시간': startTime,
+    '임장지도 종료시간': endTime
+  };
+  
+  // 저장 버튼 비활성화
+  const saveBtn = document.querySelector('#editModal .btn-primary');
+  saveBtn.disabled = true;
+  saveBtn.textContent = '저장 중...';
+  
+  google.script.run
+    .withSuccessHandler(function(result) {
+      saveBtn.disabled = false;
+      saveBtn.textContent = '저장';
+      
+      if (result && result.success) {
+        alert('저장되었습니다.');
+        hideModal('editModal');
+        loadData(); // 데이터 새로고침
+      } else {
+        alert('저장 실패: ' + (result?.message || '알 수 없는 오류'));
+      }
+    })
+    .withFailureHandler(function(err) {
+      saveBtn.disabled = false;
+      saveBtn.textContent = '저장';
+      alert('저장 실패: ' + (err.message || err));
+    })
+    .updateScheduleFields(appId, updates);
+}
+
+/* =========================================================
+ * 인쇄
+ * ========================================================= */
+function printSchedule() {
+  window.print();
+}
+
+/* =========================================================
+ * CSV 내보내기
+ * ========================================================= */
+function exportCSV() {
+  if (FILTERED_DATA.length === 0) {
+    alert('내보낼 데이터가 없습니다.');
+    return;
+  }
+  
+  const headers = ['날짜', '실험실', '시간', '지도교사', '대표학생', '실험제목', '임장필요', '임장시작', '임장종료'];
+  const rows = [headers.join(',')];
+  
+  FILTERED_DATA.forEach(item => {
+    rows.push([
+      escapeCSV(item.날짜),
+      escapeCSV(item.실험실),
+      escapeCSV(item.시간),
+      escapeCSV(item.지도교사),
+      escapeCSV(item.대표학생),
+      escapeCSV(item.실험제목),
+      item.임장필요 ? '필요' : '불필요',
+      escapeCSV(item.임장시작),
+      escapeCSV(item.임장종료)
+    ].join(','));
+  });
+  
+  const blob = new Blob(['\uFEFF' + rows.join('\n')], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  
+  // 선택된 교사 목록 (새로운 체크박스 방식)
+  const selectedTeachers = getSelectedTeachers();
+  const teacherName = selectedTeachers.length > 0 ? selectedTeachers.join('_') : 'all';
+  const dateFrom = document.getElementById('dateFrom').value || 'all';
+  const dateTo = document.getElementById('dateTo').value || 'all';
+  link.download = `임장일정_${teacherName}_${dateFrom}_${dateTo}.csv`;
+  
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
+/* =========================================================
+ * 이벤트 바인딩
+ * ========================================================= */
+['presenceFilter', 'labFilter', 'timeFilter', 'approvalFilter', 'sortKey', 'sortDir'].forEach(id => {
+  const el = document.getElementById(id);
+  if (el) {
+    el.addEventListener('change', function() {
+      if (id === 'approvalFilter') {
+        processData();
+      }
+      applyFiltersAndRender();
+    });
+  }
+});
+
+/* =========================================================
+ * 관리자 페이지로 이동
+ * ========================================================= */
+function goToAdmin() {
+  if (typeof APP_BASE_URL !== 'undefined' && APP_BASE_URL) {
+    window.top.location.href = APP_BASE_URL + '?view=admin';
+  } else {
+    google.script.run
+      .withSuccessHandler(function(url) {
+        window.top.location.href = url + '?view=admin';
+      })
+      .withFailureHandler(function(err) {
+        alert('페이지 이동 실패: ' + (err.message || err));
+      })
+      .getAppUrl();
+  }
+}
+
+/* =========================================================
+ * ✅ 날짜별 일정 팝업 (달력에서 +N건 더보기 클릭 시)
+ * ========================================================= */
+
+/**
+ * 날짜별 일정 팝업 표시
+ * @param {string} dateStr - 날짜 문자열 (YYYY-MM-DD)
+ * @param {Event} event - 클릭 이벤트 (버블링 방지용)
+ */
+function showDaySchedulePopup(dateStr, event) {
+  // 이벤트 버블링 방지 (날짜 셀 클릭 이벤트와 충돌 방지)
+  if (event) {
+    event.stopPropagation();
+  }
+  
+  // 해당 날짜의 모든 일정 가져오기
+  const events = FILTERED_DATA.filter(item => item.날짜 === dateStr);
+  
+  if (events.length === 0) {
+    return;
+  }
+  
+  // 날짜 포맷팅
+  const dateParts = dateStr.split('-');
+  const displayDate = `${dateParts[0]}년 ${parseInt(dateParts[1])}월 ${parseInt(dateParts[2])}일`;
+  
+  // 팝업 제목 설정
+  document.getElementById('dayScheduleTitle').textContent = `📅 ${displayDate} 일정 (${events.length}건)`;
+  
+  // 여러 교사 선택 또는 전체 선택 여부
+  const selectedTeachers = getSelectedTeachers();
+  // ✅ 수정: 전체(0명) 또는 여러 명(2명 이상) 선택 시 지도교사 표시
+  const showTeacherName = selectedTeachers.length !== 1;
+  
+  // 일정 목록 HTML 생성
+  const bodyHtml = events.map(e => {
+    const cls = e.임장필요 ? 'need-presence' : 'no-presence';
+    const teacherInfo = e.지도교사 ? `<div class="day-schedule-teacher">👨‍🏫 ${escapeHtml(e.지도교사)}</div>` : '';
+    
+    return `
+      <div class="day-schedule-item ${cls}" onclick="openEditFromPopup('${e.신청ID}')">
+        <div class="day-schedule-time">${escapeHtml(e.시간 || '-')}</div>
+        <div class="day-schedule-info">
+          <div class="day-schedule-student">${escapeHtml(e.대표학생 || '-')}</div>
+          <div class="day-schedule-detail">${escapeHtml(e.실험실 || '-')} · ${escapeHtml(e.실험제목 || '-')}</div>
+          ${teacherInfo}
+        </div>
+      </div>
+    `;
+  }).join('');
+  
+  document.getElementById('dayScheduleBody').innerHTML = bodyHtml;
+  
+  // 팝업 표시
+  document.getElementById('daySchedulePopup').style.display = 'flex';
+}
+
+/**
+ * 날짜별 일정 팝업 닫기
+ */
+function closeDaySchedulePopup() {
+  document.getElementById('daySchedulePopup').style.display = 'none';
+}
+
+/**
+ * 팝업에서 일정 클릭 시 수정 모달 열기
+ * @param {string} appId - 신청 ID
+ */
+function openEditFromPopup(appId) {
+  closeDaySchedulePopup();
+  openEdit(appId);
+}
+
+// 팝업 외부 클릭 시 닫기
+document.addEventListener('click', function(e) {
+  const popup = document.getElementById('daySchedulePopup');
+  if (popup && popup.style.display === 'flex') {
+    const content = popup.querySelector('.day-schedule-popup-content');
+    if (content && !content.contains(e.target)) {
+      closeDaySchedulePopup();
+    }
+  }
+});
+
+// ESC 키로 팝업 닫기
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') {
+    const popup = document.getElementById('daySchedulePopup');
+    if (popup && popup.style.display === 'flex') {
+      closeDaySchedulePopup();
+    }
+  }
+});
+
+function updateLabFilter() {
+  var labs = {};
+  ALL_DATA.forEach(function(app) { if (app['신청실험실']) labs[app['신청실험실']] = true; });
+  var sorted = Object.keys(labs).sort();
+  var sel = document.getElementById('labFilter');
+  if (!sel) return;
+  sel.innerHTML = '<option value="">전체</option>' + sorted.map(function(lab) { return '<option value="' + escapeHtml(lab) + '">' + escapeHtml(lab) + '</option>'; }).join('');
+}
+
+function goToPage(view) {
+  google.script.run
+    .withSuccessHandler(function(url) { window.top.location.href = url + '?view=' + view; })
+    .withFailureHandler(function() { alert('페이지 이동 실패'); })
+    .getAppUrl();
+}
+</script>
