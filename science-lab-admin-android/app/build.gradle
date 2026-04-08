@@ -10,13 +10,13 @@ android {
         applicationId "kr.hs.cnsa.sciencelab"
         minSdk 24          // Android 7.0+
         targetSdk 34       // Android 14
-        versionCode 11
-        versionName "2.0.0"
+        versionCode 12
+        versionName "2.1.0"
 
         // 웹앱 URL 설정 - 모바일 전용 UI (?platform=mobile)
-        // @152 배포: SPA 방식 — 페이지 이동 없이 즉시 화면 전환
+        // @156 배포: v3.2.2 속도최적화 + 버튼피드백
         buildConfigField "String", "WEB_APP_URL",
-            "\"https://script.google.com/macros/s/AKfycbxuN_hxU6Krfza_eWpkoPZuVVaWAhCZ_9foO7MlviJy927I670Oh0sVcJX8JGYJU2YYsw/exec?platform=mobile\""
+            "\"https://script.google.com/macros/s/AKfycbwvVrc2cpLseByXQJYV1-OAtDlucVzKHnxqkT09N7LBTG6CvK7fVTXD0UGuH4rU6Yl-5A/exec?platform=mobile\""
     }
 
     buildTypes {
