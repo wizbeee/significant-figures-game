@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>모바일 햄버거 메뉴 목업</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+:root {
+  --primary: #2563eb; --primary-light: #dbeafe; --success: #16a34a;
+  --warning: #f59e0b; --danger: #dc2626; --bg: #f1f5f9;
+  --surface: #ffffff; --text: #1e293b; --text-muted: #64748b;
+  --border: #e2e8f0; --shadow: 0 1px 3px rgba(0,0,0,0.08);
+}
+body { font-family: 'Pretendard', -apple-system, 'Noto Sans KR', sans-serif; background: var(--bg); color: var(--text); max-width: 390px; margin: 0 auto; min-height: 100vh; position: relative; }
+
+/* 어두운 오버레이 */
+.overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 200; }
+
+/* 슬라이드 메뉴 */
+.slide-menu {
+  position: fixed; top: 0; left: 0; width: 300px; height: 100%;
+  background: var(--surface); z-index: 300;
+  display: flex; flex-direction: column;
+  box-shadow: 4px 0 20px rgba(0,0,0,0.15);
+}
+
+.menu-header {
+  background: var(--primary);
+  padding: 28px 24px 24px;
+  color: white;
+}
+.menu-logo { font-size: 28px; margin-bottom: 8px; }
+.menu-title { font-size: 18px; font-weight: 800; letter-spacing: -0.3px; }
+.menu-subtitle { font-size: 13px; opacity: 0.8; margin-top: 4px; }
+.menu-user { margin-top: 16px; padding: 12px 14px; background: rgba(255,255,255,0.12); border-radius: 12px; display: flex; align-items: center; gap: 10px; }
+.user-avatar { width: 38px; height: 38px; background: rgba(255,255,255,0.25); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 16px; font-weight: 700; }
+.user-info {}
+.user-name { font-size: 14px; font-weight: 700; }
+.user-role { font-size: 12px; opacity: 0.7; }
+
+.menu-nav { flex: 1; padding: 12px 0; overflow-y: auto; }
+.menu-section-title { padding: 12px 24px 6px; font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px; }
+.menu-item {
+  display: flex; align-items: center; gap: 14px;
+  padding: 14px 24px; font-size: 15px; font-weight: 600;
+  color: var(--text); cursor: pointer; transition: background 0.15s;
+  border: none; background: none; width: 100%; text-align: left;
+}
+.menu-item:hover { background: #f8fafc; }
+.menu-item.active { background: var(--primary-light); color: var(--primary); }
+.menu-item .icon { font-size: 20px; width: 28px; text-align: center; }
+.menu-item .badge { margin-left: auto; background: var(--danger); color: white; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 700; }
+
+.menu-divider { height: 1px; background: var(--border); margin: 8px 20px; }
+
+.menu-footer { padding: 16px 24px; border-top: 1px solid var(--border); }
+.menu-footer-item {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 0; font-size: 14px; font-weight: 600; color: var(--text-muted);
+  border: none; background: none; width: 100%; text-align: left; cursor: pointer;
+}
+.menu-footer-item .icon { font-size: 18px; margin-right: 12px; }
+
+/* 토글 스위치 */
+.toggle { width: 44px; height: 24px; background: #cbd5e1; border-radius: 12px; position: relative; cursor: pointer; transition: background 0.2s; }
+.toggle::after { content: ''; position: absolute; top: 2px; left: 2px; width: 20px; height: 20px; background: white; border-radius: 50%; transition: left 0.2s; box-shadow: 0 1px 3px rgba(0,0,0,0.2); }
+.toggle.on { background: var(--primary); }
+.toggle.on::after { left: 22px; }
+
+.version { text-align: center; padding: 8px; font-size: 11px; color: #cbd5e1; }
+
+/* 뒤쪽 대시보드 (흐릿하게) */
+.bg-dashboard { filter: blur(2px); opacity: 0.3; padding: 16px; }
+.bg-topbar { background: var(--primary); color: white; padding: 14px 16px; border-radius: 10px; margin-bottom: 12px; font-weight: 700; }
+.bg-card { background: var(--surface); border-radius: 10px; height: 60px; margin-bottom: 8px; }
+</style>
+</head>
+<body>
+
+<!-- 배경 (대시보드 흐릿하게) -->
+<div class="bg-dashboard">
+  <div class="bg-topbar">☰ 실험실 관리</div>
+  <div class="bg-card"></div>
+  <div class="bg-card"></div>
+  <div class="bg-card"></div>
+  <div class="bg-card"></div>
+</div>
+
+<!-- 오버레이 -->
+<div class="overlay"></div>
+
+<!-- 슬라이드 메뉴 -->
+<div class="slide-menu">
+  <div class="menu-header">
+    <div class="menu-logo">🔬</div>
+    <div class="menu-title">과학 실험·실습실</div>
+    <div class="menu-subtitle">관리 시스템 v3.2</div>
+    <div class="menu-user">
+      <div class="user-avatar">이</div>
+      <div class="user-info">
+        <div class="user-name">이승현 선생님</div>
+        <div class="user-role">화학 담당</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="menu-nav">
+    <div class="menu-section-title">메뉴</div>
+    <button class="menu-item active">
+      <span class="icon">📊</span> 대시보드
+      <span class="badge">12</span>
+    </button>
+    <button class="menu-item">
+      <span class="icon">📦</span> 시약 목록
+    </button>
+    <button class="menu-item">
+      <span class="icon">👥</span> 학생 명단
+    </button>
+    <button class="menu-item">
+      <span class="icon">🧑‍🏫</span> 임장 일정
+    </button>
+
+    <div class="menu-divider"></div>
+
+    <div class="menu-section-title">관리</div>
+    <button class="menu-item">
+      <span class="icon">📝</span> 지도일지 작성
+    </button>
+    <button class="menu-item">
+      <span class="icon">📊</span> 지도 통계
+    </button>
+    <button class="menu-item">
+      <span class="icon">🚫</span> 신청 제한 관리
+    </button>
+  </div>
+
+  <div class="menu-footer">
+    <div class="menu-footer-item">
+      <span><span class="icon">🌙</span> 다크모드</span>
+      <div class="toggle"></div>
+    </div>
+    <div class="menu-footer-item">
+      <span><span class="icon">↻</span> 새로고침</span>
+    </div>
+    <div class="menu-footer-item" style="color: var(--danger);">
+      <span><span class="icon">🚪</span> 로그아웃</span>
+    </div>
+  </div>
+
+  <div class="version">v3.2.0 · 2026</div>
+</div>
+
+</body>
+</html>

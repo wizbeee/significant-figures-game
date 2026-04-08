@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>모바일 임장 일정 목업</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+:root {
+  --primary: #2563eb; --primary-light: #dbeafe; --success: #16a34a;
+  --warning: #f59e0b; --danger: #dc2626; --bg: #f1f5f9;
+  --surface: #ffffff; --text: #1e293b; --text-muted: #64748b;
+  --border: #e2e8f0; --shadow: 0 1px 3px rgba(0,0,0,0.08);
+}
+body { font-family: 'Pretendard', -apple-system, 'Noto Sans KR', sans-serif; background: var(--bg); color: var(--text); max-width: 390px; margin: 0 auto; min-height: 100vh; }
+.topbar { background: var(--primary); color: white; padding: 14px 16px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 100; }
+.topbar-left { display: flex; align-items: center; gap: 12px; }
+.topbar-hamburger { font-size: 22px; background: none; border: none; color: white; padding: 4px; }
+.topbar-title { font-size: 16px; font-weight: 700; }
+.topbar-right { display: flex; gap: 8px; }
+.topbar-btn { background: rgba(255,255,255,0.15); border: none; color: white; width: 36px; height: 36px; border-radius: 10px; font-size: 16px; display: flex; align-items: center; justify-content: center; }
+
+/* 교사 칩 선택 */
+.teacher-chips { padding: 12px 16px; overflow-x: auto; -webkit-overflow-scrolling: touch; display: flex; gap: 8px; background: var(--surface); border-bottom: 1px solid var(--border); }
+.teacher-chips::-webkit-scrollbar { display: none; }
+.teacher-chip { padding: 8px 16px; border-radius: 20px; font-size: 13px; font-weight: 600; white-space: nowrap; border: 1.5px solid var(--border); background: var(--surface); color: var(--text-muted); cursor: pointer; flex-shrink: 0; }
+.teacher-chip.active { background: var(--primary); color: white; border-color: var(--primary); }
+
+/* 보기 전환 */
+.view-toggle { padding: 10px 16px; display: flex; gap: 0; }
+.view-btn { flex: 1; padding: 10px; font-size: 13px; font-weight: 700; text-align: center; border: 1.5px solid var(--border); background: var(--surface); color: var(--text-muted); cursor: pointer; }
+.view-btn:first-child { border-radius: 10px 0 0 10px; }
+.view-btn:last-child { border-radius: 0 10px 10px 0; border-left: none; }
+.view-btn.active { background: var(--primary); color: white; border-color: var(--primary); }
+
+/* 달력 */
+.calendar { background: var(--surface); margin: 0 16px; border-radius: 14px; padding: 16px; box-shadow: var(--shadow); }
+.cal-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+.cal-title { font-size: 17px; font-weight: 800; }
+.cal-nav { background: none; border: none; font-size: 20px; cursor: pointer; padding: 4px 10px; color: var(--text-muted); }
+.cal-weekdays { display: grid; grid-template-columns: repeat(7, 1fr); text-align: center; margin-bottom: 8px; }
+.cal-weekday { font-size: 12px; font-weight: 700; color: var(--text-muted); padding: 4px 0; }
+.cal-weekday:first-child { color: var(--danger); }
+.cal-weekday:last-child { color: var(--primary); }
+.cal-days { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
+.cal-day { text-align: center; padding: 8px 0; font-size: 14px; font-weight: 500; border-radius: 10px; position: relative; cursor: pointer; min-height: 44px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; }
+.cal-day:hover { background: #f8fafc; }
+.cal-day.today { background: var(--primary-light); font-weight: 800; color: var(--primary); }
+.cal-day.selected { background: var(--primary); color: white; }
+.cal-day.other-month { color: #cbd5e1; }
+.cal-dots { display: flex; gap: 3px; justify-content: center; }
+.dot { width: 5px; height: 5px; border-radius: 50%; }
+.dot-need { background: var(--warning); }
+.dot-noneed { background: var(--success); }
+
+/* 통계 바 */
+.stats-row { padding: 10px 16px; display: flex; gap: 10px; }
+.mini-stat { flex: 1; background: var(--surface); border-radius: 10px; padding: 8px; text-align: center; box-shadow: var(--shadow); }
+.mini-stat-num { font-size: 18px; font-weight: 800; }
+.mini-stat-label { font-size: 10px; color: var(--text-muted); font-weight: 600; }
+
+/* 범례 */
+.legend { padding: 8px 16px; display: flex; gap: 16px; justify-content: center; }
+.legend-item { display: flex; align-items: center; gap: 4px; font-size: 12px; color: var(--text-muted); font-weight: 600; }
+.legend-dot { width: 8px; height: 8px; border-radius: 50%; }
+
+/* 일별 일정 카드 */
+.day-section { padding: 12px 16px 4px; }
+.day-title { font-size: 14px; font-weight: 700; color: var(--text); margin-bottom: 10px; }
+.schedule-card { background: var(--surface); border-radius: 12px; padding: 14px 16px; margin-bottom: 8px; box-shadow: var(--shadow); display: flex; justify-content: space-between; align-items: center; border-left: 4px solid transparent; }
+.schedule-card.need { border-left-color: var(--warning); }
+.schedule-card.noneed { border-left-color: var(--success); }
+.sched-info {}
+.sched-teacher { font-size: 15px; font-weight: 700; margin-bottom: 3px; }
+.sched-detail { font-size: 12px; color: var(--text-muted); display: flex; gap: 8px; flex-wrap: wrap; }
+.sched-right { text-align: right; }
+.sched-badge { padding: 4px 10px; border-radius: 12px; font-size: 11px; font-weight: 700; }
+.badge-need { background: #fef3c7; color: #92400e; }
+.badge-noneed { background: #d1fae5; color: #065f46; }
+.sched-time-range { font-size: 11px; color: var(--text-muted); margin-top: 4px; }
+
+.bottom-nav { position: fixed; bottom: 0; left: 50%; transform: translateX(-50%); width: 100%; max-width: 390px; background: var(--surface); border-top: 1px solid var(--border); display: flex; padding: 6px 0 10px; z-index: 100; box-shadow: 0 -2px 10px rgba(0,0,0,0.05); }
+.nav-item { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 6px 0; background: none; border: none; color: var(--text-muted); font-size: 11px; font-weight: 600; }
+.nav-item.active { color: var(--primary); }
+.nav-icon { font-size: 22px; }
+.content { padding-bottom: 80px; }
+</style>
+</head>
+<body>
+<div class="topbar">
+  <div class="topbar-left">
+    <button class="topbar-hamburger">☰</button>
+    <span class="topbar-title">🧑‍🏫 임장 일정</span>
+  </div>
+  <div class="topbar-right">
+    <button class="topbar-btn">🖨️</button>
+    <button class="topbar-btn">📥</button>
+  </div>
+</div>
+
+<div class="teacher-chips">
+  <span class="teacher-chip active">전체</span>
+  <span class="teacher-chip">이승현 T</span>
+  <span class="teacher-chip">김영호 T</span>
+  <span class="teacher-chip">박준호 T</span>
+  <span class="teacher-chip">최미래 T</span>
+  <span class="teacher-chip">정하늘 T</span>
+</div>
+
+<div class="view-toggle">
+  <button class="view-btn">📋 목록</button>
+  <button class="view-btn active">📅 달력</button>
+</div>
+
+<div class="stats-row">
+  <div class="mini-stat"><div class="mini-stat-num" style="color:var(--primary)">12</div><div class="mini-stat-label">총 일정</div></div>
+  <div class="mini-stat"><div class="mini-stat-num" style="color:var(--warning)">8</div><div class="mini-stat-label">임장 필요</div></div>
+  <div class="mini-stat"><div class="mini-stat-num" style="color:var(--success)">4</div><div class="mini-stat-label">임장 불필요</div></div>
+</div>
+
+<div class="content">
+  <div class="calendar">
+    <div class="cal-header">
+      <button class="cal-nav">◀</button>
+      <span class="cal-title">2026년 4월</span>
+      <button class="cal-nav">▶</button>
+    </div>
+    <div class="cal-weekdays">
+      <span class="cal-weekday">일</span><span class="cal-weekday">월</span>
+      <span class="cal-weekday">화</span><span class="cal-weekday">수</span>
+      <span class="cal-weekday">목</span><span class="cal-weekday">금</span>
+      <span class="cal-weekday">토</span>
+    </div>
+    <div class="cal-days">
+      <div class="cal-day other-month">29</div>
+      <div class="cal-day other-month">30</div>
+      <div class="cal-day other-month">31</div>
+      <div class="cal-day">1<div class="cal-dots"><span class="dot dot-need"></span></div></div>
+      <div class="cal-day">2</div>
+      <div class="cal-day">3<div class="cal-dots"><span class="dot dot-noneed"></span></div></div>
+      <div class="cal-day">4</div>
+      <div class="cal-day">5</div>
+      <div class="cal-day">6<div class="cal-dots"><span class="dot dot-need"></span></div></div>
+      <div class="cal-day">7<div class="cal-dots"><span class="dot dot-need"></span><span class="dot dot-noneed"></span></div></div>
+      <div class="cal-day today selected">8<div class="cal-dots"><span class="dot dot-need" style="background:white"></span><span class="dot dot-need" style="background:white"></span></div></div>
+      <div class="cal-day">9<div class="cal-dots"><span class="dot dot-need"></span></div></div>
+      <div class="cal-day">10</div>
+      <div class="cal-day">11</div>
+      <div class="cal-day">12</div>
+      <div class="cal-day">13</div>
+      <div class="cal-day">14<div class="cal-dots"><span class="dot dot-noneed"></span></div></div>
+      <div class="cal-day">15<div class="cal-dots"><span class="dot dot-need"></span></div></div>
+      <div class="cal-day">16</div>
+      <div class="cal-day">17</div>
+      <div class="cal-day">18</div>
+      <div class="cal-day">19</div>
+      <div class="cal-day">20</div>
+      <div class="cal-day">21</div>
+      <div class="cal-day">22<div class="cal-dots"><span class="dot dot-need"></span></div></div>
+      <div class="cal-day">23</div>
+      <div class="cal-day">24</div>
+      <div class="cal-day">25</div>
+      <div class="cal-day">26</div>
+      <div class="cal-day">27</div>
+      <div class="cal-day">28</div>
+      <div class="cal-day">29</div>
+      <div class="cal-day">30</div>
+      <div class="cal-day other-month">1</div>
+      <div class="cal-day other-month">2</div>
+    </div>
+  </div>
+
+  <div class="legend">
+    <span class="legend-item"><span class="legend-dot" style="background:var(--warning)"></span> 임장 필요</span>
+    <span class="legend-item"><span class="legend-dot" style="background:var(--success)"></span> 임장 불필요</span>
+  </div>
+
+  <div class="day-section">
+    <div class="day-title">📅 4월 8일 (화) 일정</div>
+
+    <div class="schedule-card need">
+      <div class="sched-info">
+        <div class="sched-teacher">이승현 T</div>
+        <div class="sched-detail">
+          <span>🧪 화학실험실</span> <span>🕐 ET</span>
+        </div>
+      </div>
+      <div class="sched-right">
+        <span class="sched-badge badge-need">⚠️ 임장필요</span>
+        <div class="sched-time-range">16:30~17:30</div>
+      </div>
+    </div>
+
+    <div class="schedule-card need">
+      <div class="sched-info">
+        <div class="sched-teacher">김영호 T</div>
+        <div class="sched-detail">
+          <span>🧬 생물실험실</span> <span>🕐 EP1</span>
+        </div>
+      </div>
+      <div class="sched-right">
+        <span class="sched-badge badge-need">⚠️ 임장필요</span>
+        <div class="sched-time-range">14:50~15:40</div>
+      </div>
+    </div>
+
+    <div class="schedule-card noneed">
+      <div class="sched-info">
+        <div class="sched-teacher">박준호 T</div>
+        <div class="sched-detail">
+          <span>⚡ 물리실험실</span> <span>🕐 7교시</span>
+        </div>
+      </div>
+      <div class="sched-right">
+        <span class="sched-badge badge-noneed">✅ 불필요</span>
+        <div class="sched-time-range">14:00~14:50</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="bottom-nav">
+  <button class="nav-item"><span class="nav-icon">📊</span>대시보드</button>
+  <button class="nav-item"><span class="nav-icon">📦</span>시약</button>
+  <button class="nav-item"><span class="nav-icon">👥</span>학생</button>
+  <button class="nav-item active"><span class="nav-icon">🧑‍🏫</span>일정</button>
+</div>
+</body>
+</html>
