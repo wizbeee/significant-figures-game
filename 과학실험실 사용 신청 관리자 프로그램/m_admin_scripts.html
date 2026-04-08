@@ -35,7 +35,8 @@ function loadApplications() {
     .getAllApplications({
       dateFrom: mFilters.dateFrom, dateTo: mFilters.dateTo,
       lab: mFilters.lab, status: mFilters.status,
-      searchTerm: mFilters.search, basis: mFilters.basis
+      searchTerm: mFilters.search, basis: mFilters.basis,
+      includeChemicals: false  // ✅ 대시보드 목록에서는 시약 데이터 불필요
     });
 }
 

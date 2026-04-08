@@ -597,7 +597,8 @@ function loadApplications(){
         lab: filters.lab,
         status: filters.status,
         searchTerm: filters.search,
-        basis: filters.basis
+        basis: filters.basis,
+        includeChemicals: false  // ✅ 대시보드 목록에서는 시약 데이터 불필요 → 별도 스프레드시트 호출 생략
       });
   } catch(e){
     showError(e);
@@ -605,27 +606,22 @@ function loadApplications(){
 }
 
 /* =========================================================
- * 통계 카드
+ * 통계 카드 (✅ 성능 최적화: 클라이언트에서 직접 계산, 별도 서버 호출 제거)
  * ========================================================= */
 function applyStats(){
-  google.script.run
-    .withSuccessHandler(stats => {
-      if (!stats || typeof stats !== 'object') return;
-      $('#stat-total').textContent = stats.total ?? '-';
-      $('#stat-pending').textContent = stats.pending ?? '-';
-      $('#stat-firstApproved').textContent = stats.firstApproved ?? '-';
-      $('#stat-finalApproved').textContent = stats.finalApproved ?? '-';
-      $('#stat-rejected').textContent = stats.rejected ?? '-';
-    })
-    .withFailureHandler(()=>{})
-    .getApplicationStats({
-      dateFrom: filters.dateFrom,
-      dateTo: filters.dateTo,
-      lab: filters.lab,
-      status: filters.status,
-      searchTerm: filters.search,
-      basis: filters.basis
-    });
+  var pending = 0, first = 0, final_ = 0, rejected = 0;
+  ALL.forEach(function(app) {
+    var st = calcStatus(app);
+    if (st === '대기') pending++;
+    else if (st === '1차승인') first++;
+    else if (st === '최종승인') final_++;
+    else if (st === '반려') rejected++;
+  });
+  $('#stat-total').textContent = ALL.length;
+  $('#stat-pending').textContent = pending;
+  $('#stat-firstApproved').textContent = first;
+  $('#stat-finalApproved').textContent = final_;
+  $('#stat-rejected').textContent = rejected;
 }
 /* =========================================================
  * 뷰 필터/정렬

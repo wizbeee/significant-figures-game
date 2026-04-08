@@ -397,8 +397,9 @@ function getAllApplications(filters = {}) {
     const sheets = pickSheetsForRange_(ss, from, to);
     const list = [];
 
-    // 시약 데이터 일괄 로드 (N+1 방지)
-    const chemMap = loadAllChemicalsMap_();
+    // ✅ 성능 최적화: includeChemicals=false이면 별도 스프레드시트 호출 생략
+    const needChemicals = filters.includeChemicals !== false;
+    const chemMap = needChemicals ? loadAllChemicalsMap_() : null;
 
     sheets.forEach(sh=>{
       const vals = sh.getDataRange().getValues();
@@ -428,7 +429,7 @@ function getAllApplications(filters = {}) {
           }
         });
         const appId = app['신청ID'];
-        app.chemicals = chemMap.get(appId) || [];
+        app.chemicals = chemMap ? (chemMap.get(appId) || []) : [];
         list.push(app);
       });
     });
@@ -518,6 +519,21 @@ function getApplicationChemicals(applicationId) {
 }
 
 function loadAllChemicalsMap_() {
+  // ✅ 성능 최적화: CacheService로 시약 데이터 캐싱 (5분)
+  const cache = CacheService.getScriptCache();
+  const cacheKey = 'CHEM_MAP_V1';
+  const cached = cache.get(cacheKey);
+  if (cached) {
+    try {
+      const parsed = JSON.parse(cached);
+      const map = new Map();
+      for (const key in parsed) {
+        map.set(key, parsed[key]);
+      }
+      return map;
+    } catch (_) { /* 캐시 파싱 실패 시 아래에서 재로드 */ }
+  }
+
   const map = new Map();
   try {
     const ss = SpreadsheetApp.openById(CHEM_RECORD_SSID);
@@ -533,6 +549,16 @@ function loadAllChemicalsMap_() {
       if (!map.has(appId)) map.set(appId, []);
       map.get(appId).push(obj);
     });
+
+    // 캐시에 저장 (Map → plain object로 변환, 최대 100KB 제한 고려)
+    try {
+      const plain = {};
+      for (const [k, v] of map) { plain[k] = v; }
+      const json = JSON.stringify(plain);
+      if (json.length < 100000) {  // CacheService 단일 값 100KB 제한
+        cache.put(cacheKey, json, 60 * 5);  // 5분 캐시
+      }
+    } catch (_) { /* 캐시 저장 실패 시 무시 (다음 호출에서 재로드) */ }
   } catch (e) {
     Logger.log('loadAllChemicalsMap_ 오류: ' + e.message);
   }
@@ -549,7 +575,9 @@ function getApplicationStatusForAdmin(app) {
 }
 
 function getApplicationStats(filters = {}) {
-  const rows = getAllApplications(filters);
+  // ✅ 성능 최적화: 통계 계산에는 시약 데이터 불필요
+  const statsFilters = Object.assign({}, filters, { includeChemicals: false });
+  const rows = getAllApplications(statsFilters);
   const stats = { total: rows.length, pending:0, firstApproved:0, finalApproved:0, rejected:0 };
   rows.forEach(app=>{
     const s = getApplicationStatusForAdmin(app);
@@ -603,6 +631,7 @@ function deleteApplication(applicationId) {
 
     // ✅ 수정: 시약 삭제 오류 처리 - 로그 기록 추가
     try {
+      CacheService.getScriptCache().remove('CHEM_MAP_V1');  // ✅ 시약 캐시 무효화
       const css=SpreadsheetApp.openById(CHEM_RECORD_SSID);
       const csh=css.getSheets()[0];
       const v=csh.getDataRange().getValues();
@@ -849,6 +878,8 @@ function batchUpdateApplications(updatesList) {
 
 function updateChemicalRecords(applicationId, chemicals) {
   try {
+    // ✅ 시약 데이터 변경 시 캐시 무효화
+    CacheService.getScriptCache().remove('CHEM_MAP_V1');
     const ss = SpreadsheetApp.openById(CHEM_RECORD_SSID);
     const sh = ss.getSheets()[0];
     const v = sh.getDataRange().getValues();
