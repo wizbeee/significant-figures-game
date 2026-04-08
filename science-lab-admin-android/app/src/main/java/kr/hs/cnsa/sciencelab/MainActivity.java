@@ -15,11 +15,9 @@ import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.ProgressBar;
-import android.widget.TextView;
 
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.view.WindowCompat;
-import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 
 /**
  * 메인 액티비티 - WebView로 GAS 웹앱을 전체화면 표시
@@ -29,7 +27,6 @@ public class MainActivity extends AppCompatActivity {
 
     private WebView webView;
     private ProgressBar progressBar;
-    private SwipeRefreshLayout swipeRefresh;
     private View errorView;
     private boolean isErrorShown = false;
 
@@ -45,11 +42,9 @@ public class MainActivity extends AppCompatActivity {
 
         webView = findViewById(R.id.webView);
         progressBar = findViewById(R.id.progressBar);
-        swipeRefresh = findViewById(R.id.swipeRefresh);
         errorView = findViewById(R.id.errorView);
 
         setupWebView();
-        setupSwipeRefresh();
 
         // 웹앱 로드
         webView.loadUrl(BuildConfig.WEB_APP_URL);
@@ -63,20 +58,20 @@ public class MainActivity extends AppCompatActivity {
         settings.setJavaScriptEnabled(true);
         settings.setDomStorageEnabled(true);
 
-        // 반응형 지원
-        settings.setUseWideViewPort(true);
-        settings.setLoadWithOverviewMode(true);
-
-        // 캐시 설정
-        settings.setCacheMode(WebSettings.LOAD_DEFAULT);
-
-        // 줌 설정 (태블릿에서 유용)
-        settings.setSupportZoom(true);
-        settings.setBuiltInZoomControls(true);
-        settings.setDisplayZoomControls(false); // 줌 버튼 숨김
+        // ★ 반응형 모바일 UI — 줌/와이드뷰포트 비활성화
+        // 줌 활성화 시 싱글탭 감지가 지연/차단되어 버튼 터치 불가 문제 발생
+        // 와이드뷰포트 + 오버뷰모드 시 GAS iframe 내 터치 좌표가 어긋남
+        settings.setUseWideViewPort(false);
+        settings.setLoadWithOverviewMode(false);
+        settings.setSupportZoom(false);
+        settings.setBuiltInZoomControls(false);
+        settings.setDisplayZoomControls(false);
 
         // 폰트 크기 (접근성)
         settings.setTextZoom(100);
+
+        // 캐시 설정
+        settings.setCacheMode(WebSettings.LOAD_DEFAULT);
 
         // 쿠키 (Google 로그인용)
         CookieManager cookieManager = CookieManager.getInstance();
@@ -103,7 +98,6 @@ public class MainActivity extends AppCompatActivity {
             public void onPageFinished(WebView view, String url) {
                 super.onPageFinished(view, url);
                 progressBar.setVisibility(View.GONE);
-                swipeRefresh.setRefreshing(false);
             }
 
             @Override
@@ -120,7 +114,8 @@ public class MainActivity extends AppCompatActivity {
 
                 // Google 인증/GAS 관련 URL은 WebView 내에서 처리
                 if (url.contains("google.com") || url.contains("googleapis.com") ||
-                    url.contains("gstatic.com") || url.contains("accounts.google")) {
+                    url.contains("gstatic.com") || url.contains("accounts.google") ||
+                    url.contains("googleusercontent.com")) {
                     return false;
                 }
 
@@ -147,24 +142,8 @@ public class MainActivity extends AppCompatActivity {
         });
     }
 
-    private void setupSwipeRefresh() {
-        swipeRefresh.setColorSchemeResources(
-            android.R.color.holo_blue_bright,
-            android.R.color.holo_green_light
-        );
-        swipeRefresh.setOnRefreshListener(() -> {
-            if (isErrorShown) {
-                errorView.setVisibility(View.GONE);
-                webView.setVisibility(View.VISIBLE);
-                isErrorShown = false;
-            }
-            webView.reload();
-        });
-    }
-
     private void showError() {
         progressBar.setVisibility(View.GONE);
-        swipeRefresh.setRefreshing(false);
         webView.setVisibility(View.GONE);
         errorView.setVisibility(View.VISIBLE);
         isErrorShown = true;

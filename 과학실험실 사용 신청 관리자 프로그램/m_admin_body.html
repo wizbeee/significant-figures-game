@@ -1,0 +1,96 @@
+<!-- ===== 목업 동일: 대시보드 (mobile_dashboard.html) ===== -->
+
+<!-- 통계 카드 (수평 스크롤) — 목업과 동일 구조 -->
+<div class="stats-scroll">
+  <div class="stats-row" id="stats-row">
+    <div class="stat-card active" data-status="전체" onclick="filterByStatusCard('전체')">
+      <div class="stat-number" id="stat-total">-</div>
+      <div class="stat-label">전체 신청</div>
+    </div>
+    <div class="stat-card" data-status="pending" onclick="filterByStatusCard('대기')">
+      <div class="stat-number" id="stat-pending">-</div>
+      <div class="stat-label">대기중</div>
+    </div>
+    <div class="stat-card" data-status="first" onclick="filterByStatusCard('1차승인')">
+      <div class="stat-number" id="stat-first">-</div>
+      <div class="stat-label">1차승인</div>
+    </div>
+    <div class="stat-card" data-status="final" onclick="filterByStatusCard('최종승인')">
+      <div class="stat-number" id="stat-final">-</div>
+      <div class="stat-label">최종승인</div>
+    </div>
+    <div class="stat-card" data-status="rejected" onclick="filterByStatusCard('반려')">
+      <div class="stat-number" id="stat-rejected">-</div>
+      <div class="stat-label">반려</div>
+    </div>
+  </div>
+</div>
+
+<!-- 필터 — 목업과 동일 구조 -->
+<div class="filter-section">
+  <div class="quick-filters">
+    <button class="quick-btn active" data-quick="today" onclick="onQuickFilter('today', this)">오늘</button>
+    <button class="quick-btn" data-quick="week" onclick="onQuickFilter('week', this)">이번 주</button>
+    <button class="quick-btn" data-quick="month" onclick="onQuickFilter('month', this)">이번 달</button>
+    <button class="quick-btn" data-quick="all" onclick="onQuickFilter('all', this)">전체</button>
+  </div>
+
+  <div class="filter-detail" id="filter-detail">
+    <div class="filter-row">
+      <select class="filter-select" id="labSelect">
+        <option value="">실험실 전체</option>
+        <option value="화학실험실">화학실험실</option>
+        <option value="생물실험실">생물실험실</option>
+        <option value="물리실험실">물리실험실</option>
+        <option value="프로젝트실험실">프로젝트실험실</option>
+        <option value="첨단기기실험실">첨단기기실험실</option>
+        <option value="오픈랩">오픈랩</option>
+        <option value="광학파동실험실">광학파동실험실</option>
+        <option value="AP Lab">AP Lab</option>
+        <option value="Tecｈ&Art LaB">Tech&Art Lab</option>
+      </select>
+      <select class="filter-select" id="statusSelect">
+        <option value="">상태 전체</option>
+        <option value="대기">대기</option>
+        <option value="1차승인">1차승인</option>
+        <option value="최종승인">최종승인</option>
+        <option value="반려">반려</option>
+      </select>
+    </div>
+    <div class="filter-row">
+      <input class="filter-input" type="text" id="searchInput" placeholder="🔍 학번, 이름, 실험제목 검색">
+      <button class="filter-search-btn" onclick="loadApplications()">조회</button>
+    </div>
+  </div>
+</div>
+
+<!-- 결과 바 — 목업과 동일 구조 -->
+<div class="result-bar">
+  <span class="result-count" id="result-count">조회 버튼을 눌러주세요</span>
+  <div class="result-actions">
+    <button class="result-action-btn" onclick="toggleSortMenu()">정렬 ↕</button>
+    <button class="result-action-btn" onclick="exportCSV()">엑셀 📥</button>
+  </div>
+</div>
+
+<!-- 신청 카드 목록 — 목업과 동일 구조 -->
+<div class="card-list" id="card-list">
+  <div class="m-empty">
+    <div class="m-empty-icon">📋</div>
+    <div>빠른 기간을 선택하거나 조회 버튼을 눌러주세요</div>
+  </div>
+</div>
+
+<!-- 상세보기 패널 (풀스크린) — 목업 mobile_detail.html과 동일 -->
+<div class="detail-panel" id="detail-panel">
+  <div class="detail-topbar">
+    <button class="topbar-back" onclick="closeDetail()">← 뒤로</button>
+    <div class="topbar-actions">
+      <button class="topbar-action" onclick="editDetail()" title="수정">✏️</button>
+      <button class="topbar-action" onclick="printDetail()" title="인쇄">🖨️</button>
+    </div>
+  </div>
+  <div class="status-banner" id="detail-status"></div>
+  <div id="detail-body" style="flex:1;padding:0 0 90px;"></div>
+  <div class="bottom-actions" id="detail-bottom"></div>
+</div>

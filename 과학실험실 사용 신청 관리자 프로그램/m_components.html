@@ -1,0 +1,83 @@
+<!-- ===== 목업 동일: 햄버거 메뉴 (mobile_hamburger.html) ===== -->
+<div class="overlay" onclick="closeMenu()"></div>
+<nav class="slide-menu" role="navigation" aria-label="메인 메뉴">
+  <div class="menu-header">
+    <div class="menu-logo">🔬</div>
+    <div class="menu-title">과학 실험·실습실</div>
+    <div class="menu-subtitle">관리 시스템 v3.2</div>
+    <div class="menu-user">
+      <div class="user-avatar" id="menu-user-avatar">T</div>
+      <div class="user-info">
+        <div class="user-name" id="menu-user-name">선생님</div>
+        <div class="user-role" id="menu-user-role">담당</div>
+      </div>
+    </div>
+  </div>
+  <div class="menu-nav">
+    <div class="menu-section-title">메뉴</div>
+    <button class="menu-item" data-view="admin" onclick="closeMenu(); mGoToPage('admin');">
+      <span class="icon">📊</span> 대시보드
+      <span class="badge" id="menu-pending-badge" style="display:none">0</span>
+    </button>
+    <button class="menu-item" data-view="common_list" onclick="closeMenu(); mGoToPage('common_list');">
+      <span class="icon">📦</span> 시약 목록
+    </button>
+    <button class="menu-item" data-view="student_list" onclick="closeMenu(); mGoToPage('student_list');">
+      <span class="icon">👥</span> 학생 명단
+    </button>
+    <button class="menu-item" data-view="teacher_schedule" onclick="closeMenu(); mGoToPage('teacher_schedule');">
+      <span class="icon">🧑‍🏫</span> 임장
+    </button>
+    <div class="menu-divider"></div>
+    <div class="menu-section-title">관리</div>
+    <button class="menu-item" onclick="closeMenu(); if(typeof openGuidanceForm==='function') openGuidanceForm();">
+      <span class="icon">📝</span> 지도일지 작성
+    </button>
+    <button class="menu-item" onclick="closeMenu(); if(typeof openWarningStats==='function') openWarningStats();">
+      <span class="icon">📊</span> 지도 통계
+    </button>
+    <button class="menu-item" onclick="closeMenu(); if(typeof openRestrictionModal==='function') openRestrictionModal();">
+      <span class="icon">🚫</span> 신청 제한 관리
+    </button>
+  </div>
+  <div class="menu-footer">
+    <button class="menu-footer-item" onclick="toggleDarkMode();">
+      <span><span class="icon">🌙</span> 다크모드</span>
+      <div class="toggle" id="dark-toggle"></div>
+    </button>
+    <button class="menu-footer-item" onclick="closeMenu(); location.reload();">
+      <span><span class="icon">↻</span> 새로고침</span>
+    </button>
+    <button class="menu-footer-item" style="color:var(--danger);" onclick="closeMenu(); mGoToPage('logout');">
+      <span><span class="icon">🚪</span> 로그아웃</span>
+    </button>
+  </div>
+  <div class="version">v3.2.0 · 2026</div>
+</nav>
+
+<!-- ===== 목업 동일: 하단 네비게이션 (mobile_dashboard.html) ===== -->
+<nav class="bottom-nav" role="navigation" aria-label="탭 네비게이션">
+  <button class="nav-item" data-view="admin" onclick="mGoToPage('admin');">
+    <span class="nav-icon">📊</span>대시보드
+  </button>
+  <button class="nav-item" data-view="common_list" onclick="mGoToPage('common_list');">
+    <span class="nav-icon">📦</span>시약
+  </button>
+  <button class="nav-item" data-view="student_list" onclick="mGoToPage('student_list');">
+    <span class="nav-icon">👥</span>학생
+  </button>
+  <button class="nav-item" data-view="teacher_schedule" onclick="mGoToPage('teacher_schedule');">
+    <span class="nav-icon">🧑‍🏫</span>임장
+  </button>
+</nav>
+
+<script>
+function setActiveNav(viewName) {
+  $$('.nav-item').forEach(el => el.classList.toggle('active', el.dataset.view === viewName));
+  $$('.menu-item').forEach(el => el.classList.toggle('active', el.dataset.view === viewName));
+}
+function updatePendingBadge(count) {
+  const badge = $('#menu-pending-badge');
+  if (badge) { badge.textContent = count; badge.style.display = count > 0 ? '' : 'none'; }
+}
+</script>

@@ -1,0 +1,343 @@
+<script>
+/* =========================================================
+ * 모바일 대시보드 스크립트 — 목업 클래스명 동일 버전
+ * ========================================================= */
+
+let ALL = [];
+let VIEW = [];
+let STATUS_FILTER = '';
+const PAGE = { current: 1, size: 20 };
+let CURRENT_DETAIL = null;
+
+const mFilters = {
+  basis: '실험할날짜', dateFrom: '', dateTo: '',
+  lab: '', status: '', search: ''
+};
+
+/* ===== 데이터 로딩 ===== */
+function loadApplications() {
+  mFilters.lab = $('#labSelect') ? $('#labSelect').value || '' : '';
+  mFilters.status = $('#statusSelect') ? $('#statusSelect').value || '' : '';
+  mFilters.search = $('#searchInput') ? $('#searchInput').value.trim() : '';
+
+  $('#card-list').innerHTML = '<div class="m-loading"><div class="m-loading-spinner"></div><span>데이터를 불러오는 중...</span></div>';
+
+  google.script.run
+    .withSuccessHandler(function(list) {
+      ALL = Array.isArray(list) ? list : [];
+      applyStats();
+      PAGE.current = 1;
+      refreshView();
+    })
+    .withFailureHandler(function(err) {
+      $('#card-list').innerHTML = '<div class="m-empty"><div class="m-empty-icon">⚠️</div><div>오류: ' + escapeHtml(err.message || err) + '</div></div>';
+    })
+    .getAllApplications({
+      dateFrom: mFilters.dateFrom, dateTo: mFilters.dateTo,
+      lab: mFilters.lab, status: mFilters.status,
+      searchTerm: mFilters.search, basis: mFilters.basis
+    });
+}
+
+/* ===== 통계 ===== */
+function applyStats() {
+  var pending = 0, first = 0, final_ = 0, rejected = 0;
+  ALL.forEach(function(app) {
+    var st = calcStatus(app);
+    if (st === '대기') pending++;
+    else if (st === '1차승인') first++;
+    else if (st === '최종승인') final_++;
+    else if (st === '반려') rejected++;
+  });
+  $('#stat-total').textContent = ALL.length;
+  $('#stat-pending').textContent = pending;
+  $('#stat-first').textContent = first;
+  $('#stat-final').textContent = final_;
+  $('#stat-rejected').textContent = rejected;
+  updatePendingBadge(pending);
+}
+
+/* ===== 필터/정렬 → 뷰 갱신 ===== */
+function refreshView() {
+  var rows = ALL.slice();
+  if (STATUS_FILTER) rows = rows.filter(function(a) { return calcStatus(a) === STATUS_FILTER; });
+  if (mFilters.status) rows = rows.filter(function(a) { return calcStatus(a) === mFilters.status; });
+  if (mFilters.lab) rows = rows.filter(function(a) { return String(a['신청실험실'] || '') === mFilters.lab; });
+  if (mFilters.search) {
+    var t = mFilters.search.toLowerCase();
+    rows = rows.filter(function(a) {
+      return String(a['대표자학번']||'').toLowerCase().includes(t) ||
+        String(a['대표자이름']||'').toLowerCase().includes(t) ||
+        String(a['지도교사이름']||'').toLowerCase().includes(t) ||
+        String(a['실험제목']||'').toLowerCase().includes(t);
+    });
+  }
+  rows.sort(function(a, b) { return cmpDateTs(b['실험할날짜'], a['실험할날짜']); });
+  VIEW = rows;
+  renderCards();
+}
+
+/* ===== 카드 렌더링 — 목업 HTML과 동일 구조 ===== */
+function renderCards() {
+  var container = $('#card-list');
+  var total = VIEW.length;
+  var end = PAGE.current * PAGE.size;
+  var showing = VIEW.slice(0, end);
+  var remaining = total - end;
+
+  var countEl = $('#result-count');
+  if (countEl) {
+    if (total === 0) countEl.textContent = '조건에 맞는 신청이 없습니다';
+    else countEl.innerHTML = '총 <strong>' + total + '건</strong>' + (remaining > 0 ? ' 중 <strong>' + showing.length + '건</strong> 표시' : '');
+  }
+
+  if (total === 0) {
+    container.innerHTML = '<div class="m-empty"><div class="m-empty-icon">📭</div><div>조건에 맞는 신청이 없습니다</div></div>';
+    return;
+  }
+
+  var html = '';
+  showing.forEach(function(app) {
+    var status = calcStatus(app);
+    var appId = escapeHtml(app['신청ID'] || '');
+    var name = escapeHtml(app['대표자이름'] || '');
+    var stuId = escapeHtml(app['대표자학번'] || '');
+    var lab = escapeHtml(app['신청실험실'] || '');
+    var date = fmtDate(app['실험할날짜']);
+    var time = escapeHtml(app['신청시간'] || '');
+    var title = escapeHtml(app['실험제목'] || '');
+    var teacher = escapeHtml(app['지도교사이름'] || '');
+    var badgeClass = statusBadgeClass(status);
+    var icon = statusIcon(status);
+    var dataStatus = statusDataAttr(status);
+
+    var approveBtn = '';
+    if (status === '대기') {
+      approveBtn = '<button class="card-btn card-btn-approve-menu" onclick="event.stopPropagation(); quickApprove(\'' + appId + '\')">승인 처리 ▾</button>';
+    } else if (status === '1차승인') {
+      approveBtn = '<button class="card-btn card-btn-approve-menu" onclick="event.stopPropagation(); quickFinalApprove(\'' + appId + '\')">최종승인 ▾</button>';
+    } else if (status === '반려') {
+      approveBtn = '<button class="card-btn" style="background:#fee2e2;color:#991b1b;" onclick="event.stopPropagation(); openDetail(\'' + appId + '\')">반려 사유</button>';
+    } else {
+      approveBtn = '<button class="card-btn" style="background:var(--bg);color:var(--text-muted);">완료됨</button>';
+    }
+
+    html += '<div class="app-card" data-status="' + dataStatus + '" onclick="openDetail(\'' + appId + '\')">' +
+      '<div class="card-header">' +
+        '<div><span class="card-student">' + name + '</span><span class="card-student-id">' + stuId + '</span></div>' +
+        '<span class="status-badge ' + badgeClass + '">' + icon + ' ' + status + '</span>' +
+      '</div>' +
+      '<div class="card-info">' +
+        '<span class="card-info-item"><span class="icon">🧪</span> ' + lab + '</span>' +
+        '<span class="card-info-item"><span class="icon">📅</span> ' + date + '</span>' +
+        '<span class="card-info-item"><span class="icon">🕐</span> ' + time + '</span>' +
+        '<span class="card-info-item"><span class="icon">👨‍🏫</span> ' + teacher + '</span>' +
+      '</div>' +
+      '<div class="card-title">' + title + '</div>' +
+      '<div class="card-actions">' +
+        '<button class="card-btn card-btn-detail" onclick="event.stopPropagation(); openDetail(\'' + appId + '\')">상세 보기</button>' +
+        approveBtn +
+      '</div>' +
+    '</div>';
+  });
+
+  if (remaining > 0) {
+    html += '<div class="load-more"><button class="load-more-btn" onclick="loadMore()">더보기 (' + remaining + '건 남음) ↓</button></div>';
+  }
+  container.innerHTML = html;
+}
+
+function loadMore() { PAGE.current++; renderCards(); }
+
+/* ===== 상세보기 — 목업 mobile_detail.html과 동일 구조 ===== */
+function openDetail(id) {
+  var app = ALL.find(function(a) { return String(a['신청ID']) === String(id); });
+  if (!app) { alert('신청 데이터를 찾을 수 없습니다.'); return; }
+  CURRENT_DETAIL = app;
+  var status = calcStatus(app);
+
+  // 상태 배너
+  var statusEl = $('#detail-status');
+  var statusClassMap = { '대기': 'pending', '1차승인': 'first', '최종승인': 'final', '반려': 'rejected' };
+  statusEl.className = 'status-banner ' + (statusClassMap[status] || '');
+  statusEl.textContent = statusIcon(status) + ' ' + status + (status === '대기' ? ' — 승인 대기 중' : '');
+
+  // 상세 내용 — section/info-row 구조 (목업 동일)
+  var body = $('#detail-body');
+  var h = '<div class="section"><div class="section-title">📋 기본 정보</div><div class="info-grid">' +
+    ir('신청번호', '#' + escapeHtml(app['신청ID']||'')) +
+    ir('대표자', escapeHtml(app['대표자이름']||'') + ' (' + escapeHtml(app['대표자학번']||'') + ')') +
+    ir('실험·실습실', escapeHtml(app['신청실험실']||'')) +
+    ir('실험날짜', fmtDate(app['실험할날짜'])) +
+    ir('시간', escapeHtml(app['신청시간']||'')) +
+    ir('실험제목', escapeHtml(app['실험제목']||'')) +
+    ir('지도교사', escapeHtml(app['지도교사이름']||'')) +
+    ir('제출일시', fmtDate(app['제출일시'], true)) +
+    ir('총인원', escapeHtml(app['총인원수']||'')) +
+    ir('사용목적', escapeHtml(app['사용목적']||'')) +
+  '</div></div>';
+
+  var companions = app['동반자명단'] || '';
+  if (companions) {
+    h += '<div class="section"><div class="section-title">👥 동반 학생</div><div class="companion-list">';
+    String(companions).split(',').forEach(function(c) {
+      c = c.trim();
+      if (c) h += '<div class="companion-chip">' + escapeHtml(c) + '</div>';
+    });
+    h += '</div></div>';
+  }
+
+  if (app['실험준비물'] || app['실험과정']) {
+    h += '<div class="section">';
+    if (app['실험준비물']) h += '<div class="section-title">🔧 실험 준비물</div><p style="font-size:14px;line-height:1.6;color:var(--text-muted);margin-bottom:16px;">' + escapeHtml(app['실험준비물']) + '</p>';
+    if (app['실험과정']) h += '<div class="section-title">📝 실험 과정</div><p style="font-size:14px;line-height:1.6;color:var(--text-muted);">' + escapeHtml(app['실험과정']) + '</p>';
+    h += '</div>';
+  }
+
+  body.innerHTML = h;
+  loadChemicals(id);
+
+  // 하단 액션 — 목업과 동일
+  var btm = $('#detail-bottom');
+  if (status === '대기') {
+    btm.innerHTML = '<button class="action-btn btn-first" onclick="approveAction(\'1차승인\')">1차승인</button><button class="action-btn btn-final" onclick="approveAction(\'최종승인\')">최종승인</button><button class="action-btn btn-reject" onclick="approveAction(\'반려\')">반려</button>';
+  } else if (status === '1차승인') {
+    btm.innerHTML = '<button class="action-btn btn-final" onclick="approveAction(\'최종승인\')">최종승인</button><button class="action-btn btn-reject" onclick="approveAction(\'반려\')">반려</button>';
+  } else {
+    btm.innerHTML = '<button class="action-btn" style="background:var(--bg);color:var(--text);border:1.5px solid var(--border);" onclick="closeDetail()">닫기</button>';
+  }
+
+  $('#detail-panel').classList.add('show');
+}
+
+function closeDetail() { $('#detail-panel').classList.remove('show'); CURRENT_DETAIL = null; }
+function ir(label, value) { return '<div class="info-row"><span class="info-label">' + label + '</span><span class="info-value">' + value + '</span></div>'; }
+
+function loadChemicals(appId) {
+  google.script.run
+    .withSuccessHandler(function(chems) {
+      if (!chems || !chems.length) return;
+      var h = '<div class="section"><div class="section-title">🧪 시약 정보</div>' +
+        '<table class="chemical-table"><thead><tr><th>시약명</th><th>용량</th><th>단위</th><th>상태</th><th>폐기방법</th></tr></thead><tbody>';
+      chems.forEach(function(c) {
+        h += '<tr><td><strong>' + escapeHtml(c['시약명']||'') + '</strong></td><td>' + escapeHtml(c['용량']||'') + '</td><td>' + escapeHtml(c['단위']||'') + '</td><td>' + escapeHtml(c['상태']||'') + '</td><td>' + escapeHtml(c['폐기방법']||'') + '</td></tr>';
+      });
+      h += '</tbody></table></div>';
+      var body = $('#detail-body');
+      var first = body.querySelector('.section');
+      if (first && first.nextSibling) first.insertAdjacentHTML('afterend', h);
+      else body.insertAdjacentHTML('beforeend', h);
+    })
+    .withFailureHandler(function() {})
+    .getApplicationChemicals(appId);
+}
+
+/* ===== 승인/반려 ===== */
+function approveAction(newStatus) {
+  if (!CURRENT_DETAIL) return;
+  var name = CURRENT_DETAIL['대표자이름'] || '';
+  if (!confirm(name + ' 학생의 신청을 "' + newStatus + '"(으)로 변경하시겠습니까?')) return;
+  var approvals = mapStatusToApprovals(newStatus);
+  google.script.run
+    .withSuccessHandler(function() { alert(newStatus + ' 처리되었습니다.'); closeDetail(); loadApplications(); })
+    .withFailureHandler(function(err) { alert('처리 실패: ' + (err.message || err)); })
+    .updateApplicationFields(CURRENT_DETAIL['신청ID'], approvals);
+}
+
+function quickApprove(appId) {
+  var app = ALL.find(function(a) { return String(a['신청ID']) === String(appId); });
+  if (!app) return;
+  CURRENT_DETAIL = app;
+  var choice = prompt('승인 처리:\n1: 1차승인\n2: 최종승인\n3: 반려');
+  if (choice === '1') approveAction('1차승인');
+  else if (choice === '2') approveAction('최종승인');
+  else if (choice === '3') approveAction('반려');
+  else CURRENT_DETAIL = null;
+}
+
+function quickFinalApprove(appId) {
+  var app = ALL.find(function(a) { return String(a['신청ID']) === String(appId); });
+  if (!app) return;
+  CURRENT_DETAIL = app;
+  var choice = prompt('처리:\n1: 최종승인\n2: 반려');
+  if (choice === '1') approveAction('최종승인');
+  else if (choice === '2') approveAction('반려');
+  else CURRENT_DETAIL = null;
+}
+
+/* ===== 상태 카드 필터 ===== */
+function filterByStatusCard(status) {
+  STATUS_FILTER = (status === '전체') ? '' : status;
+  $$('.stat-card').forEach(function(c) {
+    var s = c.dataset.status;
+    c.classList.toggle('active', s === status || (status === '전체' && s === '전체'));
+  });
+  PAGE.current = 1;
+  refreshView();
+}
+
+/* ===== 빠른 기간 ===== */
+function onQuickFilter(type, btn) {
+  $$('.quick-btn').forEach(function(b) { b.classList.remove('active'); });
+  btn.classList.add('active');
+  var dates = setQuickDate(type);
+  if (dates) { mFilters.dateFrom = dates.from; mFilters.dateTo = dates.to; }
+  loadApplications();
+}
+
+/* ===== 정렬 ===== */
+function toggleSortMenu() {
+  var choice = prompt('정렬:\n1: 실험날짜 최신순\n2: 실험날짜 오래된순\n3: 제출일시 최신순\n4: 이름순');
+  if (choice === '1') VIEW.sort(function(a, b) { return cmpDateTs(b['실험할날짜'], a['실험할날짜']); });
+  else if (choice === '2') VIEW.sort(function(a, b) { return cmpDateTs(a['실험할날짜'], b['실험할날짜']); });
+  else if (choice === '3') VIEW.sort(function(a, b) { return cmpDateTs(b['제출일시'], a['제출일시']); });
+  else if (choice === '4') VIEW.sort(function(a, b) { return String(a['대표자이름']||'').localeCompare(String(b['대표자이름']||''), 'ko'); });
+  else return;
+  PAGE.current = 1;
+  renderCards();
+}
+
+/* ===== CSV ===== */
+function escapeCSV(val) { var s = String(val==null?'':val); return (s.includes(',')||s.includes('"')||s.includes('\n')) ? '"'+s.replace(/"/g,'""')+'"' : s; }
+function exportCSV() {
+  if (!VIEW || !VIEW.length) { alert('내보낼 데이터가 없습니다.'); return; }
+  var h = ['신청ID','제출일시','대표자학번','대표자이름','동반자명단','총인원수','신청실험실','실험할날짜','신청시간','사용목적','실험제목','실험과정','실험준비물','지도교사이름','상태','지도승인여부','최종승인여부'];
+  var rows = [h.join(',')];
+  VIEW.forEach(function(a) {
+    rows.push([a['신청ID'],fmtDate(a['제출일시'],true),a['대표자학번'],a['대표자이름'],a['동반자명단'],a['총인원수'],a['신청실험실'],fmtDate(a['실험할날짜']),a['신청시간'],a['사용목적'],a['실험제목'],a['실험과정'],a['실험준비물'],a['지도교사이름'],calcStatus(a),a['지도승인여부'],a['최종승인여부']].map(escapeCSV).join(','));
+  });
+  var blob = new Blob(['\uFEFF'+rows.join('\n')], {type:'text/csv;charset=utf-8;'});
+  var a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+  a.download = '실험실신청_'+toLocalYMD(new Date())+'.csv';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+}
+
+function editDetail() {
+  if (!CURRENT_DETAIL) return;
+  alert('수정 기능은 데스크탑에서 이용해주세요.');
+}
+function printDetail() { window.print(); }
+
+/* ===== 초기화 ===== */
+function adminInit() {
+  var dates = setQuickDate('today');
+  if (dates) { mFilters.dateFrom = dates.from; mFilters.dateTo = dates.to; }
+
+  if ($('#labSelect')) $('#labSelect').addEventListener('change', function() { mFilters.lab = this.value; PAGE.current = 1; refreshView(); });
+  if ($('#statusSelect')) $('#statusSelect').addEventListener('change', function() {
+    mFilters.status = this.value; STATUS_FILTER = '';
+    $$('.stat-card').forEach(function(c) { c.classList.remove('active'); });
+    if (!this.value) document.querySelector('.stat-card[data-status="전체"]').classList.add('active');
+    PAGE.current = 1; refreshView();
+  });
+  if ($('#searchInput')) $('#searchInput').addEventListener('input', debounce(function() {
+    mFilters.search = $('#searchInput').value.trim();
+    PAGE.current = 1; refreshView();
+  }, 300));
+
+  document.addEventListener('keydown', function(e) { if (e.key === 'Escape') closeDetail(); });
+
+  loadApplications();
+}
+if (typeof SPA_MODE === 'undefined') window.addEventListener('load', adminInit);
+</script>

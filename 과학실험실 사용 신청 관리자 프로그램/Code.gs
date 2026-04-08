@@ -45,35 +45,43 @@ const RESTRICT_ACCUM_HEADERS= ['학번','이름','누적 횟수'];
 
 function doGet(e) {
   var view = (e && e.parameter && e.parameter.view) ? String(e.parameter.view) : '';
+  var platform = (e && e.parameter && e.parameter.platform) ? String(e.parameter.platform) : '';
+  var isMobile = (platform === 'mobile');
   var file;
   var title = '과학실험·실습실 사용 신청 관리 시스템';
-  
-  // 라우팅 분기 (✅ 신규 페이지 추가)
-  switch(view) {
-    case 'admin':
-      file = 'admin';
-      title = '과학실험·실습실 사용 신청 관리 시스템';
-      break;
-    case 'chemical_list':
-    case 'common_list':
-      file = 'common_list';
-      title = '시약 목록';
-      break;
-    case 'student_list':
-      file = 'student_list';
-      title = '학생 명단';
-      break;
-    case 'teacher_schedule':
-      file = 'teacher_schedule';
-      title = '임장 일정';
-      break;
-    case 'statistics':
-      file = 'statistics';
-      title = '사용 통계';
-      break;
-    default:
-      file = 'entry';
-      title = '과학실험·실습실 사용 신청 관리 시스템';
+
+  // 라우팅 분기 (✅ 모바일: SPA 단일 페이지 / 데스크탑: 개별 페이지)
+  if (isMobile) {
+    // ★ 모바일 SPA — 한 번 로드로 모든 뷰 포함, 즉시 네비게이션
+    file = 'm_spa';
+    title = '실험실 관리';
+  } else {
+    switch(view) {
+      case 'admin':
+        file = 'admin';
+        title = '과학실험·실습실 사용 신청 관리 시스템';
+        break;
+      case 'chemical_list':
+      case 'common_list':
+        file = 'common_list';
+        title = '시약 목록';
+        break;
+      case 'student_list':
+        file = 'student_list';
+        title = '학생 명단';
+        break;
+      case 'teacher_schedule':
+        file = 'teacher_schedule';
+        title = '임장 일정';
+        break;
+      case 'statistics':
+        file = 'statistics';
+        title = '사용 통계';
+        break;
+      default:
+        file = 'entry';
+        title = '과학실험·실습실 사용 신청 관리 시스템';
+    }
   }
   
   try {

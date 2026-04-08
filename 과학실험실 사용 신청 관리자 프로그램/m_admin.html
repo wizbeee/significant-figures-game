@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>과학실험·실습실 관리 시스템</title>
+  <?!= include('m_common_styles'); ?>
+</head>
+<body>
+  <!-- ★ 진단: JS 에러를 화면에 표시 -->
+  <div id="__diag" style="position:fixed;top:0;left:0;right:0;z-index:9999;background:red;color:white;font-size:12px;padding:8px;display:none;max-height:40vh;overflow:auto;"></div>
+  <script>
+    window.onerror = function(msg, src, line, col, err) {
+      var d = document.getElementById('__diag');
+      d.style.display = 'block';
+      d.innerHTML += '<b>JS Error:</b> ' + msg + '<br>at ' + src + ':' + line + '<br><br>';
+      return false;
+    };
+    var APP_BASE_URL = '<?= ScriptApp.getService().getUrl() ?>';
+    var PLATFORM = 'mobile';
+  </script>
+
+  <!-- 상단 바 -->
+  <header class="topbar" id="main-topbar">
+    <div class="topbar-left">
+      <button class="topbar-hamburger" id="btn-menu" aria-label="메뉴 열기">☰</button>
+      <span class="topbar-title">실험실 관리</span>
+    </div>
+    <div class="topbar-right">
+      <button class="topbar-btn" id="btn-refresh" title="새로고침">↻</button>
+      <button class="topbar-btn" id="btn-darkmode" title="다크모드">☀️</button>
+    </div>
+  </header>
+
+  <?!= include('m_components'); ?>
+  <?!= include('m_admin_body'); ?>
+  <?!= include('m_admin_scripts'); ?>
+
+  <!-- ★ 이벤트를 addEventListener로 연결 (onclick 대신 — CSP 대응) -->
+  <script>
+  (function() {
+    try {
+      // 상단바 버튼
+      document.getElementById('btn-menu').addEventListener('click', function(e) { e.preventDefault(); openMenu(); });
+      document.getElementById('btn-refresh').addEventListener('click', function(e) { e.preventDefault(); loadApplications(); });
+      document.getElementById('btn-darkmode').addEventListener('click', function(e) { e.preventDefault(); toggleDarkMode(); });
+
+      // 상단바 터치 이벤트도 추가 (터치 디바이스 대응)
+      document.getElementById('btn-menu').addEventListener('touchend', function(e) { e.preventDefault(); openMenu(); });
+      document.getElementById('btn-refresh').addEventListener('touchend', function(e) { e.preventDefault(); loadApplications(); });
+      document.getElementById('btn-darkmode').addEventListener('touchend', function(e) { e.preventDefault(); toggleDarkMode(); });
+
+      setActiveNav('admin');
+    } catch(e) {
+      var d = document.getElementById('__diag');
+      d.style.display = 'block';
+      d.innerHTML += '<b>Init Error:</b> ' + e.message + '<br>';
+    }
+  })();
+  </script>
+</body>
+</html>

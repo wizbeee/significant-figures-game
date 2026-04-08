@@ -3,13 +3,8 @@
 <!-- ✅ 수정: 조회기준을 hidden으로 변경 (실험할날짜 고정) -->
 <a href="#main-content" class="skip-link">본문으로 건너뛰기</a>
 <div class="container">
-<nav class="nav-bar no-print" aria-label="관리자 메뉴">
-  <a class="nav-item active" href="#" aria-current="page">📊 대시보드</a>
-  <a class="nav-item" href="#" onclick="goToPage('common_list'); return false;">📦 시약 목록</a>
-  <a class="nav-item" href="#" onclick="goToPage('student_list'); return false;">👥 학생 명단</a>
-  <a class="nav-item" href="#" onclick="goToPage('teacher_schedule'); return false;">🧑‍🏫 임장 일정</a>
-</nav>
 <main id="main-content">
+<script>setActiveDesktopNav('admin');</script>
   <!-- 헤더 -->
   <div class="header" role="banner">
     <h1>과학 실험·실습실 관리 시스템</h1>

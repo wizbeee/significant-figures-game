@@ -1,0 +1,247 @@
+<script>
+/* ===== 모바일 임장 — 데스크탑 기능 완전 반영 ===== */
+var MT_ALL=[], MT_SCHEDULES=[], MT_TEACHERS=[], MT_TEACHER_FILTER='';
+var MT_VIEW='calendar', MT_YEAR=new Date().getFullYear(), MT_MONTH=new Date().getMonth();
+var MT_SELECTED_DATE=toLocalYMD(new Date()), MT_DATE_FROM='', MT_DATE_TO='';
+var MT_TIME_ORDER = {'ET':0,'EP1':1,'7교시':2};
+var MT_LAB_ICONS = {'화학실험실':'🧪','생물실험실':'🧬','물리실험실':'⚡','프로젝트실험실':'🔬',
+  '첨단기기실험실':'🔧','오픈랩':'🏠','광학파동실험실':'🌊','AP Lab':'🔬','Tech&Art Lab':'🎨'};
+
+/* ===== 데이터 로딩 ===== */
+function mtLoadData() {
+  var from = new Date(MT_YEAR, MT_MONTH, 1), to = new Date(MT_YEAR, MT_MONTH+1, 0);
+  MT_DATE_FROM = toLocalYMD(from); MT_DATE_TO = toLocalYMD(to);
+  google.script.run
+    .withSuccessHandler(function(list) { MT_ALL = Array.isArray(list)?list:[]; mtUpdateLabFilter(); mtProcessData(); mtLoadTeachers(); mtRender(); })
+    .withFailureHandler(function(err) { $('#mt-day-schedules').innerHTML = '<div class="m-empty"><div class="m-empty-icon">⚠️</div><div>'+escapeHtml(err.message||err)+'</div></div>'; })
+    .getApplicationsForPeriod(MT_DATE_FROM, MT_DATE_TO);
+}
+
+function mtLoadTeachers() {
+  google.script.run.withSuccessHandler(function(t) { if(Array.isArray(t)) { MT_TEACHERS=t; mtRenderTeacherChips(); } }).withFailureHandler(function(){}).getTeacherListForEdit();
+}
+
+/* ===== 실험실 드롭다운 동적 업데이트 ===== */
+function mtUpdateLabFilter() {
+  var labs = new Set();
+  MT_ALL.forEach(function(app) { var l = app['신청실험실']||''; if (l) labs.add(l); });
+  var sel = $('#mt-labFilter'), val = sel ? sel.value : '';
+  if (!sel) return;
+  var html = '<option value="">실험실 전체</option>';
+  Array.from(labs).sort(function(a,b){return a.localeCompare(b,'ko');}).forEach(function(l) {
+    html += '<option value="'+escapeHtml(l)+'">'+escapeHtml(l)+'</option>';
+  });
+  sel.innerHTML = html;
+  sel.value = val;
+}
+
+/* ===== 데이터 가공 ===== */
+function mtProcessData() {
+  var approval = $('#mt-approvalFilter') ? $('#mt-approvalFilter').value : 'approved';
+  MT_SCHEDULES = [];
+  MT_ALL.forEach(function(app) {
+    var status = calcStatus(app);
+    if (approval === 'approved' && status !== '1차승인' && status !== '최종승인') return;
+    if (status === '반려') return;
+
+    var chems = app['chemicals']||[], needPresence = false;
+    if (Array.isArray(chems)) needPresence = chems.some(function(c) {
+      return String(c['교사임장여부']||'').indexOf('필요')>=0 || String(c['교사임장여부']||'')==='Y';
+    });
+    MT_SCHEDULES.push({
+      appId: app['신청ID']||'', date: fmtDate(app['실험할날짜']), dateRaw: app['실험할날짜'],
+      lab: app['신청실험실']||'', time: app['신청시간']||'', teacher: app['지도교사이름']||'',
+      student: app['대표자이름']||'', title: app['실험제목']||'', needPresence: needPresence,
+      startTime: app['임장지도 시작시간']||'', endTime: app['임장지도 종료시간']||'', status: status
+    });
+  });
+}
+
+/* ===== 교사 칩 렌더링 ===== */
+function mtRenderTeacherChips() {
+  var container = $('#teacher-chips-container'), names = new Set();
+  MT_SCHEDULES.forEach(function(s) { if(s.teacher) names.add(s.teacher); });
+  MT_TEACHERS.forEach(function(t) { var n=t['이름']||t['name']||''; if(n) names.add(n); });
+  var html = '<span class="teacher-chip active" data-teacher="" onclick="mtFilterTeacher(\'\',this)">전체</span>';
+  Array.from(names).sort(function(a,b){return a.localeCompare(b,'ko');}).forEach(function(n) {
+    html += '<span class="teacher-chip" data-teacher="'+escapeHtml(n)+'" onclick="mtFilterTeacher(\''+escapeHtml(n)+'\',this)">'+escapeHtml(n)+'</span>';
+  });
+  container.innerHTML = html;
+}
+
+function mtFilterTeacher(name, el) {
+  MT_TEACHER_FILTER = name;
+  $$('.teacher-chip').forEach(function(c){c.classList.remove('active');});
+  if(el) el.classList.add('active');
+  mtRender();
+}
+
+/* ===== 필터링 ===== */
+function mtGetFiltered() {
+  var presenceFilter = $('#mt-presenceFilter') ? $('#mt-presenceFilter').value : '';
+  var labFilter = $('#mt-labFilter') ? $('#mt-labFilter').value : '';
+  var timeFilter = $('#mt-timeFilter') ? $('#mt-timeFilter').value : '';
+  var sortBy = $('#mt-sortBy') ? $('#mt-sortBy').value : 'date';
+
+  var filtered = MT_SCHEDULES.filter(function(s) {
+    if (MT_TEACHER_FILTER && s.teacher !== MT_TEACHER_FILTER) return false;
+    if (presenceFilter === 'need' && !s.needPresence) return false;
+    if (presenceFilter === 'noneed' && s.needPresence) return false;
+    if (labFilter && s.lab !== labFilter) return false;
+    if (timeFilter) {
+      var times = String(s.time).split(/[,\s]+/);
+      if (times.indexOf(timeFilter) === -1) return false;
+    }
+    return true;
+  });
+
+  // 정렬
+  filtered.sort(function(a, b) {
+    switch(sortBy) {
+      case 'date': return cmpDateTs(a.dateRaw, b.dateRaw);
+      case 'time':
+        var ta = MT_TIME_ORDER[String(a.time).split(/[,\s]+/)[0]] != null ? MT_TIME_ORDER[String(a.time).split(/[,\s]+/)[0]] : 99;
+        var tb = MT_TIME_ORDER[String(b.time).split(/[,\s]+/)[0]] != null ? MT_TIME_ORDER[String(b.time).split(/[,\s]+/)[0]] : 99;
+        return ta - tb;
+      case 'lab': return a.lab.localeCompare(b.lab,'ko');
+      case 'teacher': return a.teacher.localeCompare(b.teacher,'ko');
+      default: return 0;
+    }
+  });
+
+  return filtered;
+}
+
+/* ===== 통계 업데이트 ===== */
+function mtUpdateStats(f) {
+  var need=0, ok=0;
+  f.forEach(function(s) { s.needPresence ? need++ : ok++; });
+  $('#mt-stat-total').textContent = f.length;
+  $('#mt-stat-need').textContent = need;
+  $('#mt-stat-ok').textContent = ok;
+}
+
+/* ===== 메인 렌더 ===== */
+function mtRender() {
+  var f = mtGetFiltered();
+  mtUpdateStats(f);
+  if (MT_VIEW === 'calendar') { mtRenderCalendar(f); mtRenderDaySchedules(f); }
+  else mtRenderList(f);
+}
+
+/* ===== 달력 렌더링 ===== */
+function mtRenderCalendar(filtered) {
+  var cal = $('#mt-calendar'); if (!cal) return;
+  var months = ['1월','2월','3월','4월','5월','6월','7월','8월','9월','10월','11월','12월'];
+  var firstDay = new Date(MT_YEAR,MT_MONTH,1).getDay(), daysInMonth = new Date(MT_YEAR,MT_MONTH+1,0).getDate();
+  var todayStr = toLocalYMD(new Date());
+  var dateMap = {};
+  filtered.forEach(function(s) { if(!dateMap[s.date]) dateMap[s.date]={need:0,ok:0}; s.needPresence?dateMap[s.date].need++:dateMap[s.date].ok++; });
+
+  var html = '<div class="cal-header"><button class="cal-nav" onclick="mtPrevMonth()">◀</button><span class="cal-title">'+MT_YEAR+'년 '+months[MT_MONTH]+'</span><button class="cal-nav" onclick="mtNextMonth()">▶</button></div>';
+  html += '<div class="cal-weekdays">'; ['일','월','화','수','목','금','토'].forEach(function(d){html+='<span class="cal-weekday">'+d+'</span>';}); html += '</div><div class="cal-days">';
+
+  var prevDays = new Date(MT_YEAR,MT_MONTH,0).getDate();
+  for (var i=firstDay-1; i>=0; i--) html += '<div class="cal-day other-month">'+(prevDays-i)+'</div>';
+
+  for (var d=1; d<=daysInMonth; d++) {
+    var ds = MT_YEAR+'-'+pad2(MT_MONTH+1)+'-'+pad2(d);
+    var cls = 'cal-day'; if(ds===todayStr) cls+=' today'; if(ds===MT_SELECTED_DATE) cls+=' selected';
+    var dots = '';
+    if (dateMap[ds]) {
+      dots = '<div class="cal-dots">';
+      for(var n=0;n<Math.min(dateMap[ds].need,3);n++) dots+='<span class="dot dot-need"></span>';
+      for(var n=0;n<Math.min(dateMap[ds].ok,3);n++) dots+='<span class="dot dot-noneed"></span>';
+      dots += '</div>';
+    }
+    html += '<div class="'+cls+'" onclick="mtSelectDate(\''+ds+'\')">'+d+dots+'</div>';
+  }
+  var total=firstDay+daysInMonth, rem=(7-total%7)%7;
+  for(var i=1;i<=rem;i++) html+='<div class="cal-day other-month">'+i+'</div>';
+  html += '</div>';
+  cal.innerHTML = html;
+}
+
+function mtSelectDate(ds) { MT_SELECTED_DATE=ds; var f=mtGetFiltered(); mtRenderCalendar(f); mtRenderDaySchedules(f); }
+function mtPrevMonth() { MT_MONTH--; if(MT_MONTH<0){MT_MONTH=11;MT_YEAR--;} mtLoadData(); }
+function mtNextMonth() { MT_MONTH++; if(MT_MONTH>11){MT_MONTH=0;MT_YEAR++;} mtLoadData(); }
+
+/* ===== 선택 날짜 일정 카드 ===== */
+function mtRenderDaySchedules(filtered) {
+  var container = $('#mt-day-schedules'); if(!container) return;
+  var dayItems = filtered.filter(function(s) { return s.date===MT_SELECTED_DATE; });
+  var dn = ['일','월','화','수','목','금','토'], dateObj = new Date(MT_SELECTED_DATE), dayName = dn[dateObj.getDay()];
+
+  if (!dayItems.length) {
+    container.innerHTML = '<div class="day-title">📅 '+MT_SELECTED_DATE.slice(5)+' ('+dayName+')</div><div class="m-empty" style="padding:20px;"><div class="m-empty-icon">📭</div><div>이 날짜에 임장이 없습니다</div></div>';
+    return;
+  }
+
+  var html = '<div class="day-title">📅 '+MT_SELECTED_DATE.slice(5)+' ('+dayName+') · '+dayItems.length+'건</div>';
+  dayItems.forEach(function(s) {
+    var cc = s.needPresence?'need':'noneed', bc = s.needPresence?'badge-need':'badge-noneed';
+    var bt = s.needPresence?'⚠️ 임장필요':'✅ 불필요';
+    var tr = (s.startTime&&s.endTime) ? s.startTime+'~'+s.endTime : '';
+    html += '<div class="schedule-card '+cc+'"><div class="sched-info"><div class="sched-teacher">'+escapeHtml(s.teacher)+'</div>' +
+      '<div class="sched-detail"><span>'+(MT_LAB_ICONS[s.lab]||'🧪')+' '+escapeHtml(s.lab)+'</span><span>🕐 '+escapeHtml(s.time)+'</span><span>👤 '+escapeHtml(s.student)+'</span></div>' +
+      '<div style="font-size:12px;color:var(--primary);margin-top:2px;">'+escapeHtml(s.title)+'</div>' +
+      '</div>' +
+      '<div class="sched-right"><span class="sched-badge '+bc+'">'+bt+'</span>'+(tr?'<div class="sched-time-range">'+tr+'</div>':'')+'</div></div>';
+  });
+  container.innerHTML = html;
+}
+
+/* ===== 목록 보기 ===== */
+function mtRenderList(filtered) {
+  var container = $('#mt-list-content'); if(!container) return;
+  if (!filtered.length) { container.innerHTML = '<div class="m-empty"><div class="m-empty-icon">📭</div><div>임장이 없습니다</div></div>'; return; }
+
+  var groups = {};
+  filtered.forEach(function(s) { if(!groups[s.date]) groups[s.date]=[]; groups[s.date].push(s); });
+
+  var html = '';
+  Object.keys(groups).sort().forEach(function(date) {
+    var dn = ['일','월','화','수','목','금','토'], dayName = dn[new Date(date).getDay()];
+    html += '<div class="day-title">📅 '+date+' ('+dayName+') · '+groups[date].length+'건</div>';
+    groups[date].forEach(function(s) {
+      var cc=s.needPresence?'need':'noneed', bc=s.needPresence?'badge-need':'badge-noneed', bt=s.needPresence?'⚠️ 임장필요':'✅ 불필요';
+      var tr = (s.startTime&&s.endTime) ? s.startTime+'~'+s.endTime : '';
+      html += '<div class="schedule-card '+cc+'"><div class="sched-info"><div class="sched-teacher">'+escapeHtml(s.teacher)+'</div>' +
+        '<div class="sched-detail"><span>'+(MT_LAB_ICONS[s.lab]||'🧪')+' '+escapeHtml(s.lab)+'</span><span>🕐 '+escapeHtml(s.time)+'</span><span>👤 '+escapeHtml(s.student)+'</span></div>' +
+        '<div style="font-size:12px;color:var(--primary);margin-top:2px;">'+escapeHtml(s.title)+'</div></div>' +
+        '<div class="sched-right"><span class="sched-badge '+bc+'">'+bt+'</span>'+(tr?'<div class="sched-time-range">'+tr+'</div>':'')+'</div></div>';
+    });
+  });
+  container.innerHTML = html;
+}
+
+/* ===== 보기 전환 ===== */
+function mtSetView(view, btn) {
+  MT_VIEW = view;
+  $$('.view-btn').forEach(function(b){b.classList.remove('active');}); if(btn) btn.classList.add('active');
+  $('#mt-calendar-view').style.display = view==='calendar'?'':'none';
+  $('#mt-list-view').style.display = view==='list'?'':'none';
+  mtRender();
+}
+
+/* ===== CSV 내보내기 ===== */
+function mtExportCSV() {
+  var f=mtGetFiltered(); if(!f.length){alert('내보낼 데이터가 없습니다.');return;}
+  var rows=['날짜,실험실,시간,지도교사,학생,실험제목,임장필요,임장시작,임장종료,상태'];
+  f.forEach(function(s) {
+    rows.push([s.date,s.lab,s.time,s.teacher,s.student,s.title,s.needPresence?'필요':'불필요',s.startTime,s.endTime,s.status].map(function(v){
+      var sv=String(v == null ? '' : v);
+      return (sv.indexOf(',')>=0||sv.indexOf('"')>=0)?'"'+sv.replace(/"/g,'""')+'"':sv;
+    }).join(','));
+  });
+  var blob=new Blob(['\uFEFF'+rows.join('\n')],{type:'text/csv;charset=utf-8;'});
+  var a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='임장_'+toLocalYMD(new Date())+'.csv';
+  document.body.appendChild(a);a.click();document.body.removeChild(a);
+}
+
+function mtPrint(){window.print();}
+
+/* ===== 초기화 ===== */
+function mtInit() { mtLoadData(); }
+if (typeof SPA_MODE === 'undefined') window.addEventListener('load', mtInit);
+</script>

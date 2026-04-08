@@ -1,0 +1,130 @@
+<!-- ===== 데스크탑 사이드바 — 목업 동일 ===== -->
+<style>
+/* 사이드바 레이아웃 */
+:root { --sidebar-w: 230px; }
+body { display: flex; min-height: 100vh; margin: 0; }
+
+.sidebar {
+  width: var(--sidebar-w); min-height: 100vh; background: var(--surface, #fff);
+  border-right: 1px solid var(--border, #e2e8f0); position: fixed; top: 0; left: 0;
+  display: flex; flex-direction: column; z-index: 100; overflow-y: auto;
+}
+.sidebar-header {
+  padding: 24px 20px 20px; background: var(--primary, #2563eb); color: white;
+}
+.sidebar-logo { font-size: 28px; margin-bottom: 8px; }
+.sidebar-title { font-size: 16px; font-weight: 800; letter-spacing: -0.3px; }
+.sidebar-subtitle { font-size: 12px; opacity: 0.8; margin-top: 4px; }
+.sidebar-nav { flex: 1; padding: 12px 0; }
+.sidebar-section { padding: 12px 20px 6px; font-size: 11px; font-weight: 700; color: var(--text-muted, #64748b); text-transform: uppercase; letter-spacing: 1px; }
+.sidebar-item {
+  display: flex; align-items: center; gap: 12px; padding: 12px 20px;
+  font-size: 14px; font-weight: 600; color: var(--text, #1e293b);
+  cursor: pointer; transition: background 0.15s; text-decoration: none;
+  border: none; background: none; width: 100%; text-align: left;
+}
+.sidebar-item:hover { background: var(--bg, #f1f5f9); }
+.sidebar-item.active { background: var(--primary-light, #dbeafe); color: var(--primary, #2563eb); font-weight: 700; border-right: 3px solid var(--primary, #2563eb); }
+.sidebar-item .s-icon { font-size: 18px; width: 24px; text-align: center; }
+.sidebar-item .s-badge { margin-left: auto; background: var(--danger, #dc2626); color: white; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 700; }
+.sidebar-divider { height: 1px; background: var(--border, #e2e8f0); margin: 8px 16px; }
+.sidebar-footer { padding: 12px 20px; border-top: 1px solid var(--border, #e2e8f0); }
+.sidebar-footer-item {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 0; font-size: 13px; font-weight: 600; color: var(--text-muted, #64748b);
+  cursor: pointer; background: none; border: none; width: 100%; text-align: left;
+}
+.sidebar-footer-item:hover { color: var(--text, #1e293b); }
+.sidebar-footer-item .s-icon { font-size: 16px; margin-right: 10px; }
+.sidebar-version { text-align: center; padding: 8px; font-size: 11px; color: var(--text-muted, #64748b); }
+
+/* 메인 콘텐츠 영역 */
+.container, .main-wrap { margin-left: var(--sidebar-w); flex: 1; min-width: 0; }
+
+/* ---- 반응형: 태블릿 이하에서는 사이드바 숨김 ---- */
+@media (max-width: 1024px) {
+  .sidebar { display: none; }
+  .container, .main-wrap { margin-left: 0; }
+}
+
+/* ---- 인쇄 시 사이드바 숨김 ---- */
+@media print {
+  .sidebar { display: none !important; }
+  .container, .main-wrap { margin-left: 0 !important; }
+}
+</style>
+
+<aside class="sidebar no-print">
+  <div class="sidebar-header">
+    <div class="sidebar-logo">🔬</div>
+    <div class="sidebar-title">과학 실험·실습실</div>
+    <div class="sidebar-subtitle">관리 시스템 v3.2</div>
+  </div>
+  <div class="sidebar-nav">
+    <div class="sidebar-section">메뉴</div>
+    <a class="sidebar-item" data-view="admin" href="#" onclick="dGoToPage('admin'); return false;">
+      <span class="s-icon">📊</span> 대시보드
+      <span class="s-badge" id="sidebar-pending-badge" style="display:none">0</span>
+    </a>
+    <a class="sidebar-item" data-view="common_list" href="#" onclick="dGoToPage('common_list'); return false;">
+      <span class="s-icon">📦</span> 시약 목록
+    </a>
+    <a class="sidebar-item" data-view="student_list" href="#" onclick="dGoToPage('student_list'); return false;">
+      <span class="s-icon">👥</span> 학생 명단
+    </a>
+    <a class="sidebar-item" data-view="teacher_schedule" href="#" onclick="dGoToPage('teacher_schedule'); return false;">
+      <span class="s-icon">🧑‍🏫</span> 임장
+    </a>
+    <div class="sidebar-divider"></div>
+    <div class="sidebar-section">관리</div>
+    <a class="sidebar-item" href="#" onclick="if(typeof openGuidanceForm==='function') openGuidanceForm(); return false;">
+      <span class="s-icon">📝</span> 지도일지 작성
+    </a>
+    <a class="sidebar-item" href="#" onclick="if(typeof openWarningStats==='function') openWarningStats(); return false;">
+      <span class="s-icon">📊</span> 지도 통계
+    </a>
+    <a class="sidebar-item" href="#" onclick="if(typeof openRestrictionModal==='function') openRestrictionModal(); return false;">
+      <span class="s-icon">🚫</span> 신청 제한 관리
+    </a>
+  </div>
+  <div class="sidebar-footer">
+    <button class="sidebar-footer-item" onclick="toggleDarkMode();">
+      <span><span class="s-icon">🌙</span> 다크모드</span>
+      <div class="toggle" id="sidebar-dark-toggle"></div>
+    </button>
+    <button class="sidebar-footer-item" onclick="location.reload();">
+      <span><span class="s-icon">↻</span> 새로고침</span>
+    </button>
+    <button class="sidebar-footer-item" style="color:var(--danger);" onclick="dGoToPage('logout');">
+      <span><span class="s-icon">🚪</span> 로그아웃</span>
+    </button>
+  </div>
+  <div class="sidebar-version">v3.2.0 · 2026</div>
+</aside>
+
+<script>
+function dGoToPage(viewName) {
+  if (typeof APP_BASE_URL !== 'undefined') {
+    window.location.href = APP_BASE_URL + '?view=' + encodeURIComponent(viewName);
+  } else if (typeof goToPage === 'function') {
+    goToPage(viewName);
+  } else if (typeof goToAdmin === 'function' && viewName === 'admin') {
+    goToAdmin();
+  }
+}
+function setActiveDesktopNav(viewName) {
+  var items = document.querySelectorAll('.sidebar-item[data-view]');
+  for (var i = 0; i < items.length; i++) {
+    var el = items[i];
+    if (el.getAttribute('data-view') === viewName) {
+      el.classList.add('active');
+    } else {
+      el.classList.remove('active');
+    }
+  }
+}
+function updateSidebarPendingBadge(count) {
+  var badge = document.getElementById('sidebar-pending-badge');
+  if (badge) { badge.textContent = count; badge.style.display = count > 0 ? '' : 'none'; }
+}
+</script>

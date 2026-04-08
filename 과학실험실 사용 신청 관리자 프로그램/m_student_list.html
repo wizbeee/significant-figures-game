@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>학생 명단</title>
+  <?!= include('m_common_styles'); ?>
+</head>
+<body>
+  <div id="__diag" style="position:fixed;top:0;left:0;right:0;z-index:9999;background:red;color:white;font-size:12px;padding:8px;display:none;max-height:40vh;overflow:auto;"></div>
+  <script>
+    window.onerror = function(msg, src, line, col, err) {
+      var d = document.getElementById('__diag');
+      d.style.display = 'block';
+      d.innerHTML += '<b>JS Error:</b> ' + msg + '<br>at ' + src + ':' + line + '<br><br>';
+      return false;
+    };
+    var APP_BASE_URL = '<?= ScriptApp.getService().getUrl() ?>';
+    var PLATFORM = 'mobile';
+  </script>
+
+  <header class="topbar">
+    <div class="topbar-left">
+      <button class="topbar-hamburger" id="btn-menu" aria-label="메뉴 열기">☰</button>
+      <span class="topbar-title">👥 학생 명단</span>
+    </div>
+    <div class="topbar-right">
+      <button class="topbar-btn" id="btn-print" title="인쇄">🖨️</button>
+      <button class="topbar-btn" id="btn-export" title="엑셀">📥</button>
+      <button class="topbar-btn" id="btn-darkmode" title="다크모드">☀️</button>
+    </div>
+  </header>
+
+  <?!= include('m_components'); ?>
+  <?!= include('m_student_list_body'); ?>
+  <?!= include('m_student_list_scripts'); ?>
+
+  <script>
+  (function() {
+    try {
+      document.getElementById('btn-menu').addEventListener('click', function(e) { e.preventDefault(); openMenu(); });
+      document.getElementById('btn-print').addEventListener('click', function(e) { e.preventDefault(); msPrint(); });
+      document.getElementById('btn-export').addEventListener('click', function(e) { e.preventDefault(); msExportCSV(); });
+      document.getElementById('btn-darkmode').addEventListener('click', function(e) { e.preventDefault(); toggleDarkMode(); });
+      setActiveNav('student_list');
+    } catch(e) {
+      var d = document.getElementById('__diag');
+      d.style.display = 'block';
+      d.innerHTML += '<b>Init Error:</b> ' + e.message + '<br>';
+    }
+  })();
+  </script>
+</body>
+</html>
