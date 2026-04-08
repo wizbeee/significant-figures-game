@@ -1889,36 +1889,39 @@ function getLabUsageStats(dateFrom, dateTo) {
 function getApplicationsForPeriod(dateFrom, dateTo) {
   const ss = SpreadsheetApp.openById(MAIN_SSID);
   const sheets = ss.getSheets().filter(sh => !EXCLUDED_SHEETS.includes(sh.getName()));
-  
+
   const from = dateFrom ? parseToDateSafe_(dateFrom) : null;
   const to = dateTo ? parseToDateSafe_(dateTo) : null;
-  
+
   // to 날짜는 해당 일의 끝으로 설정
   let toEnd = null;
   if (to) {
     toEnd = new Date(to.getTime());
     toEnd.setHours(23, 59, 59, 999);
   }
-  
+
+  // ✅ 시약 정보를 한 번에 모두 로드 (N+1 쿼리 방지)
+  const chemMap = loadAllChemicalsMap_();
+
   const results = [];
-  
+
   for (const sh of sheets) {
     const data = sh.getDataRange().getValues();
     if (data.length <= 1) continue;
-    
+
     const { header, map } = getHeaderMap_(sh);
     const dateIdx = map['실험할날짜'] ?? -1;
-    
+
     for (let i = 1; i < data.length; i++) {
       const row = data[i];
-      
+
       // 날짜 필터링
       if (dateIdx >= 0 && (from || toEnd)) {
         const cellDate = parseToDateSafe_(row[dateIdx]);
         if (from && cellDate && cellDate < from) continue;
         if (toEnd && cellDate && cellDate > toEnd) continue;
       }
-      
+
       // 객체로 변환
       const app = {};
       header.forEach((h, idx) => {
@@ -1935,14 +1938,14 @@ function getApplicationsForPeriod(dateFrom, dateTo) {
         }
       });
 
-      // 시약 정보 가져오기 (별도 시트에서)
+      // ✅ 시약 정보를 미리 로드한 맵에서 조회 (스프레드시트 재호출 없음)
       const appId = app['신청ID'] || '';
-      app.chemicals = appId ? getApplicationChemicals(appId) : [];
-      
+      app.chemicals = appId ? (chemMap.get(appId) || []) : [];
+
       results.push(app);
     }
   }
-  
+
   return results;
 }
 

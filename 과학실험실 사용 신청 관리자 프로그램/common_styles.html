@@ -445,6 +445,29 @@
 /* ===== 스크린 리더 전용 유틸 ===== */
 .sr-only { position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0; }
 
+/* ===== 버튼 클릭 피드백 ===== */
+.btn, .sidebar-item, .sidebar-footer-item, .nav-item,
+.stat-card, .theme-toggle {
+  position: relative; overflow: hidden;
+}
+.btn:active, .sidebar-item:active, .nav-item:active,
+.stat-card:active, .theme-toggle:active {
+  transform: scale(0.97); opacity: 0.85;
+  transition: transform 0.08s ease, opacity 0.08s ease;
+}
+.ripple-effect {
+  position: absolute; border-radius: 50%;
+  background: rgba(0,0,0,0.08);
+  transform: scale(0); animation: rippleAnim 0.5s ease-out forwards;
+  pointer-events: none; z-index: 1;
+}
+.btn-primary .ripple-effect, .btn-success .ripple-effect,
+.btn-warning .ripple-effect, .btn-danger .ripple-effect,
+.btn-info .ripple-effect, .sidebar-item.active .ripple-effect {
+  background: rgba(255,255,255,0.3);
+}
+@keyframes rippleAnim { to { transform: scale(4); opacity: 0; } }
+
 /* ===== 모션 감소 설정 존중 ===== */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
@@ -497,4 +520,19 @@ function showModal(id) { const m = document.getElementById(id); if(m) m.classLis
 function hideModal(id) { const m = document.getElementById(id); if(m) m.classList.remove('show'); }
 document.addEventListener('click', e => { if(e.target.classList.contains('modal')) e.target.classList.remove('show'); });
 document.addEventListener('keydown', e => { if(e.key==='Escape') $$('.modal.show').forEach(m=>m.classList.remove('show')); });
+
+/* ===== 버튼 리플 효과 (글로벌) ===== */
+document.addEventListener('click', function(e) {
+  var btn = e.target.closest('.btn, .sidebar-item, .sidebar-footer-item, .nav-item, .stat-card, .theme-toggle');
+  if (!btn) return;
+  var rect = btn.getBoundingClientRect();
+  var size = Math.max(rect.width, rect.height) * 2;
+  var ripple = document.createElement('span');
+  ripple.className = 'ripple-effect';
+  ripple.style.width = ripple.style.height = size + 'px';
+  ripple.style.left = (e.clientX - rect.left - size / 2) + 'px';
+  ripple.style.top = (e.clientY - rect.top - size / 2) + 'px';
+  btn.appendChild(ripple);
+  setTimeout(function() { ripple.remove(); }, 500);
+});
 </script>

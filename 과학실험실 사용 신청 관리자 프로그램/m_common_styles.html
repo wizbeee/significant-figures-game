@@ -142,6 +142,41 @@ body {
 }
 
 /* ══════════════════════════════════════
+   버튼 클릭 피드백 (리플 + 활성 상태)
+   ══════════════════════════════════════ */
+button, .card-btn, .action-btn, .quick-btn, .stat-card,
+.menu-item, .nav-item, .filter-search-btn, .result-action-btn,
+.load-more-btn, .topbar-btn, .topbar-hamburger, .topbar-back {
+  position: relative; overflow: hidden;
+}
+button:active, .card-btn:active, .action-btn:active, .quick-btn:active,
+.stat-card:active, .menu-item:active, .nav-item:active,
+.filter-search-btn:active, .result-action-btn:active,
+.load-more-btn:active, .topbar-btn:active, .topbar-hamburger:active {
+  transform: scale(0.97); opacity: 0.85;
+  transition: transform 0.08s ease, opacity 0.08s ease;
+}
+.ripple-effect {
+  position: absolute; border-radius: 50%;
+  background: rgba(255,255,255,0.4);
+  transform: scale(0); animation: rippleAnim 0.5s ease-out forwards;
+  pointer-events: none; z-index: 1;
+}
+[data-theme="dark"] .ripple-effect { background: rgba(255,255,255,0.15); }
+.stat-card .ripple-effect, .quick-btn .ripple-effect,
+.result-action-btn .ripple-effect, .load-more-btn .ripple-effect,
+.menu-item .ripple-effect { background: rgba(0,0,0,0.08); }
+@keyframes rippleAnim { to { transform: scale(4); opacity: 0; } }
+/* 로딩 중 버튼 비활성 피드백 */
+.btn-loading { pointer-events: none; opacity: 0.7; }
+.btn-loading::after {
+  content: ''; display: inline-block; width: 14px; height: 14px;
+  border: 2px solid rgba(255,255,255,0.4); border-top-color: #fff;
+  border-radius: 50%; animation: busyspin 0.8s linear infinite;
+  margin-left: 6px; vertical-align: middle;
+}
+
+/* ══════════════════════════════════════
    결과 바 (목업: mobile_dashboard.html)
    ══════════════════════════════════════ */
 .result-bar { padding: 8px 16px; display: flex; align-items: center; justify-content: space-between; }
@@ -647,5 +682,20 @@ function closeMenu() {
 }
 
 document.addEventListener('DOMContentLoaded', initTheme);
+
+/* ===== 버튼 리플 효과 (글로벌) ===== */
+document.addEventListener('click', function(e) {
+  var btn = e.target.closest('button, .card-btn, .action-btn, .quick-btn, .stat-card, .menu-item, .nav-item, .filter-search-btn, .result-action-btn, .load-more-btn');
+  if (!btn) return;
+  var rect = btn.getBoundingClientRect();
+  var size = Math.max(rect.width, rect.height) * 2;
+  var ripple = document.createElement('span');
+  ripple.className = 'ripple-effect';
+  ripple.style.width = ripple.style.height = size + 'px';
+  ripple.style.left = (e.clientX - rect.left - size / 2) + 'px';
+  ripple.style.top = (e.clientY - rect.top - size / 2) + 'px';
+  btn.appendChild(ripple);
+  setTimeout(function() { ripple.remove(); }, 500);
+});
 
 </script>
