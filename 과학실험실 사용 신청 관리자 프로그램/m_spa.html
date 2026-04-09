@@ -107,13 +107,16 @@
 
       // Show new view
       var next = document.getElementById('view-' + viewName);
-      if (next) {
-        next.style.display = '';
-        // Re-trigger animation
-        next.style.animation = 'none';
-        next.offsetHeight; // reflow
-        next.style.animation = '';
+      if (!next) {
+        // view div가 없으면 fallback: 페이지 전체 로드
+        window.top.location.href = APP_BASE_URL + '?view=' + encodeURIComponent(viewName) + '&platform=mobile';
+        return;
       }
+      next.style.display = '';
+      // Re-trigger animation
+      next.style.animation = 'none';
+      next.offsetHeight; // reflow
+      next.style.animation = '';
 
       SPA_CURRENT = viewName;
       spaUpdateTopbar(viewName);
@@ -123,11 +126,17 @@
       // Lazy init — only load data on first visit
       if (!SPA_INITIALIZED[viewName]) {
         SPA_INITIALIZED[viewName] = true;
-        switch(viewName) {
-          case 'admin': if (typeof adminInit==='function') adminInit(); break;
-          case 'common_list': if (typeof mcInit==='function') mcInit(); break;
-          case 'student_list': if (typeof msInit==='function') msInit(); break;
-          case 'teacher_schedule': if (typeof mtInit==='function') mtInit(); break;
+        try {
+          switch(viewName) {
+            case 'admin': if (typeof adminInit==='function') adminInit(); break;
+            case 'common_list': if (typeof mcInit==='function') mcInit(); break;
+            case 'student_list': if (typeof msInit==='function') msInit(); break;
+            case 'teacher_schedule': if (typeof mtInit==='function') mtInit(); break;
+          }
+        } catch(initErr) {
+          console.error('[SPA] init 오류 (' + viewName + '):', initErr);
+          var d = document.getElementById('__diag');
+          if (d) { d.style.display='block'; d.innerHTML += '<b>Init Error ('+viewName+'):</b> '+initErr.message+'<br>'; }
         }
       }
 
