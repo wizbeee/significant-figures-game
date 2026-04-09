@@ -37,8 +37,8 @@ function createWindow() {
   });
 }
 
-app.whenReady().then(() => {
-  initDatabase();
+app.whenReady().then(async () => {
+  await initDatabase();
   registerIpcHandlers();
   createWindow();
 });
