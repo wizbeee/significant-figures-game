@@ -382,6 +382,9 @@ const S = {
 function go(id) {
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
   document.getElementById('s-' + id).classList.add('active');
+  // Show/hide rules FAB during gameplay
+  const fab = document.getElementById('rulesFab');
+  if (fab) fab.style.display = (id === 'game' || id === 'online') ? 'block' : 'none';
 }
 const gTitles = { 1: '🔢 유효숫자 개수 세기', 2: '🎯 유효숫자 찾기', 3: '📏 측정값 읽기' };
 
@@ -591,7 +594,7 @@ function startSingleGame() {
   S.diff = document.getElementById('sel-diff').value;
   S.pi = 0;
   S.ps[0].score = 0; S.ps[0].solved = 0; S.ps[0].correct = 0; S.ps[0].wrong = 0;
-  S.ps[0].combo = 0; S.ps[0].maxCombo = 0;
+  S.ps[0].combo = 0; S.ps[0].maxCombo = 0; S.ps[0].history = [];
   go('game');
   countdown(() => startPlayerTurn());
 }
@@ -600,11 +603,11 @@ function mkP(n) { return { name: n, score: 0, solved: 0, correct: 0, wrong: 0, c
 
 function countdown(cb) {
   const el = document.getElementById('countdown'); el.style.display = 'flex';
-  let n = 3; el.textContent = n;
+  let n = 3; el.textContent = n; SFX.countdown();
   const iv = setInterval(() => {
     n--;
-    if (n > 0) { el.textContent = n; el.style.animation = 'none'; el.offsetHeight; el.style.animation = 'countIn .4s'; }
-    else { clearInterval(iv); el.textContent = 'GO!'; setTimeout(() => { el.style.display = 'none'; cb(); }, 400); }
+    if (n > 0) { el.textContent = n; el.style.animation = 'none'; el.offsetHeight; el.style.animation = 'countIn .4s'; SFX.countdown(); }
+    else { clearInterval(iv); el.textContent = 'GO!'; SFX.go(); setTimeout(() => { el.style.display = 'none'; cb(); }, 400); }
   }, 700);
 }
 
@@ -669,6 +672,10 @@ function togDig(el) { if (!S.answered) el.classList.toggle('sel'); }
 function submitG() {
   if (S.answered || S.timeLeft <= 0) return; S.answered = true;
   const p = S.ps[S.pi]; let ok = false, exp = '';
+  const _hElapsed = ((Date.now() - S.qStart) / 1000).toFixed(1);
+  const _hQuestion = S.gm === 3 ? (S.currentMeas.type === 'ruler' ? '자' : S.currentMeas.type === 'cylinder' ? '실린더' : '온도계') : S.currentNum;
+  const _hAnswer = S.gm === 3 ? S.currentMeas.dv + ' ' + S.currentMeas.unit : analyze(S.currentNum).count + '개';
+  const _hScoreBefore = p.score;
   if (S.gm === 1) {
     const a = analyze(S.currentNum), ans = parseInt(document.getElementById('g-ans').value);
     ok = ans === a.count;
@@ -703,6 +710,7 @@ function submitG() {
   document.querySelector('#g-hdr .score').textContent = '⭐ ' + p.score;
   const ce = document.querySelector('#g-hdr .combo'); if (ce) ce.textContent = p.combo > 1 ? '🔥 ' + p.combo + '콤보' : '';
   document.querySelector('#g-hdr .solved').textContent = '✅ ' + p.correct + '문제';
+  if (p.history) p.history.push({ question: _hQuestion, answer: _hAnswer, correct: ok, elapsed: _hElapsed, pts: p.score - _hScoreBefore });
   setTimeout(() => { if (S.timeLeft > 0) nextQ(); }, ok ? 600 : 1200);
 }
 
@@ -711,18 +719,44 @@ function updateTimer() {
     el.textContent = S.timeLeft + '초';
     el.classList.toggle('urgent', S.timeLeft <= 5);
   });
+  if (S.timeLeft === 5 || S.timeLeft === 3 || S.timeLeft === 1) SFX.warning();
 }
 
 function endSingleGame() {
   clearInterval(S.timer); go('results');
+  SFX.gameOver();
+
   const p = S.ps[0];
-  document.getElementById('res-box').innerHTML = `<div class="res-card"><div style="font-size:3rem">🏆</div>
+  const acc = p.solved ? Math.round(p.correct / p.solved * 100) : 0;
+  const grade = acc >= 90 ? 'A' : acc >= 75 ? 'B' : acc >= 60 ? 'C' : acc >= 40 ? 'D' : 'F';
+
+  // localStorage best score
+  const key = `sfm_best_${S.gm}_${S.diff}_${S.tl}`;
+  const prev = parseInt(localStorage.getItem(key)) || 0;
+  const isNew = p.score > prev;
+  if (isNew) localStorage.setItem(key, p.score);
+
+  let h = `<div class="res-card"><div style="font-size:3rem">🏆</div>
     <div style="font-size:1.3rem;font-weight:700;margin:10px 0">${esc(p.name)}</div>
+    <div class="grade grade-${grade}">${grade}</div>
     <div class="final">${p.score}점</div>
+    ${isNew ? '<div class="best-badge">🎉 최고 기록 갱신!</div>' : prev > 0 ? `<div style="color:var(--txt2);font-size:.85rem;margin-top:4px">최고 기록: ${prev}점</div>` : ''}
     <div class="stats">맞은 문제: <b>${p.correct}개</b> / ${p.solved}개<br>
-    정답률: <b>${p.solved ? Math.round(p.correct / p.solved * 100) : 0}%</b><br>
+    정답률: <b>${acc}%</b><br>
     최대 콤보: <b>${p.maxCombo}회</b><br>
     제한 시간: <b>${S.tl}초</b></div></div>`;
+
+  if (p.history && p.history.length > 0) {
+    h += `<div style="max-height:300px;overflow-y:auto;margin-top:15px;border-radius:var(--r);border:1px solid var(--bg3)">
+    <table class="history-table"><thead><tr><th>#</th><th>문제</th><th>정답</th><th>결과</th><th>시간</th><th>점수</th></tr></thead><tbody>`;
+    p.history.forEach((q, i) => {
+      h += `<tr class="${q.correct ? 'ok' : 'no'}"><td>${i + 1}</td><td>${esc(q.question)}</td><td>${esc(q.answer)}</td>
+        <td>${q.correct ? '✅' : '❌'}</td><td>${q.elapsed}초</td><td>${q.correct ? '+' + q.pts : '0'}</td></tr>`;
+    });
+    h += '</tbody></table></div>';
+  }
+
+  document.getElementById('res-box').innerHTML = h;
   if (p.correct >= 10) spawnConfetti();
 }
 
@@ -732,6 +766,8 @@ function endSingleGame() {
 function showFB(id, ok, text, combo) {
   document.getElementById(id).innerHTML = `<div class="fb ${ok ? 'ok' : 'no'}">${ok ? '✅ 정답!' : '❌ 오답!'}<div class="exp">${text}</div></div>`;
   if (combo >= 2) showCombo(combo);
+  if (ok) { SFX.correct(); if (combo >= 3) setTimeout(() => SFX.combo(combo), 200); }
+  else SFX.wrong();
 }
 function showCombo(n) {
   const el = document.createElement('div'); el.className = 'combo-pop'; el.textContent = `🔥 ${n} COMBO!`;
@@ -1015,11 +1051,12 @@ function handleOnlineResult(msg) {
   const fbEl = document.getElementById('o-fb');
   if (msg.correct) {
     fbEl.innerHTML = `<div class="fb ok">✅ 정답! +${msg.points}점<div class="exp">${esc(msg.explanation)}</div></div>`;
-    // Find my player and update combo display
     const myP = (msg.scores || []).find(p => p.id === S.myId);
     if (myP && myP.combo >= 2) showCombo(myP.combo);
+    SFX.correct();
   } else {
     fbEl.innerHTML = `<div class="fb no">❌ 오답!<div class="exp">${esc(msg.explanation)}</div></div>`;
+    SFX.wrong();
   }
 
   // Update player data
@@ -1062,7 +1099,7 @@ function updateOnlineScoreboard(players) {
 //  GAME OVER (online)
 // ============================================================
 function handleGameOver(players) {
-  go('oresults');
+  go('oresults'); SFX.gameOver();
   const rb = document.getElementById('ores-box');
   let h = '';
   players.forEach((p, i) => {
@@ -1164,134 +1201,6 @@ function toggleRules() {
   ov.classList.toggle('show');
 }
 
-// Show/hide rules FAB based on active screen
-const _origGo = go;
-function go(id) {
-  _origGo(id);
-  const fab = document.getElementById('rulesFab');
-  fab.style.display = (id === 'game' || id === 'online') ? 'block' : 'none';
-}
-
-// ============================================================
-//  ENHANCED RESULTS (Single Play)
-// ============================================================
-// Patch startSingleGame to init history
-const _origStartSingle = startSingleGame;
-window.startSingleGame = function() {
-  _origStartSingle();
-  S.ps[0].history = [];
-};
-
-// Patch submitG to record history
-const _origSubmitG = submitG;
-window.submitG = function() {
-  if (S.answered || S.timeLeft <= 0) return;
-  const before = { score: S.ps[0].score, correct: S.ps[0].correct };
-  _origSubmitG();
-  const p = S.ps[0];
-  const after = { score: p.score, correct: p.correct };
-  const wasCorrect = after.correct > before.correct;
-  const pts = after.score - before.score;
-  const elapsed = ((Date.now() - S.qStart) / 1000).toFixed(1);
-
-  let question = '', answer = '';
-  if (S.gm === 1 || S.gm === 2) {
-    question = S.currentNum;
-    const a = analyze(S.currentNum);
-    answer = a.count + '개';
-  } else if (S.currentMeas) {
-    question = S.currentMeas.type === 'ruler' ? '자' : S.currentMeas.type === 'cylinder' ? '실린더' : '온도계';
-    answer = S.currentMeas.dv + ' ' + S.currentMeas.unit;
-  }
-
-  if (!p.history) p.history = [];
-  p.history.push({ question, answer, correct: wasCorrect, elapsed, pts });
-};
-
-// Patch endSingleGame for enhanced results
-const _origEndSingle = endSingleGame;
-window.endSingleGame = function() {
-  clearInterval(S.timer); go('results');
-  SFX.gameOver();
-
-  const p = S.ps[0];
-  const acc = p.solved ? Math.round(p.correct / p.solved * 100) : 0;
-  const grade = acc >= 90 ? 'A' : acc >= 75 ? 'B' : acc >= 60 ? 'C' : acc >= 40 ? 'D' : 'F';
-
-  // localStorage best score
-  const key = `sfm_best_${S.gm}_${S.diff}_${S.tl}`;
-  const prev = parseInt(localStorage.getItem(key)) || 0;
-  const isNew = p.score > prev;
-  if (isNew) localStorage.setItem(key, p.score);
-
-  let h = `<div class="res-card"><div style="font-size:3rem">🏆</div>
-    <div style="font-size:1.3rem;font-weight:700;margin:10px 0">${esc(p.name)}</div>
-    <div class="grade grade-${grade}">${grade}</div>
-    <div class="final">${p.score}점</div>
-    ${isNew ? '<div class="best-badge">🎉 최고 기록 갱신!</div>' : prev > 0 ? `<div style="color:var(--txt2);font-size:.85rem;margin-top:4px">최고 기록: ${prev}점</div>` : ''}
-    <div class="stats">맞은 문제: <b>${p.correct}개</b> / ${p.solved}개<br>
-    정답률: <b>${acc}%</b><br>
-    최대 콤보: <b>${p.maxCombo}회</b><br>
-    제한 시간: <b>${S.tl}초</b></div></div>`;
-
-  // History table
-  if (p.history && p.history.length > 0) {
-    h += `<div style="max-height:300px;overflow-y:auto;margin-top:15px;border-radius:var(--r);border:1px solid var(--bg3)">
-    <table class="history-table"><thead><tr><th>#</th><th>문제</th><th>정답</th><th>결과</th><th>시간</th><th>점수</th></tr></thead><tbody>`;
-    p.history.forEach((q, i) => {
-      h += `<tr class="${q.correct ? 'ok' : 'no'}"><td>${i + 1}</td><td>${esc(q.question)}</td><td>${esc(q.answer)}</td>
-        <td>${q.correct ? '✅' : '❌'}</td><td>${q.elapsed}초</td><td>${q.correct ? '+' + q.pts : '0'}</td></tr>`;
-    });
-    h += '</tbody></table></div>';
-  }
-
-  document.getElementById('res-box').innerHTML = h;
-  if (p.correct >= 10) spawnConfetti();
-};
-
-// ============================================================
-//  PATCH SOUND INTO EXISTING FUNCTIONS
-// ============================================================
-// Patch showFB to play sounds
-const _origShowFB = showFB;
-window.showFB = function(id, ok, text, combo) {
-  _origShowFB(id, ok, text, combo);
-  if (ok) { SFX.correct(); if (combo >= 3) setTimeout(() => SFX.combo(combo), 200); }
-  else SFX.wrong();
-};
-
-// Patch countdown for tick sound
-const _origCountdown = countdown;
-window.countdown = function(cb) {
-  const el = document.getElementById('countdown'); el.style.display = 'flex';
-  let n = 3; el.textContent = n; SFX.countdown();
-  const iv = setInterval(() => {
-    n--;
-    if (n > 0) { el.textContent = n; el.style.animation = 'none'; el.offsetHeight; el.style.animation = 'countIn .4s'; SFX.countdown(); }
-    else { clearInterval(iv); el.textContent = 'GO!'; SFX.go(); setTimeout(() => { el.style.display = 'none'; cb(); }, 400); }
-  }, 700);
-};
-
-// Patch updateTimer for warning sound
-const _origUpdateTimer = updateTimer;
-window.updateTimer = function() {
-  _origUpdateTimer();
-  if (S.timeLeft === 5 || S.timeLeft === 3 || S.timeLeft === 1) SFX.warning();
-};
-
-// Patch handleOnlineResult for sound
-const _origHandleOnlineResult = handleOnlineResult;
-window.handleOnlineResult = function(msg) {
-  _origHandleOnlineResult(msg);
-  if (msg.correct) SFX.correct(); else SFX.wrong();
-};
-
-// Patch handleGameOver for sound
-const _origHandleGameOver = handleGameOver;
-window.handleGameOver = function(players) {
-  _origHandleGameOver(players);
-  SFX.gameOver();
-};
 
 // Init SFX on first user interaction
 document.addEventListener('click', () => SFX.init(), { once: true });
