@@ -761,6 +761,7 @@ function updateApplicationFields(applicationId, updates) {
 
 function updateFullApplication(applicationId, data) {
   const EDITABLE_FIELDS = [
+    '대표자학번', '대표자이름',
     '실험제목', '사용목적', '사용목적 기타', '실험준비물', '실험과정', '실험뒷정리',
     '실험시 주의사항', '안전장구', '첨단기기실 이용 여부', '첨단기기실 이용 사유',
     '후드 사용 여부', '후드 사용 사유', '동반자명단', '총인원수',

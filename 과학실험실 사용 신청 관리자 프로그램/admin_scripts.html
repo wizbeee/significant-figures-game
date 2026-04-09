@@ -1082,7 +1082,10 @@ function saveAllEdits(){
       Object.assign(changes, appr);
     }
     google.script.run
-      .withSuccessHandler(_=> run(i+1, ok+1, fail))
+      .withSuccessHandler(r => {
+        if (r && r.success) run(i+1, ok+1, fail);
+        else run(i+1, ok, fail+1);
+      })
       .withFailureHandler(_=> run(i+1, ok, fail+1))
       .updateApplicationFields(id, changes);
   };
