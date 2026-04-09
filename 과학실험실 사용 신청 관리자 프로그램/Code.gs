@@ -74,10 +74,7 @@ function doGet(e) {
         file = 'teacher_schedule';
         title = '임장 일정';
         break;
-      case 'statistics':
-        file = 'statistics';
-        title = '사용 통계';
-        break;
+      // case 'statistics': 파일 미구현 — 추후 추가 예정
       default:
         file = 'entry';
         title = '과학실험·실습실 사용 신청 관리 시스템';
