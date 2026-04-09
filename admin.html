@@ -97,6 +97,16 @@ select:focus,input:focus{border-color:var(--pri)}
 
 .empty-state{text-align:center;padding:3rem;color:var(--txt2);font-size:.95rem}
 
+/* Stats Bar */
+.stats-bar{display:flex;gap:1rem;flex-wrap:wrap}
+.stat-box{flex:1;min-width:120px;background:var(--bg2);border-radius:var(--radius);padding:1rem 1.2rem;text-align:center;box-shadow:var(--shadow)}
+.stat-num{font-size:1.8rem;font-weight:800;color:var(--acc);font-variant-numeric:tabular-nums}
+.stat-label{font-size:.78rem;color:var(--txt2);margin-top:.2rem;font-weight:600}
+
+/* CSV button */
+.btn-csv{background:rgba(99,102,241,.15);color:var(--pri);padding:.35rem .7rem;font-size:.78rem;border-radius:6px}
+.btn-csv:hover{background:rgba(99,102,241,.3)}
+
 /* Scrollbar */
 ::-webkit-scrollbar{width:6px}
 ::-webkit-scrollbar-track{background:var(--bg)}
@@ -155,6 +165,16 @@ select:focus,input:focus{border-color:var(--pri)}
         </div>
       </div>
       <button class="btn-create" id="btnCreate">&#x2795; 방 만들기</button>
+    </div>
+  </div>
+
+  <!-- Stats Summary -->
+  <div class="section" id="statsSection" style="display:none">
+    <div class="stats-bar">
+      <div class="stat-box"><div class="stat-num" id="stRooms">0</div><div class="stat-label">활성 방</div></div>
+      <div class="stat-box"><div class="stat-num" id="stPlayers">0</div><div class="stat-label">총 참가자</div></div>
+      <div class="stat-box"><div class="stat-num" id="stAnswered">0</div><div class="stat-label">총 문제 수</div></div>
+      <div class="stat-box"><div class="stat-num" id="stAccuracy">-</div><div class="stat-label">평균 정답률</div></div>
     </div>
   </div>
 
@@ -264,6 +284,7 @@ select:focus,input:focus{border-color:var(--pri)}
       return;
     }
     grid.innerHTML = rooms.map(r => roomCard(r)).join('');
+    updateStats();
   }
 
   function roomCard(r){
@@ -296,8 +317,9 @@ select:focus,input:focus{border-color:var(--pri)}
         </div>
       </div>
       <div class="room-actions">
-        <button class="btn-start" onclick="adminAction('start','${esc(r.code)}')" ${st!=='waiting'?'disabled':''}>&#x25b6; 시작</button>
+        <button class="btn-start" onclick="adminAction('start','${esc(r.code)}')" ${st!=='waiting'&&st!=='finished'?'disabled':''}>&#x25b6; ${st==='finished'?'다시 시작':'시작'}</button>
         <button class="btn-stop" onclick="adminAction('stop','${esc(r.code)}')" ${st!=='playing'?'disabled':''}>&#x23f9; 종료</button>
+        <button class="btn-csv" onclick="exportCSV('${esc(r.code)}')">&#x1f4be; CSV</button>
         <button class="btn-delete" onclick="adminAction('delete','${esc(r.code)}')">&#x1f5d1; 삭제</button>
       </div>
     </div>`;
@@ -330,6 +352,44 @@ select:focus,input:focus{border-color:var(--pri)}
   }
 
   function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
+
+  /* ---- Stats ---- */
+  function updateStats(){
+    const sec = $('#statsSection');
+    if(!rooms.length){ sec.style.display = 'none'; return; }
+    sec.style.display = '';
+    let totalPlayers = 0, totalAnswered = 0, totalCorrect = 0;
+    rooms.forEach(r => {
+      (r.players||[]).forEach(p => {
+        totalPlayers++;
+        totalAnswered += (p.answered||p.correct||0) + (p.wrong||0);
+        totalCorrect += (p.correct||0);
+      });
+    });
+    $('#stRooms').textContent = rooms.length;
+    $('#stPlayers').textContent = totalPlayers;
+    $('#stAnswered').textContent = totalAnswered;
+    $('#stAccuracy').textContent = totalAnswered > 0 ? Math.round(totalCorrect / totalAnswered * 100) + '%' : '-';
+  }
+
+  /* ---- CSV Export ---- */
+  window.exportCSV = function(code){
+    const r = rooms.find(rm => rm.code === code);
+    if(!r || !r.players || !r.players.length){ toast('내보낼 데이터가 없습니다.'); return; }
+    const header = '\uFEFF이름,점수,정답,오답,정답률,최대콤보\n';
+    const rows = [...r.players].sort((a,b)=>(b.score||0)-(a.score||0)).map(p => {
+      const total = (p.correct||0) + (p.wrong||0);
+      const acc = total > 0 ? Math.round((p.correct||0) / total * 100) + '%' : '-';
+      return `${p.name},${p.score||0},${p.correct||0},${p.wrong||0},${acc},${p.maxCombo||0}`;
+    }).join('\n');
+    const blob = new Blob([header + rows], {type:'text/csv;charset=utf-8'});
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `유효숫자마스터_${code}_결과.csv`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+    toast('CSV 다운로드 완료', 'success');
+  };
 
   /* ---- Global Actions ---- */
   window.adminAction = function(action, code){

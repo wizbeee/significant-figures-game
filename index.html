@@ -112,7 +112,30 @@ h2{font-size:1.4rem;color:var(--txt2);margin-bottom:25px;font-weight:400}
 .rules-box li::before{content:'* ';color:var(--pri)}
 
 .back-btn{position:fixed;top:20px;left:20px;z-index:50}
+.mute-btn{position:fixed;top:20px;right:20px;z-index:50;font-size:1.5rem;background:var(--bg3);border:none;color:var(--txt);width:44px;height:44px;border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .2s}
+.mute-btn:hover{background:var(--bg2)}
 .confetti{position:fixed;top:-10px;pointer-events:none;z-index:200}
+
+/* Rules Modal */
+.rules-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(15,23,42,.85);z-index:250;display:none;align-items:center;justify-content:center;animation:fadeIn .2s}
+.rules-overlay.show{display:flex}
+.rules-modal{background:var(--bg2);border-radius:var(--r);padding:28px;max-width:520px;width:90%;max-height:80vh;overflow-y:auto;border:1px solid var(--bg3)}
+.rules-modal h3{margin-bottom:12px;color:var(--pri)}
+.rules-modal li{padding:5px 0;color:var(--txt2);font-size:.9rem;list-style:none;line-height:1.6}
+.rules-modal li::before{content:'* ';color:var(--pri)}
+.rules-modal .close-rules{margin-top:16px;width:100%}
+.rules-fab{position:fixed;bottom:24px;right:24px;z-index:50;width:48px;height:48px;border-radius:50%;background:var(--pri);color:#fff;border:none;font-size:1.4rem;font-weight:700;cursor:pointer;box-shadow:0 4px 15px rgba(99,102,241,.4);transition:all .2s;display:none}
+.rules-fab:hover{transform:scale(1.1)}
+
+/* History Table */
+.history-table{width:100%;border-collapse:collapse;margin-top:15px;font-size:.82rem}
+.history-table th{background:var(--bg3);color:var(--txt);padding:8px 10px;text-align:center;font-weight:600}
+.history-table td{padding:7px 10px;text-align:center;border-bottom:1px solid var(--bg3);color:var(--txt2)}
+.history-table tr.ok td{color:var(--sec)}
+.history-table tr.no td{color:var(--err)}
+.grade{font-size:3rem;font-weight:900;margin:5px 0}
+.grade-A{color:#10b981}.grade-B{color:#6366f1}.grade-C{color:#f59e0b}.grade-D{color:#ef4444}.grade-F{color:#64748b}
+.best-badge{display:inline-block;background:linear-gradient(135deg,#fbbf24,#f59e0b);color:#1e293b;padding:4px 12px;border-radius:20px;font-size:.8rem;font-weight:700;margin-top:8px}
 .countdown{position:fixed;top:0;left:0;right:0;bottom:0;display:flex;align-items:center;justify-content:center;background:rgba(15,23,42,.85);z-index:300;font-size:5rem;font-weight:900;color:var(--acc);animation:countIn .4s}
 
 /* Online-specific styles */
@@ -146,7 +169,7 @@ h2{font-size:1.4rem;color:var(--txt2);margin-bottom:25px;font-weight:400}
 @media(max-width:768px){
   h1{font-size:1.8rem}
   .num-display{font-size:2.2rem;padding:20px 25px;letter-spacing:4px}
-  .dg{font-size:2rem;padding:8px 10px;min-width:36px}
+  .dg{font-size:2rem;padding:10px 12px;min-width:44px;min-height:44px}
   .battle-grid{grid-template-columns:1fr}
   .game-cards{grid-template-columns:1fr}
   .ans-row{flex-direction:column;align-items:stretch}
@@ -315,6 +338,27 @@ h2{font-size:1.4rem;color:var(--txt2);margin-bottom:25px;font-weight:400}
 </div>
 </div>
 
+<!-- MUTE BUTTON -->
+<button class="mute-btn" id="muteBtn" onclick="SFX.toggleMute()" title="음소거">🔊</button>
+
+<!-- RULES FAB -->
+<button class="rules-fab" id="rulesFab" onclick="toggleRules()">?</button>
+
+<!-- RULES MODAL -->
+<div class="rules-overlay" id="rulesOverlay" onclick="if(event.target===this)toggleRules()">
+<div class="rules-modal">
+<h3>유효숫자 규칙</h3>
+<ul>
+<li>0이 아닌 숫자는 항상 유효숫자입니다.</li>
+<li>0이 아닌 숫자 사이의 0은 유효숫자입니다. (예: 3.04 → 3개)</li>
+<li>소수점 앞의 0(앞자리 0)은 유효숫자가 아닙니다. (예: 0.003 → 1개)</li>
+<li>소수점 뒤 끝자리 0은 유효숫자입니다. (예: 2.50 → 3개)</li>
+<li>소수점이 없는 정수의 끝자리 0은 유효숫자가 아닙니다. (예: 1200 → 2개)</li>
+</ul>
+<button class="btn btn-pri close-rules" onclick="toggleRules()">닫기</button>
+</div>
+</div>
+
 <!-- COUNTDOWN OVERLAY -->
 <div id="countdown" class="countdown" style="display:none"></div>
 
@@ -382,33 +426,35 @@ function analyze(str) {
 // ============================================================
 const pools = {
   easy: [
-    '3','7','25','42','89','6.1','3.7','0.5','0.8','1.5',
-    '16','34','91','73','58','4.2','9.3','2.6','8.4','5.9',
-    '123','456','789','234','567','12','99','0.45','0.73','7.3',
-    '2.0','3.0','5.0','8.0','1.0','14','67','0.31','0.62','4.8',
-    '510','270','38','0.9','6.5','47','82','0.17','0.28','3.4',
+    '25','3.7','0.5','2.0','510','47','100','8.2','6.00','72',
+    '350','9.1','0.8','4.5','63','1.2','80','15','7.0','36',
+    '0.3','2.5','91','0.70','44','5.6','200','3.0','18','0.9',
+    '67','4.00','0.25','12','8.0','530','2.7','0.60','95','1.5',
+    '40','6.3','0.45','78','3.2','10','0.12','56','9.0','21',
+    '7.5','0.80','34','6.0','420','1.8','0.35','83','2.4','50',
   ],
   medium: [
-    '0.0034','0.0072','0.0091','0.00056','0.0018','0.0045','0.00083','0.0067',
-    '100.0','200.0','300.0','70.0','50.0','40.0','10.0','80.0',
-    '3.040','5.060','2.010','8.070','1.030','9.020','4.050','7.080',
-    '0.502','0.709','0.304','0.608','0.901','0.107','0.805','0.203',
-    '1200','3400','5600','2500','6800','7200','4100','9300',
-    '30.06','50.09','10.03','70.01','20.08','40.05','60.07','80.02',
-    '0.0780','0.0340','0.0560','0.0120','0.0910','0.0450','0.0670','0.0230',
-    '20.10','30.20','40.50','50.30','60.40','70.80','80.60','10.90',
+    '0.0034','100.0','3.040','1200','30.06','0.0780','5010',
+    '0.00120','20.10','4500','0.560','7.020','1050','0.0091',
+    '60.30','8100','0.0450','2.300','90.05','0.00670','3600',
+    '10.20','0.1080','5500','40.07','0.00340','7200','1.060',
+    '0.0920','6300','20.04','0.00560','8500','3.070','50.08',
+    '0.01200','4100','70.50','0.00890','9200','2.040','0.1500',
+    '1800','30.09','0.0230','6700','5.010','80.20','0.00410',
+    '4300','10.50','0.0670','7800','1.200',
   ],
   hard: [
-    '0.001020','0.003040','0.005060','0.002010','0.007080','0.009010',
-    '10.0040','20.0060','30.0020','50.0080','40.0010','60.0050',
-    '300600','502000','701000','103000','204000','805000',
-    '0.00008050','0.00003020','0.00006040','0.00001090','0.00005010',
-    '20010.0','30020.0','50040.0','10070.0','40060.0',
-    '0.0000340','0.0000560','0.0000120','0.0000890','0.0000710',
-    '60.0200','30.0500','80.0100','20.0700','40.0300',
-    '0.003004','0.005007','0.001009','0.008002','0.006003',
-    '1000.00','2000.00','3000.00','5000.00','4000.00',
-    '0.00100200','0.00300400','0.00500600','0.00200100','0.00700800',
+    '0.001020','10.0040','300600','0.00008050','1000.00',
+    '50.00200','0.0040030','200100','0.000009070','40.0060',
+    '7000.0','0.00102000','30.00500','500300','0.00060040',
+    '10000.0','80.00100','0.0070020','400200','0.000050030',
+    '60.0080','9000.00','0.00203000','20.00400','600100',
+    '0.00080050','3000.0','70.00300','0.0050040','100200',
+    '0.000070060','50.0020','8000.00','0.00304000','40.00100',
+    '700300','0.00090070','2000.0','90.00200','0.0060050',
+    '300100','0.000080040','10.0030','5000.00','0.00105000',
+    '60.00400','800200','0.00070030','4000.0','30.00600',
+    '0.0080060','900100','0.000060050','20.0040',
   ]
 };
 function randNum(d) {
@@ -641,7 +687,7 @@ function submitG() {
     ok = allOk; exp = `유효숫자: ${nd.filter(d => d.sig).map(d => d.c).join(', ')} (${a.count}개)`;
   } else {
     const ms = S.currentMeas, mv = parseFloat(document.getElementById('g-meas').value), sv = parseInt(document.getElementById('g-sf').value);
-    const tol = ms.type === 'ruler' ? 0.03 : 0.2;
+    const tol = ms.type === 'ruler' ? 0.05 : 0.5;
     const mOk = !isNaN(mv) && Math.abs(mv - ms.val) <= tol, sOk = sv === ms.sf; ok = mOk && sOk;
     document.getElementById('g-meas').classList.add(mOk ? 'ok' : 'no');
     document.getElementById('g-sf').classList.add(sOk ? 'ok' : 'no');
@@ -1040,6 +1086,215 @@ function handleGameOver(players) {
     spawnConfetti();
   }
 }
+
+// ============================================================
+//  SOUND EFFECTS (Web Audio API - no external files)
+// ============================================================
+const SFX = {
+  ctx: null, muted: false,
+  init() {
+    if (!this.ctx) {
+      this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    if (this.ctx.state === 'suspended') this.ctx.resume();
+  },
+  toggleMute() {
+    this.muted = !this.muted;
+    document.getElementById('muteBtn').textContent = this.muted ? '🔇' : '🔊';
+  },
+  _tone(freq, dur, type, vol) {
+    if (this.muted || !this.ctx) return;
+    const o = this.ctx.createOscillator();
+    const g = this.ctx.createGain();
+    o.type = type || 'sine';
+    o.frequency.value = freq;
+    g.gain.value = vol || 0.15;
+    g.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + dur);
+    o.connect(g); g.connect(this.ctx.destination);
+    o.start(); o.stop(this.ctx.currentTime + dur);
+  },
+  correct() {
+    this.init();
+    this._tone(523, 0.12, 'sine', 0.18);
+    setTimeout(() => this._tone(659, 0.12, 'sine', 0.18), 80);
+    setTimeout(() => this._tone(784, 0.2, 'sine', 0.15), 160);
+  },
+  wrong() {
+    this.init();
+    this._tone(200, 0.25, 'square', 0.1);
+    setTimeout(() => this._tone(160, 0.3, 'square', 0.08), 150);
+  },
+  tick() {
+    this.init();
+    this._tone(800, 0.06, 'sine', 0.08);
+  },
+  warning() {
+    this.init();
+    this._tone(440, 0.1, 'square', 0.12);
+    setTimeout(() => this._tone(440, 0.1, 'square', 0.12), 200);
+  },
+  combo(n) {
+    this.init();
+    const base = 600 + Math.min(n, 10) * 40;
+    this._tone(base, 0.08, 'sine', 0.15);
+    setTimeout(() => this._tone(base + 200, 0.08, 'sine', 0.15), 60);
+    setTimeout(() => this._tone(base + 400, 0.15, 'sine', 0.12), 120);
+  },
+  gameOver() {
+    this.init();
+    [523, 659, 784, 1047].forEach((f, i) => {
+      setTimeout(() => this._tone(f, 0.3, 'sine', 0.12), i * 150);
+    });
+  },
+  countdown() {
+    this.init();
+    this._tone(600, 0.15, 'sine', 0.12);
+  },
+  go() {
+    this.init();
+    this._tone(880, 0.3, 'sine', 0.18);
+  }
+};
+
+// ============================================================
+//  RULES MODAL
+// ============================================================
+function toggleRules() {
+  const ov = document.getElementById('rulesOverlay');
+  ov.classList.toggle('show');
+}
+
+// Show/hide rules FAB based on active screen
+const _origGo = go;
+function go(id) {
+  _origGo(id);
+  const fab = document.getElementById('rulesFab');
+  fab.style.display = (id === 'game' || id === 'online') ? 'block' : 'none';
+}
+
+// ============================================================
+//  ENHANCED RESULTS (Single Play)
+// ============================================================
+// Patch startSingleGame to init history
+const _origStartSingle = startSingleGame;
+window.startSingleGame = function() {
+  _origStartSingle();
+  S.ps[0].history = [];
+};
+
+// Patch submitG to record history
+const _origSubmitG = submitG;
+window.submitG = function() {
+  if (S.answered || S.timeLeft <= 0) return;
+  const before = { score: S.ps[0].score, correct: S.ps[0].correct };
+  _origSubmitG();
+  const p = S.ps[0];
+  const after = { score: p.score, correct: p.correct };
+  const wasCorrect = after.correct > before.correct;
+  const pts = after.score - before.score;
+  const elapsed = ((Date.now() - S.qStart) / 1000).toFixed(1);
+
+  let question = '', answer = '';
+  if (S.gm === 1 || S.gm === 2) {
+    question = S.currentNum;
+    const a = analyze(S.currentNum);
+    answer = a.count + '개';
+  } else if (S.currentMeas) {
+    question = S.currentMeas.type === 'ruler' ? '자' : S.currentMeas.type === 'cylinder' ? '실린더' : '온도계';
+    answer = S.currentMeas.dv + ' ' + S.currentMeas.unit;
+  }
+
+  if (!p.history) p.history = [];
+  p.history.push({ question, answer, correct: wasCorrect, elapsed, pts });
+};
+
+// Patch endSingleGame for enhanced results
+const _origEndSingle = endSingleGame;
+window.endSingleGame = function() {
+  clearInterval(S.timer); go('results');
+  SFX.gameOver();
+
+  const p = S.ps[0];
+  const acc = p.solved ? Math.round(p.correct / p.solved * 100) : 0;
+  const grade = acc >= 90 ? 'A' : acc >= 75 ? 'B' : acc >= 60 ? 'C' : acc >= 40 ? 'D' : 'F';
+
+  // localStorage best score
+  const key = `sfm_best_${S.gm}_${S.diff}_${S.tl}`;
+  const prev = parseInt(localStorage.getItem(key)) || 0;
+  const isNew = p.score > prev;
+  if (isNew) localStorage.setItem(key, p.score);
+
+  let h = `<div class="res-card"><div style="font-size:3rem">🏆</div>
+    <div style="font-size:1.3rem;font-weight:700;margin:10px 0">${esc(p.name)}</div>
+    <div class="grade grade-${grade}">${grade}</div>
+    <div class="final">${p.score}점</div>
+    ${isNew ? '<div class="best-badge">🎉 최고 기록 갱신!</div>' : prev > 0 ? `<div style="color:var(--txt2);font-size:.85rem;margin-top:4px">최고 기록: ${prev}점</div>` : ''}
+    <div class="stats">맞은 문제: <b>${p.correct}개</b> / ${p.solved}개<br>
+    정답률: <b>${acc}%</b><br>
+    최대 콤보: <b>${p.maxCombo}회</b><br>
+    제한 시간: <b>${S.tl}초</b></div></div>`;
+
+  // History table
+  if (p.history && p.history.length > 0) {
+    h += `<div style="max-height:300px;overflow-y:auto;margin-top:15px;border-radius:var(--r);border:1px solid var(--bg3)">
+    <table class="history-table"><thead><tr><th>#</th><th>문제</th><th>정답</th><th>결과</th><th>시간</th><th>점수</th></tr></thead><tbody>`;
+    p.history.forEach((q, i) => {
+      h += `<tr class="${q.correct ? 'ok' : 'no'}"><td>${i + 1}</td><td>${esc(q.question)}</td><td>${esc(q.answer)}</td>
+        <td>${q.correct ? '✅' : '❌'}</td><td>${q.elapsed}초</td><td>${q.correct ? '+' + q.pts : '0'}</td></tr>`;
+    });
+    h += '</tbody></table></div>';
+  }
+
+  document.getElementById('res-box').innerHTML = h;
+  if (p.correct >= 10) spawnConfetti();
+};
+
+// ============================================================
+//  PATCH SOUND INTO EXISTING FUNCTIONS
+// ============================================================
+// Patch showFB to play sounds
+const _origShowFB = showFB;
+window.showFB = function(id, ok, text, combo) {
+  _origShowFB(id, ok, text, combo);
+  if (ok) { SFX.correct(); if (combo >= 3) setTimeout(() => SFX.combo(combo), 200); }
+  else SFX.wrong();
+};
+
+// Patch countdown for tick sound
+const _origCountdown = countdown;
+window.countdown = function(cb) {
+  const el = document.getElementById('countdown'); el.style.display = 'flex';
+  let n = 3; el.textContent = n; SFX.countdown();
+  const iv = setInterval(() => {
+    n--;
+    if (n > 0) { el.textContent = n; el.style.animation = 'none'; el.offsetHeight; el.style.animation = 'countIn .4s'; SFX.countdown(); }
+    else { clearInterval(iv); el.textContent = 'GO!'; SFX.go(); setTimeout(() => { el.style.display = 'none'; cb(); }, 400); }
+  }, 700);
+};
+
+// Patch updateTimer for warning sound
+const _origUpdateTimer = updateTimer;
+window.updateTimer = function() {
+  _origUpdateTimer();
+  if (S.timeLeft === 5 || S.timeLeft === 3 || S.timeLeft === 1) SFX.warning();
+};
+
+// Patch handleOnlineResult for sound
+const _origHandleOnlineResult = handleOnlineResult;
+window.handleOnlineResult = function(msg) {
+  _origHandleOnlineResult(msg);
+  if (msg.correct) SFX.correct(); else SFX.wrong();
+};
+
+// Patch handleGameOver for sound
+const _origHandleGameOver = handleGameOver;
+window.handleGameOver = function(players) {
+  _origHandleGameOver(players);
+  SFX.gameOver();
+};
+
+// Init SFX on first user interaction
+document.addEventListener('click', () => SFX.init(), { once: true });
 </script>
 </body>
 </html>
