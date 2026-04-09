@@ -105,7 +105,7 @@ body { display: flex; min-height: 100vh; margin: 0; }
 <script>
 function dGoToPage(viewName) {
   if (typeof APP_BASE_URL !== 'undefined') {
-    window.location.href = APP_BASE_URL + '?view=' + encodeURIComponent(viewName);
+    window.top.location.href = APP_BASE_URL + '?view=' + encodeURIComponent(viewName);
   } else if (typeof goToPage === 'function') {
     goToPage(viewName);
   } else if (typeof goToAdmin === 'function' && viewName === 'admin') {

@@ -468,12 +468,12 @@ function goToPage(view) {
   var base = typeof APP_BASE_URL !== 'undefined' ? APP_BASE_URL : '';
   if (!base) {
     google.script.run
-      .withSuccessHandler(function(url) { window.location.href = url + '?view=' + view; })
+      .withSuccessHandler(function(url) { window.top.location.href = url + '?view=' + view; })
       .withFailureHandler(function() { alert('URL을 가져올 수 없습니다.'); })
       .getAppUrl();
     return;
   }
-  window.location.href = base + '?view=' + view;
+  window.top.location.href = base + '?view=' + view;
 }
 
 /* ===== 관리자 페이지로 이동 ===== */

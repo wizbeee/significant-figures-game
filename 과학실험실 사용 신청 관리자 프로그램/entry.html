@@ -272,7 +272,7 @@
          if (isMobileDevice()) {
            url += '&platform=mobile';
          }
-         window.location.href = url;
+         window.top.location.href = url;
        })
        .withFailureHandler(function (err) {
          hideBusy();

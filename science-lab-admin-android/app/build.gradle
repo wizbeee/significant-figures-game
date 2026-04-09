@@ -14,9 +14,9 @@ android {
         versionName "2.2.0"
 
         // 웹앱 URL 설정 - 모바일 전용 UI (?platform=mobile)
-        // @160 배포: v3.2.3 지도일지 함수명 수정 + statistics dead code 제거
+        // @161 배포: v3.2.4 window.top.location 수정으로 흰화면 해결
         buildConfigField "String", "WEB_APP_URL",
-            "\"https://script.google.com/macros/s/AKfycbzB6Zfr3dn0m6KgKKb7K56LGs_8CV6bx-WTFZXAY-MGZVFWQdyXkZu84SOuo7ELhkcDTw/exec?platform=mobile\""
+            "\"https://script.google.com/macros/s/AKfycbzjVJ5eomvzS5GsTr3WoUOvoMKE9UqfTVw7gkZtK4x7XcYsX7VefG_HIhqZIfrEl0RklQ/exec?platform=mobile\""
     }
 
     buildTypes {
