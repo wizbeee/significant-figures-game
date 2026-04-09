@@ -1,0 +1,57 @@
+{
+  "name": "admission-manager",
+  "version": "1.0.0",
+  "description": "고입 입학 전형 관리 프로그램 (자사고/자율형사립고)",
+  "main": "src/main/main.js",
+  "scripts": {
+    "start": "concurrently \"npm run dev:react\" \"wait-on http://localhost:3000 && npm run dev:electron\"",
+    "dev:react": "react-scripts start",
+    "dev:electron": "cross-env NODE_ENV=development electron .",
+    "build": "react-scripts build && npm run build:electron",
+    "build:electron": "electron-builder --win",
+    "build:win": "react-scripts build && electron-builder --win"
+  },
+  "keywords": ["electron", "react", "admission", "고입", "전형관리"],
+  "author": "wizbeee",
+  "license": "MIT",
+  "dependencies": {
+    "sql.js": "^1.10.0",
+    "bcryptjs": "^2.4.3",
+    "electron-store": "^8.1.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-scripts": "5.0.1",
+    "xlsx": "^0.18.5",
+    "recharts": "^2.12.0"
+  },
+  "devDependencies": {
+    "autoprefixer": "^10.4.16",
+    "concurrently": "^8.2.2",
+    "cross-env": "^7.0.3",
+    "electron": "^28.0.0",
+    "electron-builder": "^24.9.1",
+    "postcss": "^8.4.33",
+    "tailwindcss": "^3.4.0",
+    "wait-on": "^7.2.0"
+  },
+  "homepage": "./",
+  "build": {
+    "appId": "com.admission.manager",
+    "productName": "입학전형관리",
+    "files": ["build/**/*", "src/main/**/*"],
+    "extraMetadata": { "main": "src/main/main.js" },
+    "win": {
+      "target": ["nsis"],
+      "icon": "public/icon.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    }
+  },
+  "eslintConfig": { "extends": ["react-app"] },
+  "browserslist": {
+    "production": [">0.2%", "not dead", "not op_mini all"],
+    "development": ["last 1 chrome version"]
+  }
+}
