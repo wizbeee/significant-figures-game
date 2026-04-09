@@ -5,8 +5,8 @@
   "main": "src/main/main.js",
   "scripts": {
     "start": "concurrently \"npm run dev:react\" \"wait-on http://localhost:3002 && npm run dev:electron\"",
-    "dev:react": "cross-env PORT=3002 react-scripts start",
-    "dev:electron": "cross-env NODE_ENV=development electron .",
+    "dev:react": "set PORT=3002&& react-scripts start",
+    "dev:electron": "set NODE_ENV=development&& electron .",
     "build": "react-scripts build && npm run build:electron",
     "build:electron": "electron-builder --win",
     "build:win": "react-scripts build && electron-builder --win",

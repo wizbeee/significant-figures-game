@@ -1,0 +1,40 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "game",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["server.js"],
+      "port": 3000
+    },
+    {
+      "name": "mockup-server",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["-y", "http-server", "mockups", "-p", "8090", "--cors", "-c-1"],
+      "port": 8090
+    },
+    {
+      "name": "grade-analyzer",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["-y", "http-server", "grade-analyzer", "-p", "8091", "--cors", "-c-1"],
+      "port": 8091
+    },
+    {
+      "name": "admission-dev",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["--prefix", "admission-manager", "run", "dev:react"],
+      "port": 3000
+    },
+    {
+      "name": "presentation-dev",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["node_modules/react-scripts/bin/react-scripts.js", "start"],
+      "port": 3002,
+      "cwd": "smart-presentation",
+      "env": {
+        "PORT": "3002",
+        "BROWSER": "none"
+      }
+    }
+  ]
+}

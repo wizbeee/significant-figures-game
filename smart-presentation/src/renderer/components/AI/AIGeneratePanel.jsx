@@ -33,10 +33,10 @@ export default function AIGeneratePanel() {
     return () => window.removeEventListener('ai-generate-topic', handler);
   }, []);
 
-  // AI 설정 저장
-  useEffect(() => {
-    actions.setAIConfig({ provider, apiKey, model });
-  }, [provider, apiKey, model, actions]);
+  // AI 설정은 변경 시점에만 저장 (useEffect 무한루프 방지)
+  const saveAIConfig = (updates) => {
+    actions.setAIConfig(updates);
+  };
 
   // 슬라이드 생성
   const handleGenerate = async () => {
@@ -270,7 +270,7 @@ export default function AIGeneratePanel() {
       {tab === 'settings' && (
         <div style={contentStyle}>
           <label style={labelStyle}>AI 프로바이더</label>
-          <select value={provider} onChange={(e) => { setProvider(e.target.value); setModel(''); }} style={selectStyle}>
+          <select value={provider} onChange={(e) => { setProvider(e.target.value); setModel(''); saveAIConfig({ provider: e.target.value, model: '' }); }} style={selectStyle}>
             <option value="openai">OpenAI (GPT)</option>
             <option value="claude">Anthropic (Claude)</option>
             <option value="gemini">Google (Gemini)</option>
@@ -280,13 +280,13 @@ export default function AIGeneratePanel() {
           <input
             type="password"
             value={apiKey}
-            onChange={(e) => setApiKey(e.target.value)}
+            onChange={(e) => { setApiKey(e.target.value); saveAIConfig({ apiKey: e.target.value }); }}
             placeholder="API 키를 입력하세요"
             style={inputStyle}
           />
 
           <label style={{ ...labelStyle, marginTop: 12 }}>모델</label>
-          <select value={model} onChange={(e) => setModel(e.target.value)} style={selectStyle}>
+          <select value={model} onChange={(e) => { setModel(e.target.value); saveAIConfig({ model: e.target.value }); }} style={selectStyle}>
             <option value="">기본 모델</option>
             {getProviderModels(provider).map(m => (
               <option key={m.id} value={m.id}>{m.name}</option>
