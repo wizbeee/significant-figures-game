@@ -14,9 +14,9 @@ android {
         versionName "2.2.0"
 
         // 웹앱 URL 설정 - 모바일 전용 UI (?platform=mobile)
-        // @161 배포: v3.2.4 window.top.location 수정으로 흰화면 해결
+        // @162 배포: v3.3 사용자 피드백 통일 + 모바일 접근성/라우팅 개선
         buildConfigField "String", "WEB_APP_URL",
-            "\"https://script.google.com/macros/s/AKfycbzjVJ5eomvzS5GsTr3WoUOvoMKE9UqfTVw7gkZtK4x7XcYsX7VefG_HIhqZIfrEl0RklQ/exec?platform=mobile\""
+            "\"https://script.google.com/macros/s/AKfycbxSQ4nyhpyff5NMhXUvvNDEocdG-p-K06WOGatqWKg1PClxOmsACY8YyAhhVaR_mCaalg/exec?platform=mobile\""
     }
 
     buildTypes {
