@@ -349,12 +349,37 @@
     box-shadow: 0 2px 6px rgba(0,0,0,.12);
   }
   .btn:focus-visible {
-    outline: 2px solid rgba(37,99,235,.55);
+    outline: 3px solid #2563eb;
     outline-offset: 2px;
   }
 
   .btn-danger:hover { filter: brightness(1.05); }
-  .btn-danger:focus-visible { outline-color: rgba(220,38,38,.6); }
+  .btn-danger:focus-visible { outline: 3px solid #b91c1c; outline-offset: 2px; }
+
+  /* [A5/A10] 전역 포커스 링 — 키보드 사용자 위치 명확화 */
+  :focus { outline: none; }
+  :focus-visible {
+    outline: 3px solid #2563eb;
+    outline-offset: 2px;
+  }
+  input:focus-visible, select:focus-visible, textarea:focus-visible {
+    outline: 3px solid #2563eb;
+    outline-offset: 0;
+    border-color: #2563eb;
+  }
+
+  /* [A7] 테이블 셀 텍스트 넘침 방지 — 너무 긴 실험제목/동반자명단이 레이아웃을 깨뜨리지 않게 */
+  .data-table td {
+    max-width: 280px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .data-table td:hover {
+    overflow: visible;
+    white-space: normal;
+    word-break: break-word;
+  }
 
   .btn .icon { margin-right: 6px; }
 

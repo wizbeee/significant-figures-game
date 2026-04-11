@@ -3,23 +3,23 @@
 <!-- 통계 카드 (수평 스크롤) — 목업과 동일 구조 -->
 <div class="stats-scroll">
   <div class="stats-row" id="stats-row">
-    <div class="stat-card active" data-status="전체" onclick="filterByStatusCard('전체')">
+    <div class="stat-card active" data-status="전체" tabindex="0" role="button" aria-label="전체 신청" onclick="filterByStatusCard('전체')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();filterByStatusCard('전체');}">
       <div class="stat-number" id="stat-total">-</div>
       <div class="stat-label">전체 신청</div>
     </div>
-    <div class="stat-card" data-status="pending" onclick="filterByStatusCard('대기')">
+    <div class="stat-card" data-status="대기" tabindex="0" role="button" aria-label="대기중 신청 필터" onclick="filterByStatusCard('대기')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();filterByStatusCard('대기');}">
       <div class="stat-number" id="stat-pending">-</div>
       <div class="stat-label">대기중</div>
     </div>
-    <div class="stat-card" data-status="first" onclick="filterByStatusCard('1차승인')">
+    <div class="stat-card" data-status="1차승인" tabindex="0" role="button" aria-label="1차 승인 필터" onclick="filterByStatusCard('1차승인')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();filterByStatusCard('1차승인');}">
       <div class="stat-number" id="stat-first">-</div>
       <div class="stat-label">1차승인</div>
     </div>
-    <div class="stat-card" data-status="final" onclick="filterByStatusCard('최종승인')">
+    <div class="stat-card" data-status="최종승인" tabindex="0" role="button" aria-label="최종 승인 필터" onclick="filterByStatusCard('최종승인')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();filterByStatusCard('최종승인');}">
       <div class="stat-number" id="stat-final">-</div>
       <div class="stat-label">최종승인</div>
     </div>
-    <div class="stat-card" data-status="rejected" onclick="filterByStatusCard('반려')">
+    <div class="stat-card" data-status="반려" tabindex="0" role="button" aria-label="반려 필터" onclick="filterByStatusCard('반려')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();filterByStatusCard('반려');}">
       <div class="stat-number" id="stat-rejected">-</div>
       <div class="stat-label">반려</div>
     </div>

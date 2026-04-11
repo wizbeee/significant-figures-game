@@ -234,14 +234,19 @@ function loadChemicals(appId) {
 }
 
 /* ===== 승인/반려 ===== */
+// [C8] 재클릭 가드 — confirm 여러 번 통과해도 서버로 두 번 안 보냄
+var APPROVING = false;
 function approveAction(newStatus) {
+  if (APPROVING) return;           // 이미 진행 중
   if (!CURRENT_DETAIL) return;
   var name = CURRENT_DETAIL['대표자이름'] || '';
   if (!confirm(name + ' 학생의 신청을 "' + newStatus + '"(으)로 변경하시겠습니까?')) return;
+  APPROVING = true;
   var approvals = mapStatusToApprovals(newStatus);
   if (typeof showGlobalBusy === 'function') showGlobalBusy('처리 중입니다');
   google.script.run
     .withSuccessHandler(function() {
+      APPROVING = false;
       closeDetail();
       loadApplications();
       if (typeof showGlobalSuccess === 'function') {
@@ -251,6 +256,7 @@ function approveAction(newStatus) {
       }
     })
     .withFailureHandler(function(err) {
+      APPROVING = false;
       var msg = (err && (err.message || err)) || '알 수 없는 오류';
       if (typeof showGlobalError === 'function') {
         showGlobalError('처리 실패', msg);

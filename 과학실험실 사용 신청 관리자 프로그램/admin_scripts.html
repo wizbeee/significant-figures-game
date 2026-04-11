@@ -120,8 +120,9 @@ function ensureBusyOverlay(){
         font-size:30px; font-weight:bold; color:#fff;
         animation:busyPop .32s ease-out;
       }
-      #busyOverlay .busy-icon.success{ background:#16a34a; }
-      #busyOverlay .busy-icon.error{ background:#dc2626; }
+      #busyOverlay .busy-icon.success{ background:#15803d; } /* WCAG AA 4.54:1 */
+      #busyOverlay .busy-icon.warning{ background:#b45309; } /* WCAG AA 4.66:1 */
+      #busyOverlay .busy-icon.error{ background:#b91c1c; }   /* WCAG AA 6.36:1 */
       @keyframes busyspin { to { transform: rotate(360deg); } }
       @keyframes busyPop { 0%{transform:scale(0.5);opacity:0;} 60%{transform:scale(1.08);opacity:1;} 100%{transform:scale(1);opacity:1;} }
       #busyOverlay .busy-title{
@@ -134,12 +135,13 @@ function ensureBusyOverlay(){
       }
       #busyOverlay .busy-close{
         display:none;
-        margin-top:14px; padding:9px 22px;
+        margin-top:14px; padding:11px 24px;
         background:#2563eb; color:#fff; border:none;
         border-radius:8px; font-size:14px; font-weight:600;
-        cursor:pointer; min-height:40px; min-width:80px;
+        cursor:pointer; min-height:44px; min-width:88px;
       }
       #busyOverlay .busy-close:hover{ background:#1d4ed8; }
+      #busyOverlay .busy-close:focus-visible{ outline:3px solid #60a5fa; outline-offset:2px; }
       #busyOverlay .busy-close.show{ display:inline-block; }
       @media (prefers-reduced-motion: reduce) {
         #busyOverlay, #busyOverlay .busy-icon, #busyOverlay .busy-spinner { animation:none !important; }
@@ -180,6 +182,11 @@ function _applyBusyState(state, title, sub) {
     tEl.textContent  = title || '저장되었습니다';
     sEl.textContent  = sub   || '작업이 완료되었습니다.';
     closeBtn.classList.remove('show');
+  } else if (state === 'warning') {
+    visual.innerHTML = '<div class="busy-icon warning" aria-hidden="true">!</div>';
+    tEl.textContent  = title || '저장되었으나 수동 조치가 필요합니다';
+    sEl.textContent  = sub   || '';
+    closeBtn.classList.add('show');
   } else if (state === 'error') {
     visual.innerHTML = '<div class="busy-icon error" aria-hidden="true">!</div>';
     tEl.textContent  = title || '오류가 발생했습니다';
@@ -188,10 +195,24 @@ function _applyBusyState(state, title, sub) {
   }
 }
 
-function showGlobalBusy(msg = '저장 중입니다'){
+// 전역 경고 피드백 — 저장은 성공했지만 후속 조치가 필요한 경우
+function showGlobalWarning(title, sub){
   ensureBusyOverlay();
-  BUSY_COUNT++;
-  _applyBusyState('loading', msg, '잠시만 기다려주세요…');
+  if (BUSY_OVERLAY_AUTOCLOSE_TIMER) {
+    clearTimeout(BUSY_OVERLAY_AUTOCLOSE_TIMER);
+    BUSY_OVERLAY_AUTOCLOSE_TIMER = null;
+  }
+  BUSY_COUNT = 0;
+  _applyBusyState('warning', title, sub);
+  __showOverlayRaw();
+}
+
+// [C7] 오버레이 열림 상태를 관리하는 단일 진실
+// BUSY_COUNT는 '동시 loading 호출' 수만 추적. success/error는 항상 terminal 상태로 reset.
+// 이 설계가 핵심: loading → success/error 전이 후에는 누구도 BUSY_COUNT를 읽지 않음.
+let BUSY_OVERLAY_AUTOCLOSE_TIMER = null;
+
+function __showOverlayRaw(){
   const el = document.getElementById('busyOverlay');
   el.style.display = 'flex';
   el.setAttribute('aria-hidden', 'false');
@@ -200,9 +221,12 @@ function showGlobalBusy(msg = '저장 중입니다'){
   el.style.pointerEvents = 'auto';
 }
 
-function hideGlobalBusy(){
-  BUSY_COUNT = Math.max(0, BUSY_COUNT - 1);
-  if (BUSY_COUNT > 0) return;
+function __hideOverlayRaw(){
+  BUSY_COUNT = 0;
+  if (BUSY_OVERLAY_AUTOCLOSE_TIMER) {
+    clearTimeout(BUSY_OVERLAY_AUTOCLOSE_TIMER);
+    BUSY_OVERLAY_AUTOCLOSE_TIMER = null;
+  }
   const el = document.getElementById('busyOverlay');
   if (el) {
     el.style.display = 'none';
@@ -212,31 +236,43 @@ function hideGlobalBusy(){
   document.body.style.pointerEvents = '';
 }
 
+function showGlobalBusy(msg = '저장 중입니다'){
+  ensureBusyOverlay();
+  // 이전에 success/error 상태로 떠 있던 오버레이를 덮어쓰는 경우 타이머 정리
+  if (BUSY_OVERLAY_AUTOCLOSE_TIMER) {
+    clearTimeout(BUSY_OVERLAY_AUTOCLOSE_TIMER);
+    BUSY_OVERLAY_AUTOCLOSE_TIMER = null;
+  }
+  BUSY_COUNT++;
+  _applyBusyState('loading', msg, '잠시만 기다려주세요…');
+  __showOverlayRaw();
+}
+
+function hideGlobalBusy(){
+  // loading 상태에서만 참조되는 카운터 감소
+  BUSY_COUNT = Math.max(0, BUSY_COUNT - 1);
+  if (BUSY_COUNT > 0) return;
+  __hideOverlayRaw();
+}
+
 /**
  * 전역 성공 피드백 — 스피너 → 체크 → 자동 닫힘
- * @param {string} title 예: '저장되었습니다'
- * @param {string} sub   예: '변경사항이 반영되었습니다.'
- * @param {number} autoCloseMs  자동 닫힘 지연 (기본 2200ms), 0이면 수동 닫기
+ * 주의: 성공 상태는 terminal이므로 BUSY_COUNT를 reset하고 타이머로 자동 닫는다.
  */
 function showGlobalSuccess(title, sub, autoCloseMs){
   ensureBusyOverlay();
-  // 카운터가 이미 0이면 올려서 hideGlobalBusy 1회 호출이 정상 동작하게 맞춤
-  if (BUSY_COUNT <= 0) BUSY_COUNT = 1;
+  // 기존 타이머가 있으면 정리 (연속 호출 시 flicker 방지)
+  if (BUSY_OVERLAY_AUTOCLOSE_TIMER) {
+    clearTimeout(BUSY_OVERLAY_AUTOCLOSE_TIMER);
+    BUSY_OVERLAY_AUTOCLOSE_TIMER = null;
+  }
+  BUSY_COUNT = 0; // terminal 상태 — 이후 연산에서 참조되지 않도록 reset
   _applyBusyState('success', title, sub);
-  const el = document.getElementById('busyOverlay');
-  el.style.display = 'flex';
-  el.setAttribute('aria-hidden', 'false');
-  document.body.style.overflow = 'hidden';
-  document.body.style.pointerEvents = 'none';
-  el.style.pointerEvents = 'auto';
+  __showOverlayRaw();
   const delay = (typeof autoCloseMs === 'number') ? autoCloseMs : 2200;
   if (delay > 0) {
-    setTimeout(function(){
-      // hideGlobalBusy가 카운터를 감소시키므로 한 번만 호출
-      hideGlobalBusy();
-    }, delay);
+    BUSY_OVERLAY_AUTOCLOSE_TIMER = setTimeout(__hideOverlayRaw, delay);
   } else {
-    // 수동 닫기 모드
     const closeBtn = document.getElementById('busyCloseBtn');
     if (closeBtn) closeBtn.classList.add('show');
   }
@@ -247,14 +283,13 @@ function showGlobalSuccess(title, sub, autoCloseMs){
  */
 function showGlobalError(title, sub){
   ensureBusyOverlay();
-  if (BUSY_COUNT <= 0) BUSY_COUNT = 1;
+  if (BUSY_OVERLAY_AUTOCLOSE_TIMER) {
+    clearTimeout(BUSY_OVERLAY_AUTOCLOSE_TIMER);
+    BUSY_OVERLAY_AUTOCLOSE_TIMER = null;
+  }
+  BUSY_COUNT = 0; // terminal 상태
   _applyBusyState('error', title, sub);
-  const el = document.getElementById('busyOverlay');
-  el.style.display = 'flex';
-  el.setAttribute('aria-hidden', 'false');
-  document.body.style.overflow = 'hidden';
-  document.body.style.pointerEvents = 'none';
-  el.style.pointerEvents = 'auto';
+  __showOverlayRaw();
 }
 
 // ==== 날짜 파서(정렬 안정화용) ====
@@ -1383,9 +1418,13 @@ function closeAllInlineEditors(){
 /* =========================================================
  * 상세/편집 모달
  * ========================================================= */
+// [H5] 상세 모달에서 시약 비동기 로딩의 race 방지용 토큰
+var CURRENT_DETAIL_ID = '';
+
 function openDetail(id){
   const app = ALL.find(a => String(a['신청ID'])===String(id));
   if (!app) return;
+  CURRENT_DETAIL_ID = String(id);
 
   const body = $('#detailBody');
   body.innerHTML = `
@@ -1434,10 +1473,13 @@ function openDetail(id){
   $('#detailModal').style.display = 'flex';
   initTooltips(); initRipples();
 
-  // 시약 정보 지연 로드
+  // 시약 정보 지연 로드 — [H5] 현재 detail id와 다르면 stale 응답 무시
+  const loadToken = String(id);
   google.script.run
     .withSuccessHandler(list=>{
+      if (CURRENT_DETAIL_ID !== loadToken) return; // 사용자가 다른 신청으로 넘어감
       const sec = $('#chemSection');
+      if (!sec) return;
       if (!Array.isArray(list) || list.length===0){
         sec.innerHTML = `
           <h3 style="margin:0 0 6px 0;">시약 신청 목록</h3>
@@ -1464,14 +1506,21 @@ function openDetail(id){
       }
     })
     .withFailureHandler(_=>{
-      $('#chemSection').innerHTML = `
-        <h3 style="margin:0 0 6px 0;">시약 신청 목록</h3>
-        <div class="info-card"><div class="detail-value">시약 정보를 불러오지 못했습니다.</div></div>
-      `;
+      if (CURRENT_DETAIL_ID !== loadToken) return;
+      const sec = $('#chemSection');
+      if (sec) {
+        sec.innerHTML = `
+          <h3 style="margin:0 0 6px 0;">시약 신청 목록</h3>
+          <div class="info-card"><div class="detail-value">시약 정보를 불러오지 못했습니다.</div></div>
+        `;
+      }
     })
     .getApplicationChemicals(id);
 }
-function closeDetail(){ $('#detailModal').style.display='none'; }
+function closeDetail(){
+  CURRENT_DETAIL_ID = ''; // [H5] 모달이 닫히면 토큰 무효화
+  $('#detailModal').style.display='none';
+}
 
 function printOne(id){
   const a = ALL.find(x => String(x['신청ID'])===String(id));
@@ -2502,7 +2551,7 @@ function glRenderPagination() {
   }
   
   // 다음 버튼
-  html += `<button class="btn btn-small" onclick="glGoPage(${page + 1})" ${page === totalPages ? 'disabled' : ''}">›</button>`;
+  html += `<button class="btn btn-small" onclick="glGoPage(${page + 1})" ${page === totalPages ? 'disabled' : ''}>›</button>`;
   html += `<button class="btn btn-small" onclick="glGoPage(${totalPages})" ${page === totalPages ? 'disabled' : ''}>≫</button>`;
   
   // 페이지 정보

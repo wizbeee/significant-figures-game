@@ -12,7 +12,8 @@
     --text-primary: #1f2937;
     --text-secondary: #4b5563;
     --text-tertiary: #6b7280;
-    --text-muted: #9ca3af;
+    /* [A4] WCAG AA 대비: 기존 #9ca3af 는 #ffffff에서 2.86:1로 부족 → #6b7280 (4.69:1) 이상으로 */
+    --text-muted: #6b7280;
     
     --border-color: #e5e7eb;
     --border-dark: #d1d5db;
@@ -23,14 +24,14 @@
     
     --primary: #2563eb;
     --primary-hover: #1d4ed8;
-    --success: #16a34a;
-    --success-hover: #15803d;
-    --warning: #f59e0b;
-    --warning-hover: #d97706;
-    --danger: #dc2626;
-    --danger-hover: #b91c1c;
-    --info: #0ea5e9;
-    --info-hover: #0284c7;
+    --success: #15803d;   /* [A4] 4.54:1 */
+    --success-hover: #166534;
+    --warning: #b45309;   /* [A4] 4.66:1 */
+    --warning-hover: #92400e;
+    --danger: #b91c1c;    /* [A4] 6.36:1 */
+    --danger-hover: #991b1b;
+    --info: #0369a1;      /* [A4] 5.06:1 */
+    --info-hover: #075985;
     
     --status-pending-bg: #fef9c3;
     --status-pending-text: #92400e;
@@ -525,6 +526,7 @@ function showEmpty(el, msg='데이터가 없습니다', hint='') {
 if (typeof window.showGlobalBusy !== 'function') {
   (function(){
     var BUSY_COUNT = 0;
+    var AUTOCLOSE_TIMER = null;
 
     function ensureBusyOverlay(){
       if (!document.getElementById('commonBusyOverlayStyle')) {
@@ -532,7 +534,7 @@ if (typeof window.showGlobalBusy !== 'function') {
         st.id = 'commonBusyOverlayStyle';
         st.textContent = ''
           + '#busyOverlay{position:fixed;inset:0;display:none;align-items:center;justify-content:center;'
-          + 'background:rgba(255,255,255,0.85);z-index:99999;-webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px);'
+          + 'background:rgba(255,255,255,0.88);z-index:99999;-webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px);'
           + 'animation:cbOverlayFadeIn .18s ease-out;}'
           + '@keyframes cbOverlayFadeIn{from{opacity:0;}to{opacity:1;}}'
           + '#busyOverlay .busy-card{background:#fff;padding:32px 44px;border-radius:16px;'
@@ -541,15 +543,17 @@ if (typeof window.showGlobalBusy !== 'function') {
           + '#busyOverlay .busy-spinner{width:48px;height:48px;border:5px solid #e5e7eb;border-top-color:#2563eb;border-radius:50%;animation:cbBusySpin .9s linear infinite;}'
           + '#busyOverlay .busy-icon{width:56px;height:56px;border-radius:50%;display:flex;align-items:center;justify-content:center;'
           + 'font-size:30px;font-weight:bold;color:#fff;animation:cbBusyPop .32s ease-out;}'
-          + '#busyOverlay .busy-icon.success{background:#16a34a;}'
-          + '#busyOverlay .busy-icon.error{background:#dc2626;}'
+          + '#busyOverlay .busy-icon.success{background:#15803d;}' /* WCAG AA */
+          + '#busyOverlay .busy-icon.warning{background:#b45309;}' /* WCAG AA */
+          + '#busyOverlay .busy-icon.error{background:#b91c1c;}'   /* WCAG AA */
           + '@keyframes cbBusySpin{to{transform:rotate(360deg);}}'
           + '@keyframes cbBusyPop{0%{transform:scale(0.5);opacity:0;}60%{transform:scale(1.08);opacity:1;}100%{transform:scale(1);opacity:1;}}'
           + '#busyOverlay .busy-title{font-size:1.1rem;font-weight:700;color:#111827;margin:0 0 4px;}'
           + '#busyOverlay .busy-sub{font-size:0.92rem;color:#4b5563;line-height:1.5;white-space:pre-wrap;word-break:keep-all;}'
-          + '#busyOverlay .busy-close{display:none;margin-top:14px;padding:9px 22px;background:#2563eb;color:#fff;border:none;'
-          + 'border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;min-height:40px;min-width:80px;}'
+          + '#busyOverlay .busy-close{display:none;margin-top:14px;padding:11px 24px;background:#2563eb;color:#fff;border:none;'
+          + 'border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;min-height:44px;min-width:88px;}'
           + '#busyOverlay .busy-close:hover{background:#1d4ed8;}'
+          + '#busyOverlay .busy-close:focus-visible{outline:3px solid #60a5fa;outline-offset:2px;}'
           + '#busyOverlay .busy-close.show{display:inline-block;}'
           + '@media (prefers-reduced-motion: reduce){#busyOverlay,#busyOverlay .busy-icon,#busyOverlay .busy-spinner{animation:none !important;}}';
         document.head.appendChild(st);
@@ -586,6 +590,11 @@ if (typeof window.showGlobalBusy !== 'function') {
         tEl.textContent  = title || '저장되었습니다';
         sEl.textContent  = sub   || '작업이 완료되었습니다.';
         closeBtn.classList.remove('show');
+      } else if (state === 'warning') {
+        visual.innerHTML = '<div class="busy-icon warning" aria-hidden="true">!</div>';
+        tEl.textContent  = title || '저장되었으나 수동 조치가 필요합니다';
+        sEl.textContent  = sub   || '';
+        closeBtn.classList.add('show');
       } else if (state === 'error') {
         visual.innerHTML = '<div class="busy-icon error" aria-hidden="true">!</div>';
         tEl.textContent  = title || '오류가 발생했습니다';
@@ -594,21 +603,17 @@ if (typeof window.showGlobalBusy !== 'function') {
       }
     }
 
-    window.showGlobalBusy = function(msg){
-      ensureBusyOverlay();
-      BUSY_COUNT++;
-      applyState('loading', msg || '저장 중입니다', '잠시만 기다려주세요…');
+    function showRaw(){
       var el = document.getElementById('busyOverlay');
       el.style.display = 'flex';
       el.setAttribute('aria-hidden', 'false');
       document.body.style.overflow = 'hidden';
       document.body.style.pointerEvents = 'none';
       el.style.pointerEvents = 'auto';
-    };
-
-    window.hideGlobalBusy = function(){
-      BUSY_COUNT = Math.max(0, BUSY_COUNT - 1);
-      if (BUSY_COUNT > 0) return;
+    }
+    function hideRaw(){
+      BUSY_COUNT = 0;
+      if (AUTOCLOSE_TIMER) { clearTimeout(AUTOCLOSE_TIMER); AUTOCLOSE_TIMER = null; }
       var el = document.getElementById('busyOverlay');
       if (el) {
         el.style.display = 'none';
@@ -616,33 +621,47 @@ if (typeof window.showGlobalBusy !== 'function') {
       }
       document.body.style.overflow = '';
       document.body.style.pointerEvents = '';
+    }
+
+    window.showGlobalBusy = function(msg){
+      ensureBusyOverlay();
+      if (AUTOCLOSE_TIMER) { clearTimeout(AUTOCLOSE_TIMER); AUTOCLOSE_TIMER = null; }
+      BUSY_COUNT++;
+      applyState('loading', msg || '저장 중입니다', '잠시만 기다려주세요…');
+      showRaw();
+    };
+
+    window.hideGlobalBusy = function(){
+      BUSY_COUNT = Math.max(0, BUSY_COUNT - 1);
+      if (BUSY_COUNT > 0) return;
+      hideRaw();
     };
 
     window.showGlobalSuccess = function(title, sub, autoCloseMs){
       ensureBusyOverlay();
-      if (BUSY_COUNT <= 0) BUSY_COUNT = 1;
+      if (AUTOCLOSE_TIMER) { clearTimeout(AUTOCLOSE_TIMER); AUTOCLOSE_TIMER = null; }
+      BUSY_COUNT = 0; // terminal state
       applyState('success', title, sub);
-      var el = document.getElementById('busyOverlay');
-      el.style.display = 'flex';
-      el.setAttribute('aria-hidden', 'false');
-      document.body.style.overflow = 'hidden';
-      document.body.style.pointerEvents = 'none';
-      el.style.pointerEvents = 'auto';
+      showRaw();
       var delay = (typeof autoCloseMs === 'number') ? autoCloseMs : 2200;
-      if (delay > 0) setTimeout(window.hideGlobalBusy, delay);
+      if (delay > 0) AUTOCLOSE_TIMER = setTimeout(hideRaw, delay);
       else document.getElementById('busyCloseBtn').classList.add('show');
+    };
+
+    window.showGlobalWarning = function(title, sub){
+      ensureBusyOverlay();
+      if (AUTOCLOSE_TIMER) { clearTimeout(AUTOCLOSE_TIMER); AUTOCLOSE_TIMER = null; }
+      BUSY_COUNT = 0;
+      applyState('warning', title, sub);
+      showRaw();
     };
 
     window.showGlobalError = function(title, sub){
       ensureBusyOverlay();
-      if (BUSY_COUNT <= 0) BUSY_COUNT = 1;
+      if (AUTOCLOSE_TIMER) { clearTimeout(AUTOCLOSE_TIMER); AUTOCLOSE_TIMER = null; }
+      BUSY_COUNT = 0;
       applyState('error', title, sub);
-      var el = document.getElementById('busyOverlay');
-      el.style.display = 'flex';
-      el.setAttribute('aria-hidden', 'false');
-      document.body.style.overflow = 'hidden';
-      document.body.style.pointerEvents = 'none';
-      el.style.pointerEvents = 'auto';
+      showRaw();
     };
   })();
 }
