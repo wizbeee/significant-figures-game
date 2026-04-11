@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>실험실 관리</title>
   <?!= include('m_common_styles'); ?>
   <style>
@@ -92,25 +92,39 @@
       if (titleEl) titleEl.textContent = SPA_TITLES[viewName] || viewName;
     }
 
-    // Override mGoToPage for instant SPA navigation
-    mGoToPage = function(viewName) {
-      if (viewName === 'logout') {
-        window.top.location.href = APP_BASE_URL + '?view=logout&platform=mobile';
-        return;
-      }
+    var SPA_SESSION_KEY = 'lab-mobile-spa-view';
 
-      if (viewName === SPA_CURRENT) return;
+    // URL 상태 관리 헬퍼: 현재 platform/query 파라미터를 보존하면서 view만 교체
+    function spaBuildUrl(viewName) {
+      var params = new URLSearchParams(window.location.search);
+      params.set('view', viewName);
+      params.set('platform', 'mobile');
+      return window.location.pathname + '?' + params.toString();
+    }
 
-      // Hide current view
+    // 현재 뷰를 sessionStorage에 기록 (GAS iframe에서 pushState가 top URL을 못 바꿀 때 F5 복구용)
+    function spaPersistView(viewName) {
+      try { sessionStorage.setItem(SPA_SESSION_KEY, viewName); } catch (e) {}
+    }
+    function spaRestoreView() {
+      try { return sessionStorage.getItem(SPA_SESSION_KEY) || ''; } catch (e) { return ''; }
+    }
+
+    // Hide current view and show target view (URL 변경 없음; pushState는 호출부에서)
+    function spaSwitchView(viewName, opts) {
+      opts = opts || {};
+      if (viewName === SPA_CURRENT && !opts.force) return;
+      if (!document.getElementById('view-' + viewName)) return;
+
       var cur = document.getElementById('view-' + SPA_CURRENT);
       if (cur) cur.style.display = 'none';
 
-      // Show new view
       var next = document.getElementById('view-' + viewName);
-      if (!next) {
-        // view div가 없으면 fallback: 페이지 전체 로드
-        window.top.location.href = APP_BASE_URL + '?view=' + encodeURIComponent(viewName) + '&platform=mobile';
-        return;
+      if (next) {
+        next.style.display = '';
+        next.style.animation = 'none';
+        next.offsetHeight; // reflow
+        next.style.animation = '';
       }
       next.style.display = '';
       // Re-trigger animation
@@ -119,9 +133,10 @@
       next.style.animation = '';
 
       SPA_CURRENT = viewName;
+      spaPersistView(viewName);
       spaUpdateTopbar(viewName);
-      setActiveNav(viewName);
-      closeMenu();
+      if (typeof setActiveNav === 'function') setActiveNav(viewName);
+      if (typeof closeMenu === 'function') closeMenu();
 
       // Lazy init — only load data on first visit
       if (!SPA_INITIALIZED[viewName]) {
@@ -141,23 +156,75 @@
       }
 
       window.scrollTo(0, 0);
+    }
+
+    // Override mGoToPage for instant SPA navigation + URL 동기화
+    mGoToPage = function(viewName) {
+      if (viewName === 'logout') {
+        window.top.location.href = APP_BASE_URL + '?view=logout&platform=mobile';
+        return;
+      }
+
+      if (viewName === SPA_CURRENT) return;
+
+      // pushState로 URL 업데이트 (새로고침/뒤로가기 대응)
+      try {
+        var newUrl = spaBuildUrl(viewName);
+        window.history.pushState({ view: viewName }, '', newUrl);
+      } catch (e) {
+        // history API 실패 시 무시 (GAS iframe 환경 등)
+      }
+
+      spaSwitchView(viewName);
     };
+
+    // 뒤로가기/앞으로가기 처리
+    window.addEventListener('popstate', function(e) {
+      var targetView;
+      if (e.state && e.state.view) {
+        targetView = e.state.view;
+      } else {
+        var qp = new URLSearchParams(window.location.search);
+        targetView = qp.get('view') || 'admin';
+      }
+      if (document.getElementById('view-' + targetView)) {
+        spaSwitchView(targetView);
+      }
+    });
 
     // Topbar buttons
     document.getElementById('btn-menu').addEventListener('click', function(e) { e.preventDefault(); openMenu(); });
     document.getElementById('btn-refresh').addEventListener('click', function(e) { e.preventDefault(); spaRefresh(); });
     document.getElementById('btn-darkmode').addEventListener('click', function(e) { e.preventDefault(); toggleDarkMode(); });
 
-    // Init: load admin view
-    setActiveNav('admin');
-    SPA_INITIALIZED['admin'] = true;
-    adminInit();
-
-    // Handle initial view from URL hash or parameter
+    // ===== 초기 뷰 결정 =====
+    // 우선순위: URL ?view= > sessionStorage > 기본 'admin'
+    // (GAS iframe에서는 pushState가 top URL을 바꾸지 못하므로 F5 시 sessionStorage 복구)
     var urlParams = new URLSearchParams(window.location.search);
-    var initView = urlParams.get('view');
-    if (initView && initView !== 'admin' && document.getElementById('view-' + initView)) {
-      setTimeout(function() { mGoToPage(initView); }, 100);
+    var urlView = urlParams.get('view');
+    var storedView = spaRestoreView();
+    var initView = urlView || storedView || 'admin';
+    var validInit = (initView && document.getElementById('view-' + initView)) ? initView : 'admin';
+
+    // history state 초기화 (뒤로가기가 admin으로 정확히 돌아오게)
+    try {
+      window.history.replaceState({ view: validInit }, '', spaBuildUrl(validInit));
+    } catch (e) {}
+
+    if (validInit === 'admin') {
+      // 기본 경로: admin만 초기화
+      if (typeof setActiveNav === 'function') setActiveNav('admin');
+      SPA_INITIALIZED['admin'] = true;
+      SPA_CURRENT = 'admin';
+      spaUpdateTopbar('admin');
+      adminInit();
+    } else {
+      // admin 외 뷰로 직접 진입한 경우: admin은 init만 하고 즉시 해당 뷰로 전환
+      if (typeof setActiveNav === 'function') setActiveNav('admin');
+      SPA_INITIALIZED['admin'] = true;
+      adminInit();
+      SPA_CURRENT = 'admin';
+      setTimeout(function() { spaSwitchView(validInit); }, 50);
     }
   })();
   </script>

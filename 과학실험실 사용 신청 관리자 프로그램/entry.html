@@ -2,8 +2,27 @@
 <html lang="ko">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
   <title>과학 실험·실습실 사용 신청 관리 시스템</title>
+  <script>
+  // ===== 모바일 기기 감지 (로그인 후 관리자 이동 시 ?platform=mobile 붙이기 위함) =====
+  // 주의: entry.html은 로그인 페이지이므로, 로그인 전에 모바일 SPA로 리다이렉트하면
+  //       세션 없이 SPA에 진입하게 되어 오류가 발생함. 그래서 여기서는 플래그만 세워두고,
+  //       실제 리다이렉트는 goAdmin()에서 platform=mobile을 붙여서 수행한다.
+  //       사용자가 ?platform=desktop을 명시한 경우에는 존중한다.
+  window.__IS_MOBILE_UA = (function(){
+    try {
+      var params = new URLSearchParams(window.location.search);
+      var forced = (params.get('platform') || '').toLowerCase();
+      if (forced === 'desktop') return false; // 명시적 데스크탑 요청
+      if (forced === 'mobile')  return true;  // 명시적 모바일 요청
+      var ua = navigator.userAgent || '';
+      var isMobile = /Mobi|Android|iPhone|iPad|iPod|IEMobile|Opera Mini|BlackBerry/i.test(ua);
+      var isiPadLike = (navigator.maxTouchPoints && navigator.maxTouchPoints > 1 && /Macintosh/i.test(ua));
+      return !!(isMobile || isiPadLike);
+    } catch (e) { return false; }
+  })();
+  </script>
   <style>
     :root{
       --bg:#f6f7fb; --fg:#111; --muted:#6b7280; --card:#ffffff;
@@ -259,6 +278,7 @@
    }
 
    // 관리자 페이지로 이동 (서버에서 현재 배포 URL을 받아 안전하게 이동)
+  // 모바일 브라우저이거나 ?platform=mobile 강제 시 platform 파라미터를 붙여 m_spa로 이동
   function goAdmin() {
      google.script.run
        .withSuccessHandler(function (baseUrl) {
@@ -267,12 +287,15 @@
            alert('관리자 URL을 가져오지 못했습니다.');
            return;
          }
-         // 모바일이면 &platform=mobile 추가 → SPA 모드로 진입
-         var url = baseUrl + '?view=admin';
-         if (isMobileDevice()) {
-           url += '&platform=mobile';
+         // 모바일 UA면 ?platform=mobile 붙이기, 아니면 기존 ?view=admin 유지
+         var target;
+         if (window.__IS_MOBILE_UA) {
+           target = baseUrl + '?platform=mobile';
+         } else {
+           target = baseUrl + '?view=admin';
          }
-         window.top.location.href = url;
+         // 성공 시 오버레이는 계속 띄운 채로 페이지 전환
+         window.location.href = target;
        })
        .withFailureHandler(function (err) {
          hideBusy();

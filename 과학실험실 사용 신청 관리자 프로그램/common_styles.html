@@ -516,6 +516,136 @@ function showEmpty(el, msg='데이터가 없습니다', hint='') {
   if (typeof el === 'string') el = $(el);
   if (el) el.innerHTML = `<div class="empty-state"><div class="empty-icon">📭</div><div class="empty-text">${msg}</div>${hint?`<div style="font-size:13px;margin-top:8px;">${hint}</div>`:''}</div>`;
 }
+
+/* ============================================================
+   공통 작업 오버레이 (common_styles)
+   - admin.html은 자체 ensureBusyOverlay 사용, 여기서는 다른 페이지(chemical_list, student_list, teacher_schedule, common_list)를 위해 동일 API 제공
+   - 이미 정의되어 있으면 재정의하지 않음 (중복 로드 대비)
+   ============================================================ */
+if (typeof window.showGlobalBusy !== 'function') {
+  (function(){
+    var BUSY_COUNT = 0;
+
+    function ensureBusyOverlay(){
+      if (!document.getElementById('commonBusyOverlayStyle')) {
+        var st = document.createElement('style');
+        st.id = 'commonBusyOverlayStyle';
+        st.textContent = ''
+          + '#busyOverlay{position:fixed;inset:0;display:none;align-items:center;justify-content:center;'
+          + 'background:rgba(255,255,255,0.85);z-index:99999;-webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px);'
+          + 'animation:cbOverlayFadeIn .18s ease-out;}'
+          + '@keyframes cbOverlayFadeIn{from{opacity:0;}to{opacity:1;}}'
+          + '#busyOverlay .busy-card{background:#fff;padding:32px 44px;border-radius:16px;'
+          + 'box-shadow:0 8px 32px rgba(0,0,0,.18);min-width:260px;max-width:92vw;text-align:center;border:1px solid #e5e7eb;}'
+          + '#busyOverlay .busy-visual{margin:0 auto 14px;display:flex;align-items:center;justify-content:center;}'
+          + '#busyOverlay .busy-spinner{width:48px;height:48px;border:5px solid #e5e7eb;border-top-color:#2563eb;border-radius:50%;animation:cbBusySpin .9s linear infinite;}'
+          + '#busyOverlay .busy-icon{width:56px;height:56px;border-radius:50%;display:flex;align-items:center;justify-content:center;'
+          + 'font-size:30px;font-weight:bold;color:#fff;animation:cbBusyPop .32s ease-out;}'
+          + '#busyOverlay .busy-icon.success{background:#16a34a;}'
+          + '#busyOverlay .busy-icon.error{background:#dc2626;}'
+          + '@keyframes cbBusySpin{to{transform:rotate(360deg);}}'
+          + '@keyframes cbBusyPop{0%{transform:scale(0.5);opacity:0;}60%{transform:scale(1.08);opacity:1;}100%{transform:scale(1);opacity:1;}}'
+          + '#busyOverlay .busy-title{font-size:1.1rem;font-weight:700;color:#111827;margin:0 0 4px;}'
+          + '#busyOverlay .busy-sub{font-size:0.92rem;color:#4b5563;line-height:1.5;white-space:pre-wrap;word-break:keep-all;}'
+          + '#busyOverlay .busy-close{display:none;margin-top:14px;padding:9px 22px;background:#2563eb;color:#fff;border:none;'
+          + 'border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;min-height:40px;min-width:80px;}'
+          + '#busyOverlay .busy-close:hover{background:#1d4ed8;}'
+          + '#busyOverlay .busy-close.show{display:inline-block;}'
+          + '@media (prefers-reduced-motion: reduce){#busyOverlay,#busyOverlay .busy-icon,#busyOverlay .busy-spinner{animation:none !important;}}';
+        document.head.appendChild(st);
+      }
+      if (!document.getElementById('busyOverlay')) {
+        var wrap = document.createElement('div');
+        wrap.id = 'busyOverlay';
+        wrap.setAttribute('aria-hidden', 'true');
+        wrap.innerHTML = ''
+          + '<div class="busy-card" role="status" aria-live="assertive">'
+          + '<div class="busy-visual" id="busyVisual"><div class="busy-spinner"></div></div>'
+          + '<div class="busy-title" id="busyTitle">작업 중입니다</div>'
+          + '<div class="busy-sub" id="busyMsg">잠시만 기다려주세요…</div>'
+          + '<button type="button" class="busy-close" id="busyCloseBtn">닫기</button>'
+          + '</div>';
+        document.body.appendChild(wrap);
+        document.getElementById('busyCloseBtn').addEventListener('click', window.hideGlobalBusy);
+      }
+    }
+
+    function applyState(state, title, sub) {
+      var visual = document.getElementById('busyVisual');
+      var tEl    = document.getElementById('busyTitle');
+      var sEl    = document.getElementById('busyMsg');
+      var closeBtn = document.getElementById('busyCloseBtn');
+      if (!visual) return;
+      if (state === 'loading') {
+        visual.innerHTML = '<div class="busy-spinner" aria-hidden="true"></div>';
+        tEl.textContent  = title || '저장 중입니다';
+        sEl.textContent  = sub   || '잠시만 기다려주세요…';
+        closeBtn.classList.remove('show');
+      } else if (state === 'success') {
+        visual.innerHTML = '<div class="busy-icon success" aria-hidden="true">✓</div>';
+        tEl.textContent  = title || '저장되었습니다';
+        sEl.textContent  = sub   || '작업이 완료되었습니다.';
+        closeBtn.classList.remove('show');
+      } else if (state === 'error') {
+        visual.innerHTML = '<div class="busy-icon error" aria-hidden="true">!</div>';
+        tEl.textContent  = title || '오류가 발생했습니다';
+        sEl.textContent  = sub   || '다시 시도해 주세요.';
+        closeBtn.classList.add('show');
+      }
+    }
+
+    window.showGlobalBusy = function(msg){
+      ensureBusyOverlay();
+      BUSY_COUNT++;
+      applyState('loading', msg || '저장 중입니다', '잠시만 기다려주세요…');
+      var el = document.getElementById('busyOverlay');
+      el.style.display = 'flex';
+      el.setAttribute('aria-hidden', 'false');
+      document.body.style.overflow = 'hidden';
+      document.body.style.pointerEvents = 'none';
+      el.style.pointerEvents = 'auto';
+    };
+
+    window.hideGlobalBusy = function(){
+      BUSY_COUNT = Math.max(0, BUSY_COUNT - 1);
+      if (BUSY_COUNT > 0) return;
+      var el = document.getElementById('busyOverlay');
+      if (el) {
+        el.style.display = 'none';
+        el.setAttribute('aria-hidden', 'true');
+      }
+      document.body.style.overflow = '';
+      document.body.style.pointerEvents = '';
+    };
+
+    window.showGlobalSuccess = function(title, sub, autoCloseMs){
+      ensureBusyOverlay();
+      if (BUSY_COUNT <= 0) BUSY_COUNT = 1;
+      applyState('success', title, sub);
+      var el = document.getElementById('busyOverlay');
+      el.style.display = 'flex';
+      el.setAttribute('aria-hidden', 'false');
+      document.body.style.overflow = 'hidden';
+      document.body.style.pointerEvents = 'none';
+      el.style.pointerEvents = 'auto';
+      var delay = (typeof autoCloseMs === 'number') ? autoCloseMs : 2200;
+      if (delay > 0) setTimeout(window.hideGlobalBusy, delay);
+      else document.getElementById('busyCloseBtn').classList.add('show');
+    };
+
+    window.showGlobalError = function(title, sub){
+      ensureBusyOverlay();
+      if (BUSY_COUNT <= 0) BUSY_COUNT = 1;
+      applyState('error', title, sub);
+      var el = document.getElementById('busyOverlay');
+      el.style.display = 'flex';
+      el.setAttribute('aria-hidden', 'false');
+      document.body.style.overflow = 'hidden';
+      document.body.style.pointerEvents = 'none';
+      el.style.pointerEvents = 'auto';
+    };
+  })();
+}
 function showModal(id) { const m = document.getElementById(id); if(m) m.classList.add('show'); }
 function hideModal(id) { const m = document.getElementById(id); if(m) m.classList.remove('show'); }
 document.addEventListener('click', e => { if(e.target.classList.contains('modal')) e.target.classList.remove('show'); });

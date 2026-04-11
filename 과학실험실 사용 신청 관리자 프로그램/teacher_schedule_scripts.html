@@ -572,28 +572,43 @@ function saveEdit() {
     '임장지도 종료시간': endTime
   };
   
-  // 저장 버튼 비활성화
+  // 저장 버튼 비활성화 + 전체화면 오버레이
   const saveBtn = document.querySelector('#editModal .btn-primary');
   saveBtn.disabled = true;
   saveBtn.textContent = '저장 중...';
-  
+  if (typeof showGlobalBusy === 'function') showGlobalBusy('저장 중입니다');
+
   google.script.run
     .withSuccessHandler(function(result) {
       saveBtn.disabled = false;
       saveBtn.textContent = '저장';
-      
+
       if (result && result.success) {
-        alert('저장되었습니다.');
         hideModal('editModal');
         loadData(); // 데이터 새로고침
+        if (typeof showGlobalSuccess === 'function') {
+          showGlobalSuccess('저장되었습니다', '일정이 업데이트되었습니다.');
+        } else {
+          alert('저장되었습니다.');
+        }
       } else {
-        alert('저장 실패: ' + (result?.message || '알 수 없는 오류'));
+        var msg = (result && result.message) || '알 수 없는 오류';
+        if (typeof showGlobalError === 'function') {
+          showGlobalError('저장 실패', msg);
+        } else {
+          alert('저장 실패: ' + msg);
+        }
       }
     })
     .withFailureHandler(function(err) {
       saveBtn.disabled = false;
       saveBtn.textContent = '저장';
-      alert('저장 실패: ' + (err.message || err));
+      var msg = (err && (err.message || err)) || '알 수 없는 오류';
+      if (typeof showGlobalError === 'function') {
+        showGlobalError('저장 실패', msg);
+      } else {
+        alert('저장 실패: ' + msg);
+      }
     })
     .updateScheduleFields(appId, updates);
 }

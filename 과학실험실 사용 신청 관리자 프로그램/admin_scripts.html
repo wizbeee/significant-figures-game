@@ -82,7 +82,7 @@ function updateTimeOrderVisibility(){
   }
 }
 
-// ==== 전역 작업 오버레이 유틸 ====
+// ==== 전역 작업 오버레이 유틸 (loading / success / error 상태 지원) ====
 let BUSY_COUNT = 0;
 
 function ensureBusyOverlay(){
@@ -94,19 +94,56 @@ function ensureBusyOverlay(){
       #busyOverlay{
         position:fixed; inset:0; display:none;
         align-items:center; justify-content:center;
-        background:rgba(0,0,0,.35); z-index:99999;
+        background:rgba(255,255,255,0.85); z-index:99999;
+        -webkit-backdrop-filter:blur(4px); backdrop-filter:blur(4px);
+        animation:busyOverlayFadeIn .18s ease-out;
       }
-      #busyOverlay .busy-box{
-        background:#fff; padding:16px 20px; border-radius:12px;
-        box-shadow:0 6px 24px rgba(0,0,0,.2);
-        display:flex; align-items:center; gap:10px; font-weight:600;
+      @keyframes busyOverlayFadeIn { from { opacity:0; } to { opacity:1; } }
+      #busyOverlay .busy-card{
+        background:#fff; padding:32px 44px; border-radius:16px;
+        box-shadow:0 8px 32px rgba(0,0,0,.18);
+        min-width:260px; max-width:92vw;
+        text-align:center; border:1px solid #e5e7eb;
+      }
+      #busyOverlay .busy-visual{
+        margin:0 auto 14px;
+        display:flex; align-items:center; justify-content:center;
       }
       #busyOverlay .busy-spinner{
-        width:18px; height:18px; border:3px solid #ddd;
-        border-top-color:#0a84ff; border-radius:50%;
+        width:48px; height:48px; border:5px solid #e5e7eb;
+        border-top-color:#2563eb; border-radius:50%;
         animation:busyspin .9s linear infinite;
       }
+      #busyOverlay .busy-icon{
+        width:56px; height:56px; border-radius:50%;
+        display:flex; align-items:center; justify-content:center;
+        font-size:30px; font-weight:bold; color:#fff;
+        animation:busyPop .32s ease-out;
+      }
+      #busyOverlay .busy-icon.success{ background:#16a34a; }
+      #busyOverlay .busy-icon.error{ background:#dc2626; }
       @keyframes busyspin { to { transform: rotate(360deg); } }
+      @keyframes busyPop { 0%{transform:scale(0.5);opacity:0;} 60%{transform:scale(1.08);opacity:1;} 100%{transform:scale(1);opacity:1;} }
+      #busyOverlay .busy-title{
+        font-size:1.1rem; font-weight:700; color:#111827;
+        margin:0 0 4px;
+      }
+      #busyOverlay .busy-sub{
+        font-size:0.92rem; color:#4b5563;
+        line-height:1.5; white-space:pre-wrap; word-break:keep-all;
+      }
+      #busyOverlay .busy-close{
+        display:none;
+        margin-top:14px; padding:9px 22px;
+        background:#2563eb; color:#fff; border:none;
+        border-radius:8px; font-size:14px; font-weight:600;
+        cursor:pointer; min-height:40px; min-width:80px;
+      }
+      #busyOverlay .busy-close:hover{ background:#1d4ed8; }
+      #busyOverlay .busy-close.show{ display:inline-block; }
+      @media (prefers-reduced-motion: reduce) {
+        #busyOverlay, #busyOverlay .busy-icon, #busyOverlay .busy-spinner { animation:none !important; }
+      }
     `;
     document.head.appendChild(st);
   }
@@ -116,21 +153,48 @@ function ensureBusyOverlay(){
     const wrap = document.createElement('div');
     wrap.id = 'busyOverlay';
     wrap.innerHTML = `
-      <div class="busy-box">
-        <span class="busy-spinner"></span>
-        <span id="busyMsg">작업 중… 잠시 기다려주세요.</span>
+      <div class="busy-card" role="status" aria-live="assertive">
+        <div class="busy-visual" id="busyVisual"><div class="busy-spinner"></div></div>
+        <div class="busy-title" id="busyTitle">작업 중입니다</div>
+        <div class="busy-sub" id="busyMsg">잠시만 기다려주세요…</div>
+        <button type="button" class="busy-close" id="busyCloseBtn">닫기</button>
       </div>`;
     document.body.appendChild(wrap);
+    document.getElementById('busyCloseBtn').addEventListener('click', hideGlobalBusy);
   }
 }
 
-function showGlobalBusy(msg = '작업 중… 잠시 기다려주세요.'){
+function _applyBusyState(state, title, sub) {
+  const visual = document.getElementById('busyVisual');
+  const tEl    = document.getElementById('busyTitle');
+  const sEl    = document.getElementById('busyMsg');
+  const closeBtn = document.getElementById('busyCloseBtn');
+  if (!visual) return;
+  if (state === 'loading') {
+    visual.innerHTML = '<div class="busy-spinner" aria-hidden="true"></div>';
+    tEl.textContent  = title || '저장 중입니다';
+    sEl.textContent  = sub   || '잠시만 기다려주세요…';
+    closeBtn.classList.remove('show');
+  } else if (state === 'success') {
+    visual.innerHTML = '<div class="busy-icon success" aria-hidden="true">✓</div>';
+    tEl.textContent  = title || '저장되었습니다';
+    sEl.textContent  = sub   || '작업이 완료되었습니다.';
+    closeBtn.classList.remove('show');
+  } else if (state === 'error') {
+    visual.innerHTML = '<div class="busy-icon error" aria-hidden="true">!</div>';
+    tEl.textContent  = title || '오류가 발생했습니다';
+    sEl.textContent  = sub   || '다시 시도해 주세요.';
+    closeBtn.classList.add('show');
+  }
+}
+
+function showGlobalBusy(msg = '저장 중입니다'){
   ensureBusyOverlay();
   BUSY_COUNT++;
+  _applyBusyState('loading', msg, '잠시만 기다려주세요…');
   const el = document.getElementById('busyOverlay');
-  const m  = document.getElementById('busyMsg');
-  if (m) m.textContent = msg;
   el.style.display = 'flex';
+  el.setAttribute('aria-hidden', 'false');
   document.body.style.overflow = 'hidden';
   document.body.style.pointerEvents = 'none';
   el.style.pointerEvents = 'auto';
@@ -140,9 +204,57 @@ function hideGlobalBusy(){
   BUSY_COUNT = Math.max(0, BUSY_COUNT - 1);
   if (BUSY_COUNT > 0) return;
   const el = document.getElementById('busyOverlay');
-  if (el) el.style.display = 'none';
+  if (el) {
+    el.style.display = 'none';
+    el.setAttribute('aria-hidden', 'true');
+  }
   document.body.style.overflow = '';
   document.body.style.pointerEvents = '';
+}
+
+/**
+ * 전역 성공 피드백 — 스피너 → 체크 → 자동 닫힘
+ * @param {string} title 예: '저장되었습니다'
+ * @param {string} sub   예: '변경사항이 반영되었습니다.'
+ * @param {number} autoCloseMs  자동 닫힘 지연 (기본 2200ms), 0이면 수동 닫기
+ */
+function showGlobalSuccess(title, sub, autoCloseMs){
+  ensureBusyOverlay();
+  // 카운터가 이미 0이면 올려서 hideGlobalBusy 1회 호출이 정상 동작하게 맞춤
+  if (BUSY_COUNT <= 0) BUSY_COUNT = 1;
+  _applyBusyState('success', title, sub);
+  const el = document.getElementById('busyOverlay');
+  el.style.display = 'flex';
+  el.setAttribute('aria-hidden', 'false');
+  document.body.style.overflow = 'hidden';
+  document.body.style.pointerEvents = 'none';
+  el.style.pointerEvents = 'auto';
+  const delay = (typeof autoCloseMs === 'number') ? autoCloseMs : 2200;
+  if (delay > 0) {
+    setTimeout(function(){
+      // hideGlobalBusy가 카운터를 감소시키므로 한 번만 호출
+      hideGlobalBusy();
+    }, delay);
+  } else {
+    // 수동 닫기 모드
+    const closeBtn = document.getElementById('busyCloseBtn');
+    if (closeBtn) closeBtn.classList.add('show');
+  }
+}
+
+/**
+ * 전역 오류 피드백 — 스피너 → X 아이콘 → 닫기 버튼 (수동 닫기)
+ */
+function showGlobalError(title, sub){
+  ensureBusyOverlay();
+  if (BUSY_COUNT <= 0) BUSY_COUNT = 1;
+  _applyBusyState('error', title, sub);
+  const el = document.getElementById('busyOverlay');
+  el.style.display = 'flex';
+  el.setAttribute('aria-hidden', 'false');
+  document.body.style.overflow = 'hidden';
+  document.body.style.pointerEvents = 'none';
+  el.style.pointerEvents = 'auto';
 }
 
 // ==== 날짜 파서(정렬 안정화용) ====
@@ -1062,16 +1174,22 @@ function saveAllEdits(){
   if (PENDING.size===0){ alert('변경 사항이 없습니다.'); return; }
 
   // ★ 추가: 저장 시작 시 화면 잠금
-  showGlobalBusy('저장 중... 잠시 기다려주세요.');
+  showGlobalBusy('저장 중입니다');
 
   const ids = Array.from(PENDING.keys());
   const run = (i=0, ok=0, fail=0) => {
     if (i>=ids.length){
-      alert(`저장 완료: ${ok}건 성공, ${fail}건 실패`);
       $$('#applicationTableBody td.pending-changed').forEach(td=>td.classList.remove('pending-changed'));
       PENDING.clear();
       updateStatsLocal();
-      hideGlobalBusy();                 // 끝에서 한 번만 해제
+      // hideGlobalBusy() 생략 — show*가 동일 overlay의 상태만 전환하므로 깜빡임 없음
+      if (fail === 0) {
+        showGlobalSuccess('저장되었습니다', ok + '건이 저장되었습니다.');
+      } else if (ok === 0) {
+        showGlobalError('저장 실패', '전체 ' + fail + '건이 저장되지 못했습니다. 네트워크를 확인한 뒤 다시 시도해 주세요.');
+      } else {
+        showGlobalError('일부 저장 실패', '성공 ' + ok + '건, 실패 ' + fail + '건입니다. 실패 건을 확인해 주세요.');
+      }
       return;
     }
     const id = ids[i];
@@ -1536,32 +1654,28 @@ function saveEdit(id){
 
   google.script.run
     .withSuccessHandler(r => {
-      try {
-        if (r && r.success){
-          const app = ALL.find(a => String(a['신청ID'])===String(id));
-          if (app) Object.assign(app, updated);
-          const tr = document.querySelector(`#applicationTableBody tr[data-id="${cssEsc(id)}"]`);
-          if (tr){
-            const tds = tr.children;
-            tds[3].textContent = String(updated['신청실험실']||app['신청실험실']||'');
-            tds[4].textContent = fmtDate(updated['실험할날짜']||app['실험할날짜']||'', false);
-            tds[5].textContent = String(updated['신청시간']||app['신청시간']||'');
-            tds[6].textContent = String(updated['실험제목']||app['실험제목']||'');
-            tds[7].innerHTML  = statusBadge(calcStatus(app));
-            tds[8].textContent = String(updated['지도교사이름']||app['지도교사이름']||'');
-          }
-          updateStatsLocal();
-          closeDetail();
-        } else {
-          alert('수정 실패: '+((r&&r.message)||'알 수 없는 오류'));
+      if (r && r.success){
+        const app = ALL.find(a => String(a['신청ID'])===String(id));
+        if (app) Object.assign(app, updated);
+        const tr = document.querySelector(`#applicationTableBody tr[data-id="${cssEsc(id)}"]`);
+        if (tr){
+          const tds = tr.children;
+          tds[3].textContent = String(updated['신청실험실']||app['신청실험실']||'');
+          tds[4].textContent = fmtDate(updated['실험할날짜']||app['실험할날짜']||'', false);
+          tds[5].textContent = String(updated['신청시간']||app['신청시간']||'');
+          tds[6].textContent = String(updated['실험제목']||app['실험제목']||'');
+          tds[7].innerHTML  = statusBadge(calcStatus(app));
+          tds[8].textContent = String(updated['지도교사이름']||app['지도교사이름']||'');
         }
-      } finally {
-        hideGlobalBusy();   // ← 성공/실패 관계없이 반드시 숨김
+        updateStatsLocal();
+        closeDetail();
+        showGlobalSuccess('저장되었습니다', '신청 정보가 반영되었습니다.');
+      } else {
+        showGlobalError('수정 실패', (r && r.message) || '알 수 없는 오류');
       }
     })
     .withFailureHandler(err => {
-      alert('수정 실패: '+(err.message||err));
-      hideGlobalBusy();     // ← 실패 시에도 숨김
+      showGlobalError('수정 실패', (err && (err.message||err)) || '알 수 없는 오류');
     })
     .updateFullApplication(id, updated);
 }
@@ -1623,31 +1737,32 @@ function showDetailSaveBar(appId) {
 }
 function saveDetailInlineChanges(appId) {
   if (Object.keys(DETAIL_CHANGES).length === 0) return;
-  showGlobalBusy('저장 중...');
+  showGlobalBusy('저장 중입니다');
   google.script.run
-    .withSuccessHandler(function() { hideGlobalBusy(); DETAIL_CHANGES = {}; loadAll(); })
-    .withFailureHandler(function(e) { hideGlobalBusy(); alert('저장 실패: ' + e.message); })
+    .withSuccessHandler(function() {
+      DETAIL_CHANGES = {};
+      loadAll();
+      showGlobalSuccess('저장되었습니다', '상세 항목이 반영되었습니다.');
+    })
+    .withFailureHandler(function(e) {
+      showGlobalError('저장 실패', (e && (e.message || e)) || '알 수 없는 오류');
+    })
     .updateApplicationField(appId, DETAIL_CHANGES);
 }
 
 function deleteOne(id){
   if (!confirm('정말 삭제하시겠습니까?')) return;
   if (prompt('삭제를 확인하려면 "삭제"를 입력하세요') !== '삭제') return;
-  showGlobalBusy('삭제 중... 잠시 기다려주세요.');
+  showGlobalBusy('삭제 중입니다');
 
   google.script.run
     .withSuccessHandler(msg => {
-      try {
-        alert(msg || '삭제되었습니다.');
-        removeLocallyById(id);
-        closeDetail();
-      } finally {
-        hideGlobalBusy();
-      }
+      removeLocallyById(id);
+      closeDetail();
+      showGlobalSuccess('삭제되었습니다', msg || '신청 1건이 삭제되었습니다.');
     })
     .withFailureHandler(err => {
-      alert('삭제 실패: '+(err.message||err));
-      hideGlobalBusy();
+      showGlobalError('삭제 실패', (err && (err.message || err)) || '알 수 없는 오류');
     })
     .deleteApplication(id);
 }
@@ -1656,14 +1771,19 @@ function bulkDelete(){
   if (SELECTED.size === 0){ alert('삭제할 신청을 선택하세요.'); return; }
   if (!confirm(`선택한 ${SELECTED.size}건을 삭제하시겠습니까?`)) return;
 
-  showGlobalBusy('삭제 중... 잠시 기다려주세요.');
+  showGlobalBusy('삭제 중입니다');
 
   const ids = Array.from(SELECTED);
   const run = (i=0,ok=0,fail=0)=>{
     if (i>=ids.length){
-      alert(`삭제 완료: ${ok}건 성공, ${fail}건 실패`);
       $('#selectAll').checked = false;
-      hideGlobalBusy();               // ← 마지막에 숨김
+      if (fail === 0) {
+        showGlobalSuccess('삭제되었습니다', ok + '건이 삭제되었습니다.');
+      } else if (ok === 0) {
+        showGlobalError('삭제 실패', '전체 ' + fail + '건이 삭제되지 못했습니다.');
+      } else {
+        showGlobalError('일부 삭제 실패', '성공 ' + ok + '건, 실패 ' + fail + '건입니다.');
+      }
       return;
     }
     const id = ids[i];
@@ -1798,24 +1918,19 @@ function saveGuidance(){
     alert('실험날짜/학번/이름은 필수입니다.'); return;
   }
 
-  showGlobalBusy('저장 중... 잠시 기다려주세요.');
+  showGlobalBusy('저장 중입니다');
 
   google.script.run
     .withSuccessHandler(r=>{
-      try{
-        if (r && r.success){
-          alert('기록이 저장되었습니다.');
-          closeGuidanceModal();
-        } else {
-          alert('저장 실패: '+((r&&r.message)||'알 수 없는 오류'));
-        }
-      } finally {
-        hideGlobalBusy();
+      if (r && r.success){
+        closeGuidanceModal();
+        showGlobalSuccess('저장되었습니다', '지도 일지가 저장되었습니다.');
+      } else {
+        showGlobalError('저장 실패', (r && r.message) || '알 수 없는 오류');
       }
     })
     .withFailureHandler(err=>{
-      alert('저장 실패: '+(err.message||err));
-      hideGlobalBusy();
+      showGlobalError('저장 실패', (err && (err.message||err)) || '알 수 없는 오류');
     })
     .addLabGuidanceLog(entry);
 }
@@ -1970,25 +2085,22 @@ function saveRestrictionPolicy(){
     return;
   }
 
-  showGlobalBusy('설정 저장 중... 잠시 기다려주세요.');
+  showGlobalBusy('설정 저장 중입니다');
 
   google.script.run
     .withSuccessHandler(_=>{
       // 저장 성공 후 즉시 만료 정리(요청 이슈 대응)
       google.script.run
         .withSuccessHandler(()=>{
-          alert('정책이 저장되었습니다.');
-          hideGlobalBusy();
+          showGlobalSuccess('저장되었습니다', '제한 정책이 저장되었습니다.');
         })
         .withFailureHandler(err=>{
-          alert('정책 저장은 완료했지만, 만료 정리 중 오류: '+(err.message||err));
-          hideGlobalBusy();
+          showGlobalError('만료 정리 오류', '정책 저장은 완료했지만 만료 정리 중 오류: ' + ((err && (err.message||err)) || ''));
         })
         .purgeExpiredRestrictions();
     })
     .withFailureHandler(err=>{
-      alert('정책 저장 실패: '+(err.message||err));
-      hideGlobalBusy();
+      showGlobalError('정책 저장 실패', (err && (err.message||err)) || '알 수 없는 오류');
     })
     .saveRestrictionPolicy(payload);
 }

@@ -422,9 +422,11 @@
   </div>
 </div>
 
-<div id="busyOverlay" aria-live="polite" aria-busy="true" style="display:none">
-  <div class="busy-box">
-    <span class="busy-spinner"></span>
-    <span id="busyMsg">저장 중… 잠시 기다려주세요.</span>
+<div id="busyOverlay" role="status" aria-live="assertive" aria-hidden="true" style="display:none">
+  <div class="busy-card">
+    <div class="busy-visual" id="busyVisual"><div class="busy-spinner"></div></div>
+    <div class="busy-title" id="busyTitle">저장 중입니다</div>
+    <div class="busy-sub" id="busyMsg">잠시만 기다려주세요…</div>
+    <button type="button" class="busy-close" id="busyCloseBtn">닫기</button>
   </div>
 </div>

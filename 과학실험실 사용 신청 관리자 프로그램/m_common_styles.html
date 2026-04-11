@@ -42,7 +42,11 @@ button, select, input, textarea, a,
 body {
   font-family: 'Pretendard', -apple-system, 'Noto Sans KR', sans-serif;
   background: var(--bg); color: var(--text);
-  margin: 0 auto; min-height: 100vh; position: relative; overflow-x: hidden;
+  margin: 0 auto;
+  /* iOS Safari 주소창 표시/숨김 시 레이아웃 튐 방지: dvh 우선, 미지원 브라우저는 100vh 폴백 */
+  min-height: 100vh;
+  min-height: 100dvh;
+  position: relative; overflow-x: hidden;
   overscroll-behavior-y: none;
   -webkit-overflow-scrolling: touch;
 }
@@ -111,6 +115,8 @@ body {
   border-radius: 10px; background: var(--surface); font-size: 13px;
   font-weight: 600; color: var(--text-muted); cursor: pointer; transition: all 0.15s;
   text-align: center;
+  min-height: 48px; /* WCAG 2.5.5 터치 타겟 최소 크기 */
+  display: flex; align-items: center; justify-content: center;
 }
 .quick-btn.active { background: var(--primary); color: white; border-color: var(--primary); }
 .filter-toggle {
@@ -299,6 +305,24 @@ button:active, .card-btn:active, .action-btn:active, .quick-btn:active,
 .action-btn {
   flex: 1; padding: 14px 0; border-radius: 12px; font-size: 14px;
   font-weight: 700; cursor: pointer; border: none; text-align: center; min-height: 48px;
+  transition: opacity 0.15s;
+}
+/* 저장/처리 중 비활성 상태 시각 피드백 */
+.action-btn:disabled,
+.action-btn[aria-busy="true"] {
+  opacity: 0.5;
+  cursor: not-allowed;
+  pointer-events: none;
+  filter: grayscale(0.3);
+}
+/* 공통 버튼 disabled (quick-btn/card-btn 등도 커버) */
+button:disabled,
+.quick-btn:disabled,
+.card-btn:disabled,
+.filter-search-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  pointer-events: none;
 }
 .btn-first { background: #d1fae5; color: #065f46; }
 .btn-final { background: var(--primary); color: white; }
@@ -682,6 +706,125 @@ function closeMenu() {
 }
 
 document.addEventListener('DOMContentLoaded', initTheme);
+
+/* ============================================================
+   모바일 공통 작업 오버레이 (loading / success / error)
+   - 이미 정의되어 있으면 재정의하지 않음
+   ============================================================ */
+if (typeof window.showGlobalBusy !== 'function') {
+  (function(){
+    var BUSY_COUNT = 0;
+
+    function ensureBusyOverlay(){
+      if (!document.getElementById('mBusyOverlayStyle')) {
+        var st = document.createElement('style');
+        st.id = 'mBusyOverlayStyle';
+        st.textContent = ''
+          + '#busyOverlay{position:fixed;inset:0;display:none;align-items:center;justify-content:center;'
+          + 'background:rgba(255,255,255,0.88);z-index:99999;-webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px);'
+          + 'animation:mbOverlayFadeIn .18s ease-out;}'
+          + '@keyframes mbOverlayFadeIn{from{opacity:0;}to{opacity:1;}}'
+          + '#busyOverlay .busy-card{background:#fff;padding:28px 36px;border-radius:16px;'
+          + 'box-shadow:0 8px 32px rgba(0,0,0,.2);min-width:240px;max-width:86vw;text-align:center;border:1px solid #e5e7eb;}'
+          + '#busyOverlay .busy-visual{margin:0 auto 12px;display:flex;align-items:center;justify-content:center;}'
+          + '#busyOverlay .busy-spinner{width:44px;height:44px;border:5px solid #e5e7eb;border-top-color:#2563eb;border-radius:50%;animation:mbBusySpin .9s linear infinite;}'
+          + '#busyOverlay .busy-icon{width:52px;height:52px;border-radius:50%;display:flex;align-items:center;justify-content:center;'
+          + 'font-size:28px;font-weight:bold;color:#fff;animation:mbBusyPop .32s ease-out;}'
+          + '#busyOverlay .busy-icon.success{background:#16a34a;}'
+          + '#busyOverlay .busy-icon.error{background:#dc2626;}'
+          + '@keyframes mbBusySpin{to{transform:rotate(360deg);}}'
+          + '@keyframes mbBusyPop{0%{transform:scale(0.5);opacity:0;}60%{transform:scale(1.08);opacity:1;}100%{transform:scale(1);opacity:1;}}'
+          + '#busyOverlay .busy-title{font-size:1.05rem;font-weight:700;color:#111827;margin:0 0 4px;}'
+          + '#busyOverlay .busy-sub{font-size:0.9rem;color:#4b5563;line-height:1.5;white-space:pre-wrap;word-break:keep-all;}'
+          + '#busyOverlay .busy-close{display:none;margin-top:14px;padding:10px 22px;background:#2563eb;color:#fff;border:none;'
+          + 'border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;min-height:44px;min-width:88px;}'
+          + '#busyOverlay .busy-close:hover{background:#1d4ed8;}'
+          + '#busyOverlay .busy-close.show{display:inline-block;}'
+          + '@media (prefers-reduced-motion: reduce){#busyOverlay,#busyOverlay .busy-icon,#busyOverlay .busy-spinner{animation:none !important;}}';
+        document.head.appendChild(st);
+      }
+      if (!document.getElementById('busyOverlay')) {
+        var wrap = document.createElement('div');
+        wrap.id = 'busyOverlay';
+        wrap.setAttribute('aria-hidden', 'true');
+        wrap.innerHTML = ''
+          + '<div class="busy-card" role="status" aria-live="assertive">'
+          + '<div class="busy-visual" id="busyVisual"><div class="busy-spinner"></div></div>'
+          + '<div class="busy-title" id="busyTitle">저장 중입니다</div>'
+          + '<div class="busy-sub" id="busyMsg">잠시만 기다려주세요…</div>'
+          + '<button type="button" class="busy-close" id="busyCloseBtn">닫기</button>'
+          + '</div>';
+        document.body.appendChild(wrap);
+        document.getElementById('busyCloseBtn').addEventListener('click', window.hideGlobalBusy);
+      }
+    }
+
+    function applyState(state, title, sub) {
+      var visual = document.getElementById('busyVisual');
+      var tEl    = document.getElementById('busyTitle');
+      var sEl    = document.getElementById('busyMsg');
+      var closeBtn = document.getElementById('busyCloseBtn');
+      if (!visual) return;
+      if (state === 'loading') {
+        visual.innerHTML = '<div class="busy-spinner" aria-hidden="true"></div>';
+        tEl.textContent  = title || '저장 중입니다';
+        sEl.textContent  = sub   || '잠시만 기다려주세요…';
+        closeBtn.classList.remove('show');
+      } else if (state === 'success') {
+        visual.innerHTML = '<div class="busy-icon success" aria-hidden="true">✓</div>';
+        tEl.textContent  = title || '저장되었습니다';
+        sEl.textContent  = sub   || '작업이 완료되었습니다.';
+        closeBtn.classList.remove('show');
+      } else if (state === 'error') {
+        visual.innerHTML = '<div class="busy-icon error" aria-hidden="true">!</div>';
+        tEl.textContent  = title || '오류가 발생했습니다';
+        sEl.textContent  = sub   || '다시 시도해 주세요.';
+        closeBtn.classList.add('show');
+      }
+    }
+
+    window.showGlobalBusy = function(msg){
+      ensureBusyOverlay();
+      BUSY_COUNT++;
+      applyState('loading', msg || '저장 중입니다', '잠시만 기다려주세요…');
+      var el = document.getElementById('busyOverlay');
+      el.style.display = 'flex';
+      el.setAttribute('aria-hidden', 'false');
+      document.body.style.overflow = 'hidden';
+    };
+    window.hideGlobalBusy = function(){
+      BUSY_COUNT = Math.max(0, BUSY_COUNT - 1);
+      if (BUSY_COUNT > 0) return;
+      var el = document.getElementById('busyOverlay');
+      if (el) {
+        el.style.display = 'none';
+        el.setAttribute('aria-hidden', 'true');
+      }
+      document.body.style.overflow = '';
+    };
+    window.showGlobalSuccess = function(title, sub, autoCloseMs){
+      ensureBusyOverlay();
+      if (BUSY_COUNT <= 0) BUSY_COUNT = 1;
+      applyState('success', title, sub);
+      var el = document.getElementById('busyOverlay');
+      el.style.display = 'flex';
+      el.setAttribute('aria-hidden', 'false');
+      document.body.style.overflow = 'hidden';
+      var delay = (typeof autoCloseMs === 'number') ? autoCloseMs : 2200;
+      if (delay > 0) setTimeout(window.hideGlobalBusy, delay);
+      else document.getElementById('busyCloseBtn').classList.add('show');
+    };
+    window.showGlobalError = function(title, sub){
+      ensureBusyOverlay();
+      if (BUSY_COUNT <= 0) BUSY_COUNT = 1;
+      applyState('error', title, sub);
+      var el = document.getElementById('busyOverlay');
+      el.style.display = 'flex';
+      el.setAttribute('aria-hidden', 'false');
+      document.body.style.overflow = 'hidden';
+    };
+  })();
+}
 
 /* ===== 버튼 리플 효과 (글로벌) ===== */
 document.addEventListener('click', function(e) {
