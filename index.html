@@ -274,7 +274,7 @@ h2{font-size:1.4rem;color:var(--txt2);margin-bottom:25px;font-weight:400}
 <label style="display:block;margin-bottom:4px;color:var(--txt2);font-size:.9rem">이름</label>
 <input id="join-name" placeholder="이름을 입력하세요" maxlength="12">
 <label style="display:block;margin-bottom:4px;color:var(--txt2);font-size:.9rem;margin-top:8px">방 코드 (4자리)</label>
-<input id="join-code" class="code-input" placeholder="0000" maxlength="4" inputmode="numeric">
+<input id="join-code" class="code-input" placeholder="0000" maxlength="4" inputmode="numeric" pattern="\d{4}" autocomplete="off" oninput="this.value=this.value.replace(/[^0-9]/g,'')">
 <div style="margin-top:18px">
 <button class="btn btn-pri btn-lg" id="btn-join" onclick="joinRoom()">🚀 참가하기</button>
 </div>
@@ -380,8 +380,17 @@ const S = {
 //  NAV
 // ============================================================
 function go(id) {
+  // When leaving to the menu, stop any lingering game timers and hide overlay
+  if (id === 'menu') {
+    if (S.timer) { clearInterval(S.timer); S.timer = null; }
+    if (typeof _countdownIv !== 'undefined' && _countdownIv) { clearInterval(_countdownIv); _countdownIv = null; }
+    if (typeof _countdownTo !== 'undefined' && _countdownTo) { clearTimeout(_countdownTo); _countdownTo = null; }
+    const cd = document.getElementById('countdown'); if (cd) cd.style.display = 'none';
+    S.answered = true; S.timeLeft = 0;
+  }
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
-  document.getElementById('s-' + id).classList.add('active');
+  const next = document.getElementById('s-' + id);
+  if (next) next.classList.add('active');
   // Show/hide rules FAB during gameplay
   const fab = document.getElementById('rulesFab');
   if (fab) fab.style.display = (id === 'game' || id === 'online') ? 'block' : 'none';
@@ -425,44 +434,156 @@ function analyze(str) {
 }
 
 // ============================================================
-//  NUMBER POOLS
+//  NUMBER POOLS (runtime-generated, ~10,000 problems across 3 tiers)
 // ============================================================
-const pools = {
-  easy: [
-    '25','3.7','0.5','2.0','510','47','100','8.2','6.00','72',
-    '350','9.1','0.8','4.5','63','1.2','80','15','7.0','36',
-    '0.3','2.5','91','0.70','44','5.6','200','3.0','18','0.9',
-    '67','4.00','0.25','12','8.0','530','2.7','0.60','95','1.5',
-    '40','6.3','0.45','78','3.2','10','0.12','56','9.0','21',
-    '7.5','0.80','34','6.0','420','1.8','0.35','83','2.4','50',
-  ],
-  medium: [
-    '0.0034','100.0','3.040','1200','30.06','0.0780','5010',
-    '0.00120','20.10','4500','0.560','7.020','1050','0.0091',
-    '60.30','8100','0.0450','2.300','90.05','0.00670','3600',
-    '10.20','0.1080','5500','40.07','0.00340','7200','1.060',
-    '0.0920','6300','20.04','0.00560','8500','3.070','50.08',
-    '0.01200','4100','70.50','0.00890','9200','2.040','0.1500',
-    '1800','30.09','0.0230','6700','5.010','80.20','0.00410',
-    '4300','10.50','0.0670','7800','1.200',
-  ],
-  hard: [
-    '0.001020','10.0040','300600','0.00008050','1000.00',
-    '50.00200','0.0040030','200100','0.000009070','40.0060',
-    '7000.0','0.00102000','30.00500','500300','0.00060040',
-    '10000.0','80.00100','0.0070020','400200','0.000050030',
-    '60.0080','9000.00','0.00203000','20.00400','600100',
-    '0.00080050','3000.0','70.00300','0.0050040','100200',
-    '0.000070060','50.0020','8000.00','0.00304000','40.00100',
-    '700300','0.00090070','2000.0','90.00200','0.0060050',
-    '300100','0.000080040','10.0030','5000.00','0.00105000',
-    '60.00400','800200','0.00070030','4000.0','30.00600',
-    '0.0080060','900100','0.000060050','20.0040',
-  ]
-};
+// Programmatically built so every tier covers a rich set of sig-fig patterns.
+// - easy:   1~4자리 정수 + 간단한 소수 (애매한 끝자리 0 없음)
+// - medium: 앞자리 0, 소수점 있는/없는 끝자리 0, 사이 0
+// - hard:   복합 내부·끝자리·앞자리 0, 긴 소수
+const pools = (() => {
+  const easy = new Set();
+  const medium = new Set();
+  const hard = new Set();
+
+  // ------- EASY -------
+  for (let a = 1; a <= 9; a++) easy.add('' + a);
+  for (let a = 1; a <= 9; a++) for (let b = 1; b <= 9; b++) easy.add('' + a + b);
+  for (let a = 1; a <= 9; a++) for (let b = 0; b <= 9; b++) for (let c = 1; c <= 9; c++) easy.add('' + a + b + c);
+  for (let a = 1; a <= 9; a++) for (let b = 1; b <= 9; b++) easy.add(a + '.' + b);
+  for (let b = 1; b <= 9; b++) easy.add('0.' + b);
+  for (let a = 1; a <= 9; a++) for (let b = 1; b <= 9; b++) for (let c = 1; c <= 9; c++) easy.add(a + '.' + b + c);
+  for (let a = 1; a <= 9; a++) for (let b = 1; b <= 9; b++) easy.add('0.' + a + b);
+  for (let a = 1; a <= 9; a++) for (let b = 1; b <= 9; b++) for (let c = 1; c <= 9; c++) easy.add(a + b + '.' + c);
+  for (let a = 1; a <= 9; a++) for (let b = 1; b <= 9; b++) for (let c = 1; c <= 9; c++) for (let dd = 1; dd <= 9; dd++) easy.add(a + '.' + b + c + dd);
+
+  // ------- MEDIUM -------
+  // 앞자리 0: 0.0X / 0.00X / 0.000X / 0.0000X
+  for (let a = 1; a <= 9; a++) {
+    medium.add('0.0' + a);
+    medium.add('0.00' + a);
+    medium.add('0.000' + a);
+    medium.add('0.0000' + a);
+  }
+  for (let a = 1; a <= 9; a++) for (let b = 0; b <= 9; b++) {
+    medium.add('0.0' + a + b);
+    medium.add('0.00' + a + b);
+    medium.add('0.000' + a + b);
+  }
+  for (let a = 1; a <= 9; a++) for (let b = 0; b <= 9; b++) for (let c = 0; c <= 9; c++) {
+    medium.add('0.0' + a + b + c);
+    medium.add('0.00' + a + b + c);
+  }
+  // 소수점 명시 끝자리 0: X.0 / X0.0 / X00.0 / X.00
+  for (let a = 1; a <= 9; a++) {
+    medium.add(a + '.0');
+    medium.add(a + '0.0');
+    medium.add(a + '00.0');
+    medium.add(a + '.00');
+  }
+  for (let a = 1; a <= 9; a++) for (let b = 1; b <= 9; b++) {
+    medium.add(a + '.0' + b);
+    medium.add(a + '.' + b + '0');
+    medium.add(a + '0.' + b);
+    medium.add(a + b + '.0');
+  }
+  for (let a = 1; a <= 9; a++) for (let b = 1; b <= 9; b++) for (let c = 1; c <= 9; c++) {
+    medium.add(a + '.' + b + '0' + c);
+    medium.add(a + '.' + b + c + '0');
+    medium.add(a + '.0' + b + c);
+  }
+  // 소수점 없는 끝자리 0 정수
+  for (let a = 1; a <= 9; a++) for (let b = 1; b <= 9; b++) {
+    medium.add('' + a + b + '00');
+    medium.add('' + a + b + '0');
+  }
+  for (let a = 1; a <= 9; a++) for (let b = 1; b <= 9; b++) for (let c = 1; c <= 9; c++) {
+    medium.add('' + a + b + c + '0');
+    medium.add('' + a + b + c + '00');
+  }
+  // 0.XY0 / 0.0XY0 / 0.00XY0
+  for (let a = 1; a <= 9; a++) for (let b = 1; b <= 9; b++) {
+    medium.add('0.' + a + b + '0');
+    medium.add('0.0' + a + b + '0');
+    medium.add('0.00' + a + b + '0');
+  }
+
+  // ------- HARD -------
+  // 깊은 앞자리 0
+  for (let a = 1; a <= 9; a++) {
+    hard.add('0.0000' + a);
+    hard.add('0.00000' + a);
+    hard.add('0.000000' + a);
+    hard.add('0.0000000' + a);
+  }
+  for (let a = 1; a <= 9; a++) for (let b = 0; b <= 9; b++) {
+    hard.add('0.0000' + a + b);
+    hard.add('0.00000' + a + b);
+  }
+  // 내부 0이 많은 소수
+  for (let a = 1; a <= 9; a++) for (let b = 1; b <= 9; b++) {
+    hard.add('0.00' + a + '0' + b);
+    hard.add('0.000' + a + '0' + b);
+    hard.add('0.0' + a + '0' + b + '0');
+    hard.add('0.00' + a + '0' + b + '0');
+    hard.add('0.0' + a + '00' + b);
+    hard.add('0.00' + a + '00' + b);
+  }
+  // 5 유효숫자 소수
+  for (let a = 1; a <= 9; a++) for (let b = 1; b <= 9; b++) for (let c = 1; c <= 9; c++) for (let dd = 1; dd <= 9; dd++) {
+    hard.add(a + '.' + b + '0' + c + dd);
+    hard.add(a + '.0' + b + c + dd);
+    hard.add(a + '.' + b + c + '0' + dd);
+    hard.add(a + '.' + b + c + dd + '0');
+  }
+  // 복합 소수
+  for (let a = 1; a <= 9; a++) for (let b = 1; b <= 9; b++) {
+    hard.add(a + b + '.00' + a);
+    hard.add(a + '0.0' + b);
+    hard.add(a + '0.0' + b + '0');
+    hard.add(a + b + '.0' + a);
+    hard.add(a + '00.' + b + '0');
+    hard.add(a + '00.0' + b);
+    hard.add(a + '0.' + b + '0');
+  }
+  // 소수점 명시 대형수
+  for (let a = 1; a <= 9; a++) {
+    hard.add(a + '000.0');
+    hard.add(a + '0000.0');
+    hard.add(a + '00.00');
+    hard.add(a + '000.00');
+    hard.add(a + '0000.00');
+  }
+  // 큰 끝자리 0 정수
+  for (let a = 1; a <= 9; a++) for (let b = 1; b <= 9; b++) {
+    hard.add('' + a + b + '0000');
+    hard.add('' + a + '0' + b + '000');
+    hard.add('' + a + '00' + b + '00');
+  }
+
+  // Deterministic seeded shuffle so the set is stable between reloads
+  const shuffle = arr => {
+    let seed = 0xC0DE;
+    const rand = () => { seed = (seed * 1103515245 + 12345) & 0x7FFFFFFF; return seed / 0x7FFFFFFF; };
+    const a = arr.slice();
+    for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(rand() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
+    return a;
+  };
+  const clean = s => Array.from(s).filter(x => x && !isNaN(parseFloat(x)));
+
+  // Target ~3334 per tier → ~10,000 total problems
+  const TARGET = 3334;
+  const take = arr => arr.length >= TARGET ? arr.slice(0, TARGET) : arr;
+  return {
+    easy: take(shuffle(clean(easy))),
+    medium: take(shuffle(clean(medium))),
+    hard: take(shuffle(clean(hard))),
+  };
+})();
+
 function randNum(d) {
   if (d === 'mixed') d = ['easy', 'medium', 'hard'][Math.floor(Math.random() * 3)];
-  const p = pools[d]; return p[Math.floor(Math.random() * p.length)];
+  const p = pools[d] || pools.medium;
+  return p[Math.floor(Math.random() * p.length)];
 }
 
 // ============================================================
@@ -588,26 +709,46 @@ function roundRect(ctx, x, y, w, h, r) {
 //  SINGLE PLAY GAME
 // ============================================================
 function startSingleGame() {
+  // Clean up any lingering timers from a previous game
+  if (S.timer) { clearInterval(S.timer); S.timer = null; }
   const el = document.getElementById('p0');
-  S.ps = [mkP(el ? el.value.trim() || 'Player 1' : 'Player 1')];
-  S.tl = parseInt(document.getElementById('sel-time').value);
-  S.diff = document.getElementById('sel-diff').value;
+  const rawName = el ? el.value.trim() : '';
+  const name = rawName || 'Player 1';
+  S.ps = [mkP(name)];
+  const tlVal = parseInt(document.getElementById('sel-time').value, 10);
+  S.tl = Number.isFinite(tlVal) && tlVal > 0 ? tlVal : 60;
+  S.diff = document.getElementById('sel-diff').value || 'medium';
   S.pi = 0;
-  S.ps[0].score = 0; S.ps[0].solved = 0; S.ps[0].correct = 0; S.ps[0].wrong = 0;
-  S.ps[0].combo = 0; S.ps[0].maxCombo = 0; S.ps[0].history = [];
+  S.timeLeft = S.tl;
+  S.answered = true; // block any submit until the countdown finishes
+  S.currentNum = null; S.currentMeas = null;
+  S.ps[0].history = [];
   go('game');
+  // Render placeholder header so "0초" doesn't briefly show
+  const hdr = document.getElementById('g-hdr');
+  if (hdr) hdr.innerHTML = `<div class="player-info"><span style="font-weight:600">${esc(name)}</span><span class="score">⭐ 0</span></div><div class="solved">✅ 0문제</div><div class="big-timer">${S.tl}초</div>`;
+  document.getElementById('g-qarea').innerHTML = '';
+  document.getElementById('g-fb').innerHTML = '';
   countdown(() => startPlayerTurn());
 }
 
-function mkP(n) { return { name: n, score: 0, solved: 0, correct: 0, wrong: 0, combo: 0, maxCombo: 0 }; }
+function mkP(n) { return { name: n, score: 0, solved: 0, correct: 0, wrong: 0, combo: 0, maxCombo: 0, history: [] }; }
 
+let _countdownIv = null, _countdownTo = null;
 function countdown(cb) {
+  // Guard against re-entry (e.g. "다시 하기" 연타)
+  if (_countdownIv) { clearInterval(_countdownIv); _countdownIv = null; }
+  if (_countdownTo) { clearTimeout(_countdownTo); _countdownTo = null; }
   const el = document.getElementById('countdown'); el.style.display = 'flex';
   let n = 3; el.textContent = n; SFX.countdown();
-  const iv = setInterval(() => {
+  _countdownIv = setInterval(() => {
     n--;
     if (n > 0) { el.textContent = n; el.style.animation = 'none'; el.offsetHeight; el.style.animation = 'countIn .4s'; SFX.countdown(); }
-    else { clearInterval(iv); el.textContent = 'GO!'; SFX.go(); setTimeout(() => { el.style.display = 'none'; cb(); }, 400); }
+    else {
+      clearInterval(_countdownIv); _countdownIv = null;
+      el.textContent = 'GO!'; SFX.go();
+      _countdownTo = setTimeout(() => { el.style.display = 'none'; _countdownTo = null; cb(); }, 400);
+    }
   }, 700);
 }
 
@@ -670,7 +811,11 @@ function nextQ() {
 function togDig(el) { if (!S.answered) el.classList.toggle('sel'); }
 
 function submitG() {
-  if (S.answered || S.timeLeft <= 0) return; S.answered = true;
+  if (S.answered || S.timeLeft <= 0) return;
+  // Guard: only accept submissions while on the single-game screen
+  const curScr = document.querySelector('.screen.active');
+  if (!curScr || curScr.id !== 's-game') return;
+  S.answered = true;
   const p = S.ps[S.pi]; let ok = false, exp = '';
   const _hElapsed = ((Date.now() - S.qStart) / 1000).toFixed(1);
   const _hQuestion = S.gm === 3 ? (S.currentMeas.type === 'ruler' ? '자' : S.currentMeas.type === 'cylinder' ? '실린더' : '온도계') : S.currentNum;
@@ -693,12 +838,27 @@ function submitG() {
     });
     ok = allOk; exp = `유효숫자: ${nd.filter(d => d.sig).map(d => d.c).join(', ')} (${a.count}개)`;
   } else {
-    const ms = S.currentMeas, mv = parseFloat(document.getElementById('g-meas').value), sv = parseInt(document.getElementById('g-sf').value);
+    const ms = S.currentMeas;
+    const measStr = (document.getElementById('g-meas').value || '').trim();
+    const sv = parseInt(document.getElementById('g-sf').value, 10);
+    const mv = parseFloat(measStr);
     const tol = ms.type === 'ruler' ? 0.05 : 0.5;
-    const mOk = !isNaN(mv) && Math.abs(mv - ms.val) <= tol, sOk = sv === ms.sf; ok = mOk && sOk;
+    const numOk = measStr.length > 0 && !isNaN(mv);
+    const valOk = numOk && Math.abs(mv - ms.val) <= tol;
+    // 입력 문자열 자체의 유효숫자 개수도 일치해야 함 (예: "3.1"을 "3.10"의 정답으로 인정하지 않음)
+    const inputSf = numOk ? analyze(measStr).count : 0;
+    const mOk = valOk && inputSf === ms.sf;
+    const sOk = Number.isFinite(sv) && sv === ms.sf;
+    ok = mOk && sOk;
     document.getElementById('g-meas').classList.add(mOk ? 'ok' : 'no');
     document.getElementById('g-sf').classList.add(sOk ? 'ok' : 'no');
-    exp = `정답: ${ms.dv} ${ms.unit} (유효숫자 ${ms.sf}개)`;
+    let hint = '';
+    if (valOk && inputSf !== ms.sf) {
+      hint = `<br>측정값은 최소눈금의 1/10까지 어림해서 읽어야 해요 (입력: ${esc(measStr)} → ${inputSf}개)`;
+    } else if (numOk && !valOk) {
+      hint = '<br>측정값이 범위를 벗어났어요.';
+    }
+    exp = `정답: ${ms.dv} ${ms.unit} (유효숫자 ${ms.sf}개)${hint}`;
   }
   p.solved++;
   if (ok) {
@@ -723,10 +883,12 @@ function updateTimer() {
 }
 
 function endSingleGame() {
-  clearInterval(S.timer); go('results');
+  if (S.timer) { clearInterval(S.timer); S.timer = null; }
+  S.answered = true;
+  go('results');
   SFX.gameOver();
 
-  const p = S.ps[0];
+  const p = S.ps && S.ps[0] ? S.ps[0] : { name: 'Player', score: 0, correct: 0, solved: 0, wrong: 0, maxCombo: 0, history: [] };
   const acc = p.solved ? Math.round(p.correct / p.solved * 100) : 0;
   const grade = acc >= 90 ? 'A' : acc >= 75 ? 'B' : acc >= 60 ? 'C' : acc >= 40 ? 'D' : 'F';
 
@@ -798,21 +960,28 @@ function showToast(msg) {
 function connectWS() {
   if (S.ws && S.ws.readyState <= 1) return; // already connected/connecting
   const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-  S.ws = new WebSocket(proto + '//' + location.host);
+  try {
+    S.ws = new WebSocket(proto + '//' + location.host);
+  } catch (e) {
+    S.ws = null;
+    showToast('서버 주소가 올바르지 않습니다.');
+    return;
+  }
 
-  S.ws.onopen = () => { console.log('WS connected'); };
+  S.ws.onopen = () => { /* connected */ };
 
   S.ws.onclose = () => {
-    console.log('WS disconnected');
-    // If we were in a game, show a message
     const cur = document.querySelector('.screen.active');
     if (cur && (cur.id === 's-waiting' || cur.id === 's-online')) {
       showToast('서버 연결이 끊어졌습니다.');
       setTimeout(() => go('menu'), 2000);
+    } else if (cur && cur.id === 's-join') {
+      const errEl = document.getElementById('join-error');
+      if (errEl) { errEl.textContent = '서버에 연결할 수 없습니다.'; errEl.style.display = 'block'; }
     }
   };
 
-  S.ws.onerror = () => {};
+  S.ws.onerror = () => { /* onclose will surface user feedback */ };
 
   S.ws.onmessage = (ev) => {
     let msg;
@@ -825,28 +994,43 @@ function wsSend(msg) {
   if (S.ws && S.ws.readyState === 1) S.ws.send(JSON.stringify(msg));
 }
 
+let _joining = false;
 function joinRoom() {
+  if (_joining) return; // prevent double-submit on 연타
   const name = document.getElementById('join-name').value.trim();
   const code = document.getElementById('join-code').value.trim();
   const errEl = document.getElementById('join-error');
+  const btn = document.getElementById('btn-join');
   errEl.style.display = 'none';
 
   if (!name) { errEl.textContent = '이름을 입력해주세요.'; errEl.style.display = 'block'; return; }
-  if (!code || code.length !== 4) { errEl.textContent = '4자리 방 코드를 입력해주세요.'; errEl.style.display = 'block'; return; }
+  if (!/^\d{4}$/.test(code)) { errEl.textContent = '4자리 숫자 방 코드를 입력해주세요.'; errEl.style.display = 'block'; return; }
+
+  _joining = true;
+  if (btn) { btn.disabled = true; btn.textContent = '연결 중...'; }
+  const reset = () => {
+    _joining = false;
+    if (btn) { btn.disabled = false; btn.textContent = '🚀 참가하기'; }
+  };
 
   connectWS();
-  // Wait for connection then send join
+  let tries = 0;
+  const maxTries = 40; // ~4 seconds
   const sendJoin = () => {
+    if (!S.ws) { errEl.textContent = '서버에 연결할 수 없습니다.'; errEl.style.display = 'block'; reset(); return; }
     if (S.ws.readyState === 1) {
       wsSend({ type: 'join', code, name });
-    } else if (S.ws.readyState === 0) {
+      setTimeout(reset, 1500);
+    } else if (S.ws.readyState === 0 && tries < maxTries) {
+      tries++;
       setTimeout(sendJoin, 100);
     } else {
-      errEl.textContent = '서버에 연결할 수 없습니다.';
+      errEl.textContent = '서버에 연결할 수 없습니다. 교사에게 문의하세요.';
       errEl.style.display = 'block';
+      reset();
     }
   };
-  setTimeout(sendJoin, 200);
+  sendJoin();
 }
 
 // ============================================================
