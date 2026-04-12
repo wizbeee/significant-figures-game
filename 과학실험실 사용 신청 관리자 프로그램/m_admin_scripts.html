@@ -363,4 +363,169 @@ function adminInit() {
   loadApplications();
 }
 if (typeof SPA_MODE === 'undefined') window.addEventListener('load', adminInit);
+
+/* =========================================================
+ * 모바일: 지도일지 작성 / 지도 통계 / 신청 제한 관리
+ * - 데스크탑 admin_scripts.html과 동일한 서버 함수를 호출하지만
+ *   UI는 모바일 풀스크린 패널(detail-panel 스타일)을 재사용
+ * ========================================================= */
+var M_LAB_OPTIONS = ['화학실험실','생물실험실','프로젝트실험실','첨단기기실험실','오픈랩',
+  '물리실험실(S동 2층)','물리실험실(S동 3층)','융합과학실험실','IT 실습실'];
+
+/* ---- 지도일지 작성 ---- */
+function openGuidanceModal() {
+  var panel = document.getElementById('m-guidanceModal');
+  if (!panel) return;
+  panel.style.display = '';
+  panel.classList.add('show');
+  // 실험실 옵션 세팅
+  var labSel = document.getElementById('mg_lab');
+  if (labSel && !labSel.options.length) {
+    labSel.innerHTML = M_LAB_OPTIONS.map(function(v){ return '<option value="'+escapeHtml(v)+'">'+escapeHtml(v)+'</option>'; }).join('');
+  }
+  // 오늘 날짜 기본값
+  var dateInput = document.getElementById('mg_date');
+  if (dateInput && !dateInput.value) {
+    var now = new Date();
+    dateInput.value = now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0')+'-'+String(now.getDate()).padStart(2,'0');
+  }
+}
+function mCloseGuidanceModal() {
+  var panel = document.getElementById('m-guidanceModal');
+  if (panel) { panel.classList.remove('show'); panel.style.display = 'none'; }
+}
+function mSaveGuidance() {
+  var entry = {
+    date: (document.getElementById('mg_date')||{}).value || '',
+    studentId: (document.getElementById('mg_sid')||{}).value || '',
+    name: (document.getElementById('mg_name')||{}).value || '',
+    lab: (document.getElementById('mg_lab')||{}).value || '',
+    teacher: (document.getElementById('mg_teacher')||{}).value || '',
+    time: (document.getElementById('mg_time')||{}).value || '',
+    level: (document.getElementById('mg_level')||{}).value || '',
+    content: (document.getElementById('mg_content')||{}).value || ''
+  };
+  if (!entry.date || !entry.studentId || !entry.name) {
+    alert('실험날짜/학번/이름은 필수입니다.'); return;
+  }
+  if (typeof showGlobalBusy === 'function') showGlobalBusy('저장 중입니다');
+  google.script.run
+    .withSuccessHandler(function(r) {
+      if (r && r.success) {
+        mCloseGuidanceModal();
+        if (typeof showGlobalSuccess === 'function') showGlobalSuccess('저장되었습니다', '지도 일지가 저장되었습니다.');
+        else alert('저장되었습니다.');
+      } else {
+        if (typeof showGlobalError === 'function') showGlobalError('저장 실패', (r && r.message) || '알 수 없는 오류');
+        else alert('저장 실패: ' + ((r && r.message) || ''));
+      }
+    })
+    .withFailureHandler(function(err) {
+      if (typeof showGlobalError === 'function') showGlobalError('저장 실패', (err && (err.message||err)) || '알 수 없는 오류');
+      else alert('저장 실패: ' + ((err && (err.message||err)) || ''));
+    })
+    .addLabGuidanceLog(entry);
+}
+
+/* ---- 지도 통계 ---- */
+function openWarningStats() {
+  var panel = document.getElementById('m-warningModal');
+  if (!panel) return;
+  panel.style.display = '';
+  panel.classList.add('show');
+  var body = document.getElementById('m-warningBody');
+  body.innerHTML = '<div class="m-loading"><div class="m-loading-spinner"></div>로딩 중...</div>';
+  google.script.run
+    .withSuccessHandler(function(arr) {
+      if (!Array.isArray(arr) || arr.length === 0) {
+        body.innerHTML = '<div class="m-empty"><div class="m-empty-icon">📊</div><div>통계 데이터가 없습니다.</div></div>';
+        return;
+      }
+      var rows = arr.map(function(r) {
+        return '<tr><td>'+escapeHtml(r['학번']||'')+'</td><td>'+escapeHtml(r['이름']||'')+'</td>'
+          +'<td>'+escapeHtml(r['지도']||0)+'</td><td>'+escapeHtml(r['경고']||0)+'</td>'
+          +'<td>'+escapeHtml(r['안전사고']||0)+'</td><td><b>'+escapeHtml(r['total']||0)+'</b></td></tr>';
+      }).join('');
+      body.innerHTML = '<div style="overflow-x:auto;-webkit-overflow-scrolling:touch;">'
+        +'<table style="width:100%;border-collapse:collapse;font-size:13px;">'
+        +'<thead><tr style="background:var(--primary-light);"><th style="padding:10px 8px;">학번</th><th style="padding:10px 8px;">이름</th><th style="padding:10px 8px;">지도</th><th style="padding:10px 8px;">경고</th><th style="padding:10px 8px;">안전사고</th><th style="padding:10px 8px;">총계</th></tr></thead>'
+        +'<tbody>'+rows+'</tbody></table></div>';
+      // 테이블 셀 스타일
+      body.querySelectorAll('td,th').forEach(function(c){ c.style.textAlign='center'; c.style.borderBottom='1px solid var(--border)'; });
+    })
+    .withFailureHandler(function(err) {
+      body.innerHTML = '<div class="m-empty"><div class="m-empty-icon">⚠️</div><div>통계 조회 실패: '+(err&&(err.message||err)||'')+'</div></div>';
+    })
+    .warningStatsByStudent();
+}
+function mCloseWarningStats() {
+  var panel = document.getElementById('m-warningModal');
+  if (panel) { panel.classList.remove('show'); panel.style.display = 'none'; }
+}
+
+/* ---- 신청 제한 관리 ---- */
+function openRestrictionModal() {
+  var panel = document.getElementById('m-restrictionModal');
+  if (!panel) return;
+  panel.style.display = '';
+  panel.classList.add('show');
+}
+function mCloseRestrictionModal() {
+  var panel = document.getElementById('m-restrictionModal');
+  if (panel) { panel.classList.remove('show'); panel.style.display = 'none'; }
+}
+function mLoadRestrictedList() {
+  var box = document.getElementById('m-restrictionResult');
+  box.innerHTML = '<div class="m-loading"><div class="m-loading-spinner"></div>로딩 중...</div>';
+  google.script.run
+    .withSuccessHandler(function() {
+      google.script.run
+        .withSuccessHandler(function(list) {
+          if (!Array.isArray(list) || list.length === 0) {
+            box.innerHTML = '<div class="m-empty"><div class="m-empty-icon">✅</div><div>현재 제한 명단이 없습니다.</div></div>';
+            return;
+          }
+          var rows = list.map(function(r) {
+            return '<tr><td>'+escapeHtml(r['학번']||'')+'</td><td>'+escapeHtml(r['이름']||'')+'</td>'
+              +'<td>'+escapeHtml(r['시작일']||'')+'</td><td>'+escapeHtml(r['종료일']||'')+'</td></tr>';
+          }).join('');
+          box.innerHTML = '<div style="overflow-x:auto;-webkit-overflow-scrolling:touch;">'
+            +'<table style="width:100%;border-collapse:collapse;font-size:13px;">'
+            +'<thead><tr style="background:var(--primary-light);"><th style="padding:10px 8px;">학번</th><th style="padding:10px 8px;">이름</th><th style="padding:10px 8px;">시작일</th><th style="padding:10px 8px;">종료일</th></tr></thead>'
+            +'<tbody>'+rows+'</tbody></table></div>';
+          box.querySelectorAll('td,th').forEach(function(c){ c.style.textAlign='center'; c.style.borderBottom='1px solid var(--border)'; });
+        })
+        .withFailureHandler(function(err) { box.innerHTML = '<div class="m-empty"><div class="m-empty-icon">⚠️</div><div>조회 실패</div></div>'; })
+        .getRestrictedListLite();
+    })
+    .withFailureHandler(function() { box.innerHTML = '<div class="m-empty"><div class="m-empty-icon">⚠️</div><div>만료 정리 실패</div></div>'; })
+    .purgeExpiredRestrictions();
+}
+function mLoadRestrictAccumList() {
+  var box = document.getElementById('m-restrictionResult');
+  box.innerHTML = '<div class="m-loading"><div class="m-loading-spinner"></div>로딩 중...</div>';
+  google.script.run
+    .withSuccessHandler(function() {
+      google.script.run
+        .withSuccessHandler(function(list) {
+          if (!Array.isArray(list) || list.length === 0) {
+            box.innerHTML = '<div class="m-empty"><div class="m-empty-icon">✅</div><div>누적 기록이 없습니다.</div></div>';
+            return;
+          }
+          var rows = list.map(function(r) {
+            return '<tr><td>'+escapeHtml(r['학번']||'')+'</td><td>'+escapeHtml(r['이름']||'')+'</td>'
+              +'<td><b>'+escapeHtml(r['누적횟수']||0)+'</b></td></tr>';
+          }).join('');
+          box.innerHTML = '<div style="overflow-x:auto;-webkit-overflow-scrolling:touch;">'
+            +'<table style="width:100%;border-collapse:collapse;font-size:13px;">'
+            +'<thead><tr style="background:var(--primary-light);"><th style="padding:10px 8px;">학번</th><th style="padding:10px 8px;">이름</th><th style="padding:10px 8px;">누적횟수</th></tr></thead>'
+            +'<tbody>'+rows+'</tbody></table></div>';
+          box.querySelectorAll('td,th').forEach(function(c){ c.style.textAlign='center'; c.style.borderBottom='1px solid var(--border)'; });
+        })
+        .withFailureHandler(function(err) { box.innerHTML = '<div class="m-empty"><div class="m-empty-icon">⚠️</div><div>조회 실패</div></div>'; })
+        .getRestrictedAccumList();
+    })
+    .withFailureHandler(function() { box.innerHTML = '<div class="m-empty"><div class="m-empty-icon">⚠️</div><div>만료 정리 실패</div></div>'; })
+    .purgeExpiredRestrictions();
+}
 </script>

@@ -94,3 +94,63 @@
   <div id="detail-body" style="flex:1;padding:0 0 90px;"></div>
   <div class="bottom-actions" id="detail-bottom"></div>
 </div>
+
+<!-- ===== 모바일: 지도일지 작성 모달 ===== -->
+<div id="m-guidanceModal" class="detail-panel" style="display:none;z-index:120;">
+  <div class="detail-topbar">
+    <button class="topbar-back" onclick="mCloseGuidanceModal()">← 뒤로</button>
+    <span class="topbar-title" style="font-size:15px;font-weight:700;">지도일지 작성</span>
+    <div class="topbar-actions">
+      <button class="topbar-action" style="font-size:14px;font-weight:700;" onclick="mSaveGuidance()">저장</button>
+    </div>
+  </div>
+  <div style="flex:1;overflow-y:auto;padding:16px;">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px;">
+      <div><label style="font-size:12px;font-weight:600;color:var(--text-muted);display:block;margin-bottom:4px;">실험날짜</label><input type="date" id="mg_date" class="filter-input" style="width:100%;"></div>
+      <div><label style="font-size:12px;font-weight:600;color:var(--text-muted);display:block;margin-bottom:4px;">실험실</label><select id="mg_lab" class="filter-select" style="width:100%;"></select></div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px;">
+      <div><label style="font-size:12px;font-weight:600;color:var(--text-muted);display:block;margin-bottom:4px;">학번</label><input id="mg_sid" class="filter-input" style="width:100%;"></div>
+      <div><label style="font-size:12px;font-weight:600;color:var(--text-muted);display:block;margin-bottom:4px;">이름</label><input id="mg_name" class="filter-input" style="width:100%;"></div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:14px;">
+      <div><label style="font-size:12px;font-weight:600;color:var(--text-muted);display:block;margin-bottom:4px;">시간</label>
+        <select id="mg_time" class="filter-select" style="width:100%;"><option value="ET">ET</option><option value="EP1">EP1</option><option value="7교시">7교시</option></select></div>
+      <div><label style="font-size:12px;font-weight:600;color:var(--text-muted);display:block;margin-bottom:4px;">지도교사</label><input id="mg_teacher" class="filter-input" style="width:100%;" placeholder="이름"></div>
+      <div><label style="font-size:12px;font-weight:600;color:var(--text-muted);display:block;margin-bottom:4px;">구분</label>
+        <select id="mg_level" class="filter-select" style="width:100%;"><option value="">선택</option><option value="지도">지도</option><option value="경고">경고</option><option value="칭찬">칭찬</option><option value="안전사고">안전사고</option><option value="기타 특이사항">기타</option></select></div>
+    </div>
+    <div style="margin-bottom:14px;">
+      <label style="font-size:12px;font-weight:600;color:var(--text-muted);display:block;margin-bottom:4px;">지도 내용</label>
+      <textarea id="mg_content" rows="6" class="filter-input" style="width:100%;resize:vertical;" placeholder="상세 지도 내용을 입력하세요."></textarea>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 모바일: 지도 통계 모달 ===== -->
+<div id="m-warningModal" class="detail-panel" style="display:none;z-index:120;">
+  <div class="detail-topbar">
+    <button class="topbar-back" onclick="mCloseWarningStats()">← 뒤로</button>
+    <span class="topbar-title" style="font-size:15px;font-weight:700;">지도 횟수 통계</span>
+    <div class="topbar-actions"></div>
+  </div>
+  <div style="flex:1;overflow-y:auto;padding:16px;" id="m-warningBody">
+    <div class="m-loading"><div class="m-loading-spinner"></div>로딩 중...</div>
+  </div>
+</div>
+
+<!-- ===== 모바일: 신청 제한 관리 모달 ===== -->
+<div id="m-restrictionModal" class="detail-panel" style="display:none;z-index:120;">
+  <div class="detail-topbar">
+    <button class="topbar-back" onclick="mCloseRestrictionModal()">← 뒤로</button>
+    <span class="topbar-title" style="font-size:15px;font-weight:700;">신청 제한 관리</span>
+    <div class="topbar-actions"></div>
+  </div>
+  <div style="flex:1;overflow-y:auto;padding:16px;" id="m-restrictionBody">
+    <div style="display:flex;gap:8px;margin-bottom:16px;">
+      <button class="quick-btn active" onclick="mLoadRestrictedList()">제한 명단</button>
+      <button class="quick-btn" onclick="mLoadRestrictAccumList()">누적 기록</button>
+    </div>
+    <div id="m-restrictionResult"><div class="m-empty"><div class="m-empty-icon">📋</div><div>위 버튼을 눌러 조회하세요</div></div></div>
+  </div>
+</div>
