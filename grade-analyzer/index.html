@@ -197,6 +197,7 @@ td.num { text-align:right; font-variant-numeric:tabular-nums; }
 
 /* ==================== Charts ==================== */
 .chart-container { position:relative; width:100%; min-height:320px; }
+.chart-container.tall { min-height:450px; }
 .chart-container canvas { width:100% !important; }
 .chart-row { display:grid; grid-template-columns:1fr 1fr; gap:20px; margin-bottom:20px; }
 .chart-row.triple { grid-template-columns:1fr 1fr 1fr; }
@@ -679,6 +680,7 @@ function processWorkbook(wb, fileName) {
     case 'A': students = parseTypeA(rawRows, ws); break;
     case 'B': students = parseTypeB(rawRows); break;
     case 'C': students = parseTypeC(rawRows, ws); break;
+    case 'D': students = parseTypeD(rawRows); break;
     default: throw new Error('인식할 수 없는 파일 형식입니다.');
   }
 
@@ -699,7 +701,7 @@ function processWorkbook(wb, fileName) {
   if (!cohort && students.length && students[0].cohort) cohort = students[0].cohort;
   if (cohort) students.forEach(s => { if (!s.cohort) s.cohort = cohort; });
 
-  const typeNames = { A:'통합양식(병합헤더)', B:'RAW파일(플랫)', C:'복수기수 합본' };
+  const typeNames = { A:'통합양식(병합헤더)', B:'RAW파일(플랫)', C:'복수기수 합본', D:'전형 지원 데이터' };
   return {
     students,
     meta: {
@@ -715,6 +717,13 @@ function detectFileType(rows, ws) {
   const row1 = (rows[1] || []).map(v => String(v||'').trim());
   const colCount = Math.max(row0.length, row1.length);
   const allStr = [...row0, ...row1].join(' ');
+
+  // Type D: 전형 지원 데이터 (접수번호/전형구분/교과성적/합불여부 등)
+  if (allStr.includes('전형구분') || allStr.includes('접수번호') ||
+      allStr.includes('교과성적') || allStr.includes('합불여부') ||
+      (allStr.includes('출신중') && allStr.includes('환산점수'))) {
+    return 'D';
+  }
 
   // Type C: has 기수 column
   if (row0.includes('기수') || row1.includes('기수') ||
@@ -734,8 +743,8 @@ function detectFileType(rows, ws) {
   }
 
   // Fallback: check for merged headers
-  if (hasMerges(ws)) return 'C'; // Assume multi-row header = Type C
-  return 'B'; // Default to flat
+  if (hasMerges(ws)) return 'C';
+  return 'B';
 }
 
 function hasMerges(ws) {
@@ -922,6 +931,104 @@ function parseTypeC(rows, ws) {
 
     students.push(s);
   }
+  return students;
+}
+
+// ---- Type D Parser: 전형 지원 데이터 (접수번호/전형구분/교과성적/합불여부) ----
+function parseTypeD(rows) {
+  // Find header row
+  let headerIdx = 0;
+  for (let i = 0; i < Math.min(5, rows.length); i++) {
+    const r = (rows[i]||[]).map(v => String(v||'').trim());
+    if (r.includes('성명(한글)') || r.includes('전형구분') || r.includes('접수번호')) {
+      headerIdx = i; break;
+    }
+  }
+  const headers = (rows[headerIdx]||[]).map(v => String(v||'').trim());
+  const students = [];
+
+  // Build column index map
+  const col = {};
+  headers.forEach((h, i) => { col[h] = i; });
+
+  // Helper to find column by partial match
+  function fc(keyword) {
+    const exact = col[keyword];
+    if (exact !== undefined) return exact;
+    const idx = headers.findIndex(h => h.includes(keyword));
+    return idx >= 0 ? idx : -1;
+  }
+
+  // 환산점수 columns: "2-1학기 국어(환산점수)" etc.
+  const semesters = ['2-1학기','2-2학기','3-1학기','3-2학기'];
+  const naesinSubjects = ['국어','수학','과학','영어'];
+
+  for (let i = headerIdx + 1; i < rows.length; i++) {
+    const row = rows[i];
+    if (!row || !row.some(v => v != null && v !== '')) continue;
+
+    const name = strVal(row[fc('성명(한글)')]);
+    if (!name) continue;
+
+    const s = createEmptyStudent();
+    s.name = name;
+    s.admissionType = strVal(row[fc('전형구분')]);
+    s.middleSchool = strVal(row[fc('출신중')]);
+
+    // 내신 환산점수 파싱
+    const semData = {};
+    let naesinTotal = 0;
+    let hasSemData = false;
+    for (const sem of semesters) {
+      semData[sem] = {};
+      for (const subj of naesinSubjects) {
+        const colKey = `${sem} ${subj}(환산점수)`;
+        const ci = fc(colKey);
+        if (ci >= 0) {
+          const val = numVal(row[ci]);
+          semData[sem][subj] = val;
+          if (val) hasSemData = true;
+        }
+      }
+    }
+
+    // 교과성적 총점
+    const totalCol = fc('교과성적');
+    const total = totalCol >= 0 ? numVal(row[totalCol]) : null;
+
+    if (hasSemData || total) {
+      s.naesin = { semesters: semData, total: total };
+    }
+
+    // 부가 정보
+    const passCol = fc('합불여부');
+    if (passCol >= 0) s._pass = strVal(row[passCol]);
+
+    // 원점수 과목별 (2-1~3-2학기 국어 등 — 환산이 아닌 원점수)
+    // These are middle school grades, not mock exam grades
+    // Store in naesin.rawGrades for potential future use
+    if (s.naesin) {
+      s.naesin.rawGrades = {};
+      const rawSubjects = ['국어','도덕','사회','역사','수학','과학','기가','영어','체육','미술','음악'];
+      for (const sem of semesters) {
+        s.naesin.rawGrades[sem] = {};
+        for (const subj of rawSubjects) {
+          const ci = fc(`${sem} ${subj}`);
+          if (ci >= 0 && !headers[ci].includes('환산')) {
+            s.naesin.rawGrades[sem][subj] = numVal(row[ci]);
+          }
+        }
+      }
+    }
+
+    // 기타 필드
+    const regionCol = fc('지역');
+    if (regionCol >= 0) s._region = strVal(row[regionCol]);
+
+    students.push(s);
+  }
+
+  console.log(`Type D parsed: ${students.length} students, ${students.filter(s=>s.naesin?.total).length} with naesin`);
   return students;
 }
 
@@ -1204,8 +1311,10 @@ if (!AppState.chartType) AppState.chartType = 'stackedBar';
 if (!AppState.gradeRange) AppState.gradeRange = 'short'; // 'short' (1~5등급이하) or 'full' (1~9등급)
 
 const CHART_TYPES = [
-  { id:'stackedBar', label:'누적 막대', icon:'📊' },
-  { id:'groupedBar', label:'그룹 막대', icon:'📊' },
+  { id:'stackedBar', label:'누적 막대(세로)', icon:'📊' },
+  { id:'stackedBarH', label:'누적 막대(가로)', icon:'📊' },
+  { id:'groupedBar', label:'그룹 막대(세로)', icon:'📊' },
+  { id:'groupedBarH', label:'그룹 막대(가로)', icon:'📊' },
   { id:'stackedBarPct', label:'100% 누적', icon:'📈' },
   { id:'line', label:'꺾은선', icon:'📉' },
   { id:'radar', label:'방사형', icon:'🕸️' },
@@ -1337,7 +1446,7 @@ function renderMockCharts() {
   for (const subj of subjects) {
     html += `<div class="card">
       <div class="card-title"><span class="icon">📊</span> ${subj.name} 등급 분포</div>
-      <div class="chart-container"><canvas id="chart-mock-${subj.key}"></canvas></div>
+      <div class="chart-container${AppState.chartType.includes('H')?' tall':''}"><canvas id="chart-mock-${subj.key}"></canvas></div>
     </div>`;
   }
   html += `</div>`;
@@ -1352,13 +1461,15 @@ function renderMockCharts() {
 
 function renderChartByType(canvasId, cohorts, gradeKey, title) {
   switch(AppState.chartType) {
-    case 'stackedBar': renderStackedBarChart(canvasId, cohorts, gradeKey, title, false); break;
-    case 'groupedBar': renderGroupedBarChart(canvasId, cohorts, gradeKey, title); break;
-    case 'stackedBarPct': renderStackedBarChart(canvasId, cohorts, gradeKey, title, true); break;
+    case 'stackedBar': renderStackedBarChart(canvasId, cohorts, gradeKey, title, false, false); break;
+    case 'stackedBarH': renderStackedBarChart(canvasId, cohorts, gradeKey, title, false, true); break;
+    case 'groupedBar': renderGroupedBarChart(canvasId, cohorts, gradeKey, title, false); break;
+    case 'groupedBarH': renderGroupedBarChart(canvasId, cohorts, gradeKey, title, true); break;
+    case 'stackedBarPct': renderStackedBarChart(canvasId, cohorts, gradeKey, title, true, false); break;
     case 'line': renderLineChart(canvasId, cohorts, gradeKey, title); break;
     case 'radar': renderRadarChart(canvasId, cohorts, gradeKey, title); break;
     case 'doughnut': renderDoughnutCharts(canvasId, cohorts, gradeKey, title); break;
-    default: renderStackedBarChart(canvasId, cohorts, gradeKey, title, false);
+    default: renderStackedBarChart(canvasId, cohorts, gradeKey, title, false, false);
   }
 }
 
@@ -1398,7 +1509,7 @@ function getGradeData(cohorts, gradeKey) {
   return { labels, colors, count, distData };
 }
 
-function renderStackedBarChart(canvasId, cohorts, gradeKey, title, pct100) {
+function renderStackedBarChart(canvasId, cohorts, gradeKey, title, pct100, horizontal) {
   const ctx = document.getElementById(canvasId);
   if (!ctx) return;
   const { labels, colors, count, distData } = getGradeData(cohorts, gradeKey);
@@ -1415,16 +1526,17 @@ function renderStackedBarChart(canvasId, cohorts, gradeKey, title, pct100) {
     });
   }
 
+  const valAxis = { stacked:true, ...(pct100?{max:100,ticks:{callback:v=>v+'%'}}:{}), grid:{color:'#F1F5F9'} };
+  const catAxis = { stacked:true, grid:{display:false} };
+
   destroyChart(canvasId);
   AppState.charts[canvasId] = new Chart(ctx, {
     type:'bar',
     data:{ labels:cohorts.map(c=>c+'기'), datasets },
     options:{
       responsive:true, maintainAspectRatio:false,
-      scales:{
-        x:{stacked:true,grid:{display:false}},
-        y:{stacked:true, ...(pct100?{max:100,ticks:{callback:v=>v+'%'}}:{}), grid:{color:'#F1F5F9'}},
-      },
+      indexAxis: horizontal ? 'y' : 'x',
+      scales: horizontal ? { x:valAxis, y:catAxis } : { x:catAxis, y:valAxis },
       plugins:{
         legend:{position:'bottom',labels:{padding:16,usePointStyle:true,pointStyle:'circle'}},
         tooltip:{ callbacks:{ label:c=>{
@@ -1433,7 +1545,7 @@ function renderStackedBarChart(canvasId, cohorts, gradeKey, title, pct100) {
         }}},
         datalabels:{
           display:c=>c.dataset.data[c.dataIndex]>(pct100?5:3),
-          color:'#fff',font:{weight:'bold',size:11},
+          color:'#fff',font:{weight:'bold',size:horizontal?10:11},
           formatter:v=>pct100?v.toFixed(0)+'%':v,
         }
       }
@@ -1442,7 +1554,7 @@ function renderStackedBarChart(canvasId, cohorts, gradeKey, title, pct100) {
   });
 }
 
-function renderGroupedBarChart(canvasId, cohorts, gradeKey, title) {
+function renderGroupedBarChart(canvasId, cohorts, gradeKey, title, horizontal) {
   const ctx = document.getElementById(canvasId);
   if (!ctx) return;
   const { labels, colors, count, distData } = getGradeData(cohorts, gradeKey);
@@ -1462,10 +1574,14 @@ function renderGroupedBarChart(canvasId, cohorts, gradeKey, title) {
     data:{ labels:cohorts.map(c=>c+'기'), datasets },
     options:{
       responsive:true, maintainAspectRatio:false,
-      scales:{ x:{grid:{display:false}}, y:{grid:{color:'#F1F5F9'},beginAtZero:true} },
+      indexAxis: horizontal ? 'y' : 'x',
+      scales: horizontal
+        ? { x:{grid:{color:'#F1F5F9'},beginAtZero:true}, y:{grid:{display:false}} }
+        : { x:{grid:{display:false}}, y:{grid:{color:'#F1F5F9'},beginAtZero:true} },
       plugins:{
         legend:{position:'bottom',labels:{padding:16,usePointStyle:true,pointStyle:'circle'}},
-        datalabels:{ display:c=>c.dataset.data[c.dataIndex]>0, anchor:'end',align:'top',
+        datalabels:{ display:c=>c.dataset.data[c.dataIndex]>0,
+          anchor:horizontal?'end':'end', align:horizontal?'right':'top',
           color:c=>colors[c.datasetIndex], font:{weight:'bold',size:10}, formatter:v=>v||'' }
       }
     },
