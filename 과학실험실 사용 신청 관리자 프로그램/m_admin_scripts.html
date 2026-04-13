@@ -299,6 +299,17 @@ function filterByStatusCard(status) {
   refreshView();
 }
 
+/* ===== 날짜 직접 지정 ===== */
+function onDateRangeChange() {
+  var from = $('#dateFrom') ? $('#dateFrom').value : '';
+  var to = $('#dateTo') ? $('#dateTo').value : '';
+  if (!from || !to) return;
+  mFilters.dateFrom = from;
+  mFilters.dateTo = to;
+  $$('.quick-btn').forEach(function(b) { b.classList.remove('active'); });
+  loadApplications();
+}
+
 /* ===== 빠른 기간 ===== */
 function onQuickFilter(type, btn) {
   $$('.quick-btn').forEach(function(b) { b.classList.remove('active'); });
@@ -345,6 +356,10 @@ function printDetail() { window.print(); }
 function adminInit() {
   var dates = setQuickDate('today');
   if (dates) { mFilters.dateFrom = dates.from; mFilters.dateTo = dates.to; }
+
+  /* 날짜 직접 지정 시 빠른필터 해제 + 자동 조회 */
+  if ($('#dateFrom')) $('#dateFrom').addEventListener('change', onDateRangeChange);
+  if ($('#dateTo')) $('#dateTo').addEventListener('change', onDateRangeChange);
 
   if ($('#labSelect')) $('#labSelect').addEventListener('change', function() { mFilters.lab = this.value; PAGE.current = 1; refreshView(); });
   if ($('#statusSelect')) $('#statusSelect').addEventListener('change', function() {

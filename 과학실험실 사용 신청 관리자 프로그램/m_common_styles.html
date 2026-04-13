@@ -147,6 +147,18 @@ button:focus-visible,
   padding: 8px; font-size: 13px; color: var(--text-muted);
   cursor: pointer; background: none; border: none; width: 100%;
 }
+/* 날짜 직접 지정 */
+.date-range-row {
+  display: flex; align-items: center; gap: 8px; margin-bottom: 10px;
+}
+.date-input {
+  flex: 1; padding: 10px 12px; border: 1.5px solid var(--border);
+  border-radius: 10px; font-size: 13px; background: var(--bg);
+  color: var(--text); min-height: 44px; font-family: inherit;
+}
+.date-input:focus { border-color: var(--primary); outline: none; }
+.date-separator { color: var(--text-muted); font-size: 14px; font-weight: 600; }
+
 .filter-detail {
   background: var(--surface); border-radius: 12px; padding: 14px;
   margin-bottom: 10px; box-shadow: var(--shadow);

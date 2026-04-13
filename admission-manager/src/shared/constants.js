@@ -49,7 +49,7 @@ const generateExamNumber = (year, seq) => {
   return `${year}-${String(seq).padStart(4, '0')}`;
 };
 
-module.exports = {
+export {
   STATUS, STATUS_LABEL, STATUS_COLOR,
   ADMISSION_TYPES, DOC_CATEGORIES, INTERVIEW_CATEGORIES,
   generateExamNumber,
