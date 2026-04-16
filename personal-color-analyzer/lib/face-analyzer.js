@@ -128,7 +128,8 @@ export function classifyFaceShape(landmarks) {
 
   // ━━━ 5. 연속적 점수 시스템 (가중치 기반) ━━━
 
-  const scores = { round: 0, square: 0, heart: 0, diamond: 0, oblong: 0, oval: 0 };
+  const scores = { round: 0, square: 0, heart: 0, diamond: 0, oblong: 0, oval: 0,
+                    inverted_triangle: 0, rectangle: 0, trapezoid: 0, pear: 0 };
 
   // ── 둥근형 (round) ──
   // 특징: 폭/길이 비율 높음, 턱이 둥글고 넓음, 광대와 턱 차이 적음
@@ -179,6 +180,37 @@ export function classifyFaceShape(landmarks) {
   // 3등분 균형 보너스
   const thirdBalance = 1 - (Math.abs(upperThird - 0.333) + Math.abs(middleThird - 0.333) + Math.abs(lowerThird - 0.333));
   scores.oval += Math.max(0, thirdBalance * 3) * 1.5;
+
+  // ── 역삼각형 (inverted_triangle) ──
+  // 특징: 이마가 넓고 턱이 뾰족, 하트형과 유사하나 헤어라인 직선적, 광대가 이마와 비슷
+  scores.inverted_triangle += sigmoid(foreheadToCheekbone, 0.98, 10) * 2.0;  // 이마 ≈ 광대 (하트형은 이마 > 광대)
+  scores.inverted_triangle += sigmoid(jawToCheekbone, 0.72, -15) * 3.0;      // 턱이 매우 좁음
+  scores.inverted_triangle += sigmoid(chinTaper, 0.60, -12) * 2.5;            // 턱끝이 매우 뾰족
+  scores.inverted_triangle += sigmoid(taperRatio, 0.78, -12) * 2.0;           // 급격한 위→아래 좁아짐
+  scores.inverted_triangle += sigmoid(jawAngle, 90, -0.15) * 1.5;             // 턱 각도 좁음 (날카로운)
+
+  // ── 직사각형 (rectangle) ──
+  // 특징: 사각형 + 긴 얼굴형 복합 — 이마·광대·턱 비슷 + 세로로 김 + 턱이 각짐
+  scores.rectangle += sigmoid(widthToLength, 0.68, -12) * 2.5;               // 세로로 긴 편
+  scores.rectangle += sigmoid(jawToCheekbone, 0.85, 12) * 2.0;               // 턱 ≈ 광대
+  scores.rectangle += sigmoid(foreheadToCheekbone, 0.90, 10) * 1.5;          // 이마 ≈ 광대
+  scores.rectangle += jawStraightness * 2.0;                                   // 턱선 직선적 (각짐)
+  scores.rectangle += sigmoid(jawAngle, 98, -0.12) * 2.0;                     // 턱 각도 좁은 편
+
+  // ── 사다리꼴형 (trapezoid) ──
+  // 특징: 턱이 이마보다 넓음, 턱 라인이 넓고 각짐
+  scores.trapezoid += sigmoid(taperRatio, 1.05, 15) * 3.5;                   // 아래가 위보다 넓음 (핵심)
+  scores.trapezoid += sigmoid(jawToCheekbone, 0.90, 12) * 2.0;               // 턱이 광대만큼 넓음
+  scores.trapezoid += sigmoid(foreheadToCheekbone, 0.88, -10) * 2.0;         // 이마가 좁음
+  scores.trapezoid += jawStraightness * 1.5;                                   // 턱선 직선적 (각짐)
+
+  // ── 배형 (pear) ──
+  // 특징: 사다리꼴과 유사하나 턱이 둥글고 볼이 풍성함
+  scores.pear += sigmoid(taperRatio, 1.05, 15) * 3.0;                        // 아래가 위보다 넓음
+  scores.pear += sigmoid(jawToCheekbone, 0.88, 12) * 2.0;                    // 턱이 넓음
+  scores.pear += sigmoid(foreheadToCheekbone, 0.88, -10) * 2.0;              // 이마가 좁음
+  scores.pear += (1 - jawStraightness) * 2.0;                                 // 턱선이 둥근 (사다리꼴과의 차이)
+  scores.pear += sigmoid(jawAngle, 105, 0.12) * 1.5;                          // 턱 각도 넓음 (둥근)
 
   // ━━━ 6. 결과 결정 ━━━
 
