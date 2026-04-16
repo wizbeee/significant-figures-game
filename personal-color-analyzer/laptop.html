@@ -329,6 +329,103 @@
                 </div>
               </div>
             </div>
+
+            <!-- Detailed Face Ratios Section -->
+            <div id="faceDetailedRatios" class="hidden border-t border-white/5">
+              <!-- Toggle Button -->
+              <button onclick="document.getElementById('ratioDetails').classList.toggle('hidden'); this.querySelector('.chevron').classList.toggle('rotate-180')"
+                class="w-full p-6 md:p-8 flex items-center justify-between hover:bg-white/[0.02] transition-colors">
+                <div class="flex items-center gap-2">
+                  <span class="text-xs text-violet-500 font-medium tracking-widest uppercase">Detailed Analysis</span>
+                  <div class="w-8 h-px bg-violet-500/30"></div>
+                  <span class="text-zinc-600 text-xs">30+ 정밀 측정 데이터</span>
+                </div>
+                <svg class="chevron w-4 h-4 text-zinc-600 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                </svg>
+              </button>
+
+              <div id="ratioDetails" class="hidden px-6 md:px-8 pb-8 space-y-6">
+
+                <!-- Golden Ratio Score -->
+                <div id="goldenRatioCard" class="glass rounded-2xl p-5 border border-amber-500/10">
+                  <div class="flex items-center justify-between mb-4">
+                    <div class="flex items-center gap-2">
+                      <span class="text-amber-400 text-lg">&#x2728;</span>
+                      <h5 class="text-sm font-medium text-amber-300">황금비율 적합도</h5>
+                    </div>
+                    <span id="goldenFitScore" class="text-2xl font-light text-amber-300">--</span>
+                  </div>
+                  <div class="w-full bg-zinc-800 rounded-full h-2 mb-4">
+                    <div id="goldenFitBar" class="h-2 rounded-full bg-gradient-to-r from-amber-600 to-amber-400 transition-all duration-1000" style="width: 0%"></div>
+                  </div>
+                  <div id="goldenRatioItems" class="grid grid-cols-2 md:grid-cols-4 gap-3"></div>
+                </div>
+
+                <!-- Symmetry Score -->
+                <div id="symmetryCard" class="glass rounded-2xl p-5 border border-cyan-500/10">
+                  <div class="flex items-center justify-between mb-4">
+                    <div class="flex items-center gap-2">
+                      <span class="text-cyan-400 text-lg">&#x2696;&#xFE0F;</span>
+                      <h5 class="text-sm font-medium text-cyan-300">좌우 대칭 분석</h5>
+                    </div>
+                    <span id="overallSymmetry" class="text-2xl font-light text-cyan-300">--</span>
+                  </div>
+                  <div id="symmetryBars" class="space-y-2"></div>
+                </div>
+
+                <!-- Feature Grid: Eyes, Eyebrows, Nose, Mouth -->
+                <div class="grid md:grid-cols-2 gap-4">
+                  <!-- Eye Analysis -->
+                  <div class="tip-card">
+                    <p class="text-sky-400 text-xs font-medium mb-3 flex items-center gap-1.5">
+                      <span class="w-2 h-2 rounded-full bg-sky-400"></span> 눈 분석
+                    </p>
+                    <div id="eyeAnalysis" class="space-y-2"></div>
+                  </div>
+                  <!-- Eyebrow Analysis -->
+                  <div class="tip-card">
+                    <p class="text-indigo-400 text-xs font-medium mb-3 flex items-center gap-1.5">
+                      <span class="w-2 h-2 rounded-full bg-indigo-400"></span> 눈썹 분석
+                    </p>
+                    <div id="eyebrowAnalysis" class="space-y-2"></div>
+                  </div>
+                  <!-- Nose Analysis -->
+                  <div class="tip-card">
+                    <p class="text-teal-400 text-xs font-medium mb-3 flex items-center gap-1.5">
+                      <span class="w-2 h-2 rounded-full bg-teal-400"></span> 코 분석
+                    </p>
+                    <div id="noseAnalysis" class="space-y-2"></div>
+                  </div>
+                  <!-- Mouth Analysis -->
+                  <div class="tip-card">
+                    <p class="text-rose-400 text-xs font-medium mb-3 flex items-center gap-1.5">
+                      <span class="w-2 h-2 rounded-full bg-rose-400"></span> 입 분석
+                    </p>
+                    <div id="mouthAnalysis" class="space-y-2"></div>
+                  </div>
+                </div>
+
+                <!-- Face Fifths & Vertical Position -->
+                <div class="grid md:grid-cols-2 gap-4">
+                  <!-- Face Fifths -->
+                  <div class="tip-card">
+                    <p class="text-purple-400 text-xs font-medium mb-3 flex items-center gap-1.5">
+                      <span class="w-2 h-2 rounded-full bg-purple-400"></span> 얼굴 가로 5등분 균형
+                    </p>
+                    <div id="faceFifths" class="space-y-2"></div>
+                  </div>
+                  <!-- Vertical Positions -->
+                  <div class="tip-card">
+                    <p class="text-orange-400 text-xs font-medium mb-3 flex items-center gap-1.5">
+                      <span class="w-2 h-2 rounded-full bg-orange-400"></span> 세로 배치 분석
+                    </p>
+                    <div id="verticalPositions" class="space-y-2"></div>
+                  </div>
+                </div>
+
+              </div>
+            </div>
           </div>
         </div>
 
@@ -1165,6 +1262,157 @@
           document.getElementById('faceStylingTipText').textContent = tipText;
         }
 
+        // ── Detailed Face Ratios ──
+        if (faceClass.detailedRatios) {
+          document.getElementById('faceDetailedRatios').classList.remove('hidden');
+          const dr = faceClass.detailedRatios;
+
+          // Helper: ratio bar with label
+          function ratioRow(label, value, ideal, unit = '') {
+            const pct = ideal > 0 ? Math.min((value / ideal) * 100, 150) : 0;
+            const diff = Math.abs(value - ideal);
+            const quality = diff < ideal * 0.05 ? 'text-emerald-400' : diff < ideal * 0.15 ? 'text-amber-400' : 'text-red-400';
+            return `<div class="flex items-center gap-3">
+              <span class="text-zinc-500 text-[11px] w-24 shrink-0">${label}</span>
+              <div class="flex-1 bg-zinc-800 rounded-full h-1.5">
+                <div class="h-1.5 rounded-full bg-violet-500/60" style="width:${Math.min(pct, 100)}%"></div>
+              </div>
+              <span class="${quality} text-[11px] font-mono w-14 text-right">${value}${unit}</span>
+            </div>`;
+          }
+
+          // Golden Ratio
+          const gr = dr.goldenRatio;
+          document.getElementById('goldenFitScore').textContent = gr.fitScore + '/100';
+          setTimeout(() => {
+            document.getElementById('goldenFitBar').style.width = gr.fitScore + '%';
+          }, 300);
+          const grLabels = {
+            faceWidthToLength: '얼굴 종횡비',
+            noseToMouth: '코-입 비율',
+            eyeSpacing: '눈 간격',
+            lipBalance: '입술 균형'
+          };
+          document.getElementById('goldenRatioItems').innerHTML =
+            Object.entries(gr).filter(([k]) => k !== 'fitScore').map(([k, v]) => `
+              <div class="glass rounded-xl p-3 text-center">
+                <p class="text-zinc-600 text-[10px] mb-1">${grLabels[k] || k}</p>
+                <p class="text-white text-sm font-mono">${v.actual}</p>
+                <p class="text-zinc-600 text-[10px] mt-0.5">이상: ${v.ideal} (차이: ${v.diff})</p>
+              </div>`).join('');
+
+          // Symmetry
+          const sym = dr.symmetry;
+          document.getElementById('overallSymmetry').textContent = Math.round(sym.overall * 100) + '%';
+          const symLabels = { eye: '눈', eyebrow: '눈썹', cheek: '광대', jaw: '턱', mouth: '입', nose: '코' };
+          document.getElementById('symmetryBars').innerHTML =
+            Object.entries(sym).filter(([k]) => k !== 'overall').map(([k, v]) => {
+              const pct = Math.round(v * 100);
+              const color = pct >= 95 ? 'from-emerald-600 to-emerald-400' : pct >= 85 ? 'from-cyan-600 to-cyan-400' : 'from-amber-600 to-amber-400';
+              return `<div class="flex items-center gap-3">
+                <span class="text-zinc-500 text-[11px] w-12 shrink-0">${symLabels[k] || k}</span>
+                <div class="flex-1 bg-zinc-800 rounded-full h-1.5">
+                  <div class="h-1.5 rounded-full bg-gradient-to-r ${color}" style="width:${pct}%"></div>
+                </div>
+                <span class="text-zinc-400 text-[11px] font-mono w-10 text-right">${pct}%</span>
+              </div>`;
+            }).join('');
+
+          // Eye Analysis
+          const eye = dr.eye;
+          const canthalLabel = eye.canthalTilt > 3 ? '상향 (눈꼬리 올라감)' : eye.canthalTilt < -3 ? '하향 (눈꼬리 내려감)' : '수평';
+          const spacingLabel = eye.spacingRatio > 1.1 ? '넓은 편' : eye.spacingRatio < 0.9 ? '좁은 편' : '표준';
+          document.getElementById('eyeAnalysis').innerHTML = [
+            ratioRow('눈 종횡비', eye.aspectRatio, 0.35),
+            ratioRow('눈 간격 비율', eye.spacingRatio, 1.0),
+            ratioRow('캔탈 틸트', eye.canthalTilt, 5, '°'),
+            ratioRow('눈-눈썹 간격', eye.browDistanceRatio, 1.5),
+            `<div class="flex gap-2 mt-2">
+              <span class="glass rounded-full px-2.5 py-0.5 text-[10px] text-sky-400">기울기: ${canthalLabel}</span>
+              <span class="glass rounded-full px-2.5 py-0.5 text-[10px] text-sky-400">간격: ${spacingLabel}</span>
+            </div>`
+          ].join('');
+
+          // Eyebrow Analysis
+          const brow = dr.eyebrow;
+          const archLabel = brow.archHeight > 0.15 ? '높은 아치' : brow.archHeight > 0.08 ? '중간 아치' : '일자형';
+          document.getElementById('eyebrowAnalysis').innerHTML = [
+            ratioRow('길이/얼굴 비율', brow.toFaceRatio, 0.28),
+            ratioRow('아치 높이', brow.archHeight, 0.12),
+            `<div class="mt-2">
+              <span class="glass rounded-full px-2.5 py-0.5 text-[10px] text-indigo-400">형태: ${archLabel}</span>
+            </div>`
+          ].join('');
+
+          // Nose Analysis
+          const nose = dr.nose;
+          const noseWidthLabel = nose.toFaceWidthRatio > 0.28 ? '넓은 편' : nose.toFaceWidthRatio < 0.22 ? '좁은 편' : '표준';
+          document.getElementById('noseAnalysis').innerHTML = [
+            ratioRow('코 너비/얼굴', nose.toFaceWidthRatio, 0.25),
+            ratioRow('코 길이/얼굴', nose.toLengthRatio, 0.33),
+            ratioRow('코/눈 간격', nose.toEyeSpacing, 1.0),
+            `<div class="mt-2">
+              <span class="glass rounded-full px-2.5 py-0.5 text-[10px] text-teal-400">너비: ${noseWidthLabel}</span>
+            </div>`
+          ].join('');
+
+          // Mouth Analysis
+          const mouth = dr.mouth;
+          const lipLabel = mouth.lipRatio > 0.7 ? '윗입술 두꺼운 편' : mouth.lipRatio < 0.4 ? '아랫입술 두꺼운 편' : '균형';
+          document.getElementById('mouthAnalysis').innerHTML = [
+            ratioRow('입 너비/얼굴', mouth.toFaceWidthRatio, 0.38),
+            ratioRow('입술 비율 (상/하)', mouth.lipRatio, 0.618),
+            ratioRow('인중 비율', mouth.philtrumRatio, 0.33),
+            ratioRow('입-턱 비율', mouth.mouthToChinRatio, 0.50),
+            `<div class="mt-2">
+              <span class="glass rounded-full px-2.5 py-0.5 text-[10px] text-rose-400">입술: ${lipLabel}</span>
+            </div>`
+          ].join('');
+
+          // Face Fifths
+          const fifths = dr.fifths;
+          const fifthLabels = ['외측 좌', '왼쪽 눈', '미간', '오른쪽 눈', '외측 우'];
+          const fifthValues = [fifths.outerLeft, fifths.leftEye, fifths.center, fifths.rightEye, fifths.outerRight];
+          document.getElementById('faceFifths').innerHTML = `
+            <div class="flex gap-1 mb-3">
+              ${fifthValues.map((v, i) => {
+                const pct = Math.round(v * 100);
+                const color = Math.abs(v - 1.0) < 0.1 ? 'bg-emerald-500/40' : Math.abs(v - 1.0) < 0.2 ? 'bg-amber-500/40' : 'bg-red-500/40';
+                return `<div class="flex-1 text-center">
+                  <div class="h-8 ${color} rounded flex items-center justify-center">
+                    <span class="text-[10px] text-white font-mono">${pct}%</span>
+                  </div>
+                  <p class="text-[9px] text-zinc-600 mt-1">${fifthLabels[i]}</p>
+                </div>`;
+              }).join('')}
+            </div>
+            <p class="text-zinc-600 text-[10px]">* 100%가 이상적 균형 (각 영역이 동일 너비)</p>`;
+
+          // Vertical Positions
+          const vp = dr.verticalPosition;
+          const vpItems = [
+            { label: '눈 위치', value: vp.eye, ideal: 0.36 },
+            { label: '코끝 위치', value: vp.nose, ideal: 0.67 },
+            { label: '입 위치', value: vp.mouth, ideal: 0.80 }
+          ];
+          document.getElementById('verticalPositions').innerHTML = vpItems.map(item => {
+            const pctPos = Math.round(item.value * 100);
+            const idealPct = Math.round(item.ideal * 100);
+            const diff = Math.abs(item.value - item.ideal);
+            const quality = diff < 0.03 ? 'text-emerald-400' : diff < 0.06 ? 'text-amber-400' : 'text-red-400';
+            return `<div>
+              <div class="flex justify-between mb-1">
+                <span class="text-zinc-500 text-[11px]">${item.label}</span>
+                <span class="${quality} text-[11px] font-mono">${pctPos}% (이상: ${idealPct}%)</span>
+              </div>
+              <div class="relative w-full bg-zinc-800 rounded-full h-2">
+                <div class="absolute h-full w-0.5 bg-zinc-500" style="left:${idealPct}%"></div>
+                <div class="absolute h-2 w-2 rounded-full bg-orange-400 top-0" style="left:calc(${pctPos}% - 4px)"></div>
+              </div>
+            </div>`;
+          }).join('');
+        }
+
         chapterNum++;
       }
 
@@ -1503,7 +1751,7 @@
 
       // Store results for AI/PDF/email
       lastResults = {
-        face: faceClass ? { shape: faceClass.shape, confidence: faceClass.confidence, scores: faceClass.scores } : null,
+        face: faceClass ? { shape: faceClass.shape, confidence: faceClass.confidence, scores: faceClass.scores, detailedRatios: faceClass.detailedRatios || null } : null,
         color: colorResult && !colorResult.error ? { key: colorResult.key, season: colorResult.season, subtype: colorResult.subtype, confidence: colorResult.confidence, warmScore: colorResult.warmScore, chroma: colorResult.chroma } : null,
         body: bodyClass ? { bodyType: bodyClass.bodyType, confidence: bodyClass.confidence, scores: bodyClass.scores } : null
       };

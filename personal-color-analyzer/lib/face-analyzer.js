@@ -207,16 +207,165 @@ export function classifyFaceShape(landmarks) {
   }
   confidence = Math.max(20, Math.min(95, confidence));
 
+  // ━━━ 7. 정밀 비율 분석 (추가 30+ 항목) ━━━
+
+  // ── 눈 분석 ──
+  // 왼쪽 눈: 33(외안각), 133(내안각), 159(상), 145(하)
+  // 오른쪽 눈: 362(외안각), 263(내안각), 386(상), 374(하)
+  const leftEyeWidth   = dist(landmarks, 33, 133);
+  const rightEyeWidth  = dist(landmarks, 362, 263);
+  const avgEyeWidth    = (leftEyeWidth + rightEyeWidth) / 2;
+  const leftEyeHeight  = dist(landmarks, 159, 145);
+  const rightEyeHeight = dist(landmarks, 386, 374);
+  const avgEyeHeight   = (leftEyeHeight + rightEyeHeight) / 2;
+  const eyeAspectRatio = avgEyeHeight / avgEyeWidth;  // 눈 높이/너비
+
+  // 눈 간격 (내안각 간 거리)
+  const innerEyeDistance = dist(landmarks, 133, 362);
+  // 눈 간격 비율 (이상적: 눈 하나 너비 = 눈 간격)
+  const eyeSpacingRatio = innerEyeDistance / avgEyeWidth;
+
+  // 동공간 거리 (IPD)
+  const leftPupil  = landmarks[468] || midpoint(landmarks, 33, 133);  // 468 = 왼쪽 홍채 중심
+  const rightPupil = landmarks[473] || midpoint(landmarks, 362, 263); // 473 = 오른쪽 홍채 중심
+  const interpupillaryDist = distPt(leftPupil, rightPupil);
+
+  // 캔탈 틸트 (눈 기울기 각도)
+  // 양수 = 눈꼬리가 위로 (상향), 음수 = 아래로 (하향)
+  const leftCanthalTilt = Math.atan2(
+    landmarks[33].y - landmarks[133].y,
+    landmarks[33].x - landmarks[133].x
+  ) * (180 / Math.PI);
+  const rightCanthalTilt = Math.atan2(
+    landmarks[263].y - landmarks[362].y,
+    landmarks[263].x - landmarks[362].x
+  ) * (180 / Math.PI);
+  const avgCanthalTilt = (Math.abs(leftCanthalTilt) + Math.abs(rightCanthalTilt)) / 2;
+
+  // 눈-눈썹 간격
+  // 왼쪽 눈썹 중심: 105, 오른쪽 눈썹 중심: 334
+  const leftBrowEyeDist  = dist(landmarks, 105, 159);
+  const rightBrowEyeDist = dist(landmarks, 334, 386);
+  const avgBrowEyeDist   = (leftBrowEyeDist + rightBrowEyeDist) / 2;
+  const browEyeRatio     = avgBrowEyeDist / avgEyeHeight; // 눈-눈썹 간격 / 눈 높이
+
+  // ── 눈썹 분석 ──
+  // 왼쪽 눈썹: 70(시작), 105(산), 107(끝)
+  // 오른쪽 눈썹: 300(시작), 334(산), 336(끝)
+  const leftBrowLength  = dist(landmarks, 70, 107);
+  const rightBrowLength = dist(landmarks, 300, 336);
+  const avgBrowLength   = (leftBrowLength + rightBrowLength) / 2;
+  const browToFaceRatio = avgBrowLength / cheekboneWidth;
+
+  // 눈썹 아치 높이 (눈썹산이 시작-끝 직선에서 얼마나 떨어지는지)
+  function browArchHeight(startIdx, peakIdx, endIdx) {
+    const s = landmarks[startIdx], p = landmarks[peakIdx], e = landmarks[endIdx];
+    const lineLen = distPt(s, e);
+    if (lineLen < 0.001) return 0;
+    const d = Math.abs(
+      (e.y - s.y) * p.x - (e.x - s.x) * p.y + e.x * s.y - e.y * s.x
+    ) / lineLen;
+    return d / lineLen;
+  }
+  const leftArchHeight  = browArchHeight(70, 105, 107);
+  const rightArchHeight = browArchHeight(300, 334, 336);
+  const avgBrowArch     = (leftArchHeight + rightArchHeight) / 2;
+
+  // ── 코 분석 ──
+  // 코끝: 1, 코 브릿지: 6, 코 날개: 48(왼), 278(오)
+  const noseWidth    = dist(landmarks, 48, 278);
+  const noseLength   = dist(landmarks, 6, 1);
+  const noseBridgeW  = dist(landmarks, 193, 417);  // 코 브릿지 너비
+  const noseToFaceW  = noseWidth / cheekboneWidth;  // 코 너비 / 얼굴 너비
+  const noseLengthR  = noseLength / faceLength;     // 코 길이 / 얼굴 길이
+  // 코 너비 vs 눈 간격 (이상적: 비슷)
+  const noseToEyeSpacing = noseWidth / innerEyeDistance;
+
+  // ── 입 분석 ──
+  // 입 양쪽: 61(왼), 291(오), 윗입술 중앙: 0, 아랫입술 중앙: 17
+  const mouthWidth   = dist(landmarks, 61, 291);
+  const upperLipH    = dist(landmarks, 0, 13);    // 윗입술 높이
+  const lowerLipH    = dist(landmarks, 14, 17);   // 아랫입술 높이
+  const totalLipH    = upperLipH + lowerLipH;
+  const lipRatio     = upperLipH / lowerLipH;      // 윗입술/아랫입술 (이상적: ~0.5-0.6)
+  const mouthToFaceW = mouthWidth / cheekboneWidth; // 입 너비 / 얼굴 너비
+
+  // 인중 길이 (코끝 ~ 윗입술)
+  const philtrumLength = dist(landmarks, 2, 0);
+  const philtrumRatio  = philtrumLength / lowerFaceHeight; // 인중 / 하안면
+
+  // 입-턱 거리
+  const mouthToChin    = dist(landmarks, 17, 152);
+  const mouthChinRatio = mouthToChin / lowerFaceHeight;
+
+  // ── 얼굴 5등분 분석 (가로) ──
+  // 이상적: 얼굴 너비 = 눈 너비 × 5
+  const faceFifthIdeal  = cheekboneWidth / 5;
+  const fifthBalance = {
+    outerLeft:  dist(landmarks, 234, 33) / faceFifthIdeal,   // 외안각왼~얼굴왼
+    leftEye:    leftEyeWidth / faceFifthIdeal,                // 왼쪽 눈
+    center:     innerEyeDistance / faceFifthIdeal,             // 눈 사이
+    rightEye:   rightEyeWidth / faceFifthIdeal,               // 오른쪽 눈
+    outerRight: dist(landmarks, 263, 454) / faceFifthIdeal    // 외안각오~얼굴오
+  };
+
+  // ── 좌우 대칭 분석 ──
+  const faceCenterX = (landmarks[10].x + landmarks[152].x) / 2;
+
+  function asymmetry(leftIdx, rightIdx) {
+    const leftDist  = Math.abs(landmarks[leftIdx].x - faceCenterX);
+    const rightDist = Math.abs(landmarks[rightIdx].x - faceCenterX);
+    const avg = (leftDist + rightDist) / 2;
+    return avg > 0.001 ? Math.abs(leftDist - rightDist) / avg : 0;
+  }
+
+  const symmetryScores = {
+    eye:      1 - asymmetry(33, 263),         // 눈 대칭
+    eyebrow:  1 - asymmetry(105, 334),        // 눈썹 대칭
+    cheek:    1 - asymmetry(234, 454),         // 광대 대칭
+    jaw:      1 - asymmetry(172, 397),         // 턱 대칭
+    mouth:    1 - asymmetry(61, 291),          // 입 대칭
+    nose:     1 - asymmetry(48, 278)           // 코 대칭
+  };
+  const overallSymmetry = Object.values(symmetryScores).reduce((a, b) => a + b, 0) / 6;
+
+  // ── 황금비율 비교 ──
+  const PHI = 1.618;
+  const goldenRatios = {
+    faceWidthToLength: { actual: round2(1 / widthToLength), ideal: round2(PHI), diff: round2(Math.abs(1/widthToLength - PHI)) },
+    noseToMouth:       { actual: round2(philtrumLength / mouthWidth), ideal: round2(1 / PHI), diff: round2(Math.abs(philtrumLength/mouthWidth - 1/PHI)) },
+    eyeSpacing:        { actual: round2(eyeSpacingRatio), ideal: 1.0, diff: round2(Math.abs(eyeSpacingRatio - 1.0)) },
+    lipBalance:        { actual: round2(lipRatio), ideal: round2(1 / PHI), diff: round2(Math.abs(lipRatio - 1/PHI)) }
+  };
+  // 황금비율 적합도 (0~100)
+  const goldenFit = Math.round(
+    Math.max(0, 100 - (goldenRatios.faceWidthToLength.diff + goldenRatios.eyeSpacing.diff + goldenRatios.lipBalance.diff) * 50)
+  );
+
+  // ── 눈/코/입 세로 배치 분석 ──
+  const eyeLineY     = (landmarks[159].y + landmarks[386].y) / 2;
+  const noseBottomY  = landmarks[2].y;
+  const mouthCenterY = landmarks[13].y;
+  const chinY        = landmarks[152].y;
+  const foreheadTopY = landmarks[10].y;
+  const totalHeight  = chinY - foreheadTopY;
+
+  const eyePosition    = (eyeLineY - foreheadTopY) / totalHeight;      // 눈 위치 (이상적: ~0.36)
+  const nosePosition   = (noseBottomY - foreheadTopY) / totalHeight;   // 코끝 위치 (이상적: ~0.67)
+  const mouthPosition  = (mouthCenterY - foreheadTopY) / totalHeight;  // 입 위치 (이상적: ~0.80)
+
   return {
     shape: bestType,
     confidence,
     measurements: {
+      // 기본 치수
       foreheadWidth:   round4(foreheadWidth),
       templeWidth:     round4(templeWidth),
       cheekboneWidth:  round4(cheekboneWidth),
       jawWidth:        round4(jawWidth),
       chinWidth:       round4(chinWidth),
       faceLength:      round4(faceLength),
+      // 기본 비율
       widthToLength:   round2(widthToLength),
       jawToCheekbone:  round2(jawToCheekbone),
       chinToCheekbone: round2(chinToCheekbone),
@@ -226,9 +375,62 @@ export function classifyFaceShape(landmarks) {
       jawAngle:        Math.round(jawAngle),
       jawCurvature:    round4(avgJawCurvature),
       cheekProminence: round2(cheekProminence),
+      // 3등분 비율
       upperThird:      round2(upperThird),
       middleThird:     round2(middleThird),
       lowerThird:      round2(lowerThird)
+    },
+    // 정밀 비율 데이터
+    detailedRatios: {
+      eye: {
+        avgWidth:         round4(avgEyeWidth),
+        avgHeight:        round4(avgEyeHeight),
+        aspectRatio:      round2(eyeAspectRatio),
+        innerDistance:     round4(innerEyeDistance),
+        spacingRatio:     round2(eyeSpacingRatio),
+        interpupillary:   round4(interpupillaryDist),
+        canthalTilt:      round2(avgCanthalTilt),
+        browDistance:      round4(avgBrowEyeDist),
+        browDistanceRatio: round2(browEyeRatio)
+      },
+      eyebrow: {
+        avgLength:        round4(avgBrowLength),
+        toFaceRatio:      round2(browToFaceRatio),
+        archHeight:       round4(avgBrowArch)
+      },
+      nose: {
+        width:            round4(noseWidth),
+        length:           round4(noseLength),
+        bridgeWidth:      round4(noseBridgeW),
+        toFaceWidthRatio: round2(noseToFaceW),
+        toLengthRatio:    round2(noseLengthR),
+        toEyeSpacing:     round2(noseToEyeSpacing)
+      },
+      mouth: {
+        width:            round4(mouthWidth),
+        upperLipHeight:   round4(upperLipH),
+        lowerLipHeight:   round4(lowerLipH),
+        totalLipHeight:   round4(totalLipH),
+        lipRatio:         round2(lipRatio),
+        toFaceWidthRatio: round2(mouthToFaceW),
+        philtrumLength:   round4(philtrumLength),
+        philtrumRatio:    round2(philtrumRatio),
+        mouthToChinRatio: round2(mouthChinRatio)
+      },
+      fifths: fifthBalance,
+      verticalPosition: {
+        eye:   round2(eyePosition),
+        nose:  round2(nosePosition),
+        mouth: round2(mouthPosition)
+      },
+      symmetry: {
+        ...Object.fromEntries(Object.entries(symmetryScores).map(([k,v]) => [k, round2(v)])),
+        overall: round2(overallSymmetry)
+      },
+      goldenRatio: {
+        ...goldenRatios,
+        fitScore: goldenFit
+      }
     },
     scores: Object.fromEntries(
       Object.entries(scores).map(([k, v]) => [k, round2(v)])
