@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>유효숫자 마스터 - 교사 대시보드</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --pri:#6366f1;--sec:#10b981;--acc:#f59e0b;--err:#ef4444;
+  --bg:#0f172a;--bg2:#1e293b;--bg3:#334155;--txt:#f1f5f9;--txt2:#94a3b8;
+  --radius:12px;--shadow:0 4px 24px rgba(0,0,0,.3);
+}
+body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--txt);min-height:100vh;line-height:1.5}
+button{cursor:pointer;font-family:inherit;border:none;border-radius:8px;font-size:.9rem;font-weight:600;padding:.55rem 1.1rem;transition:all .15s}
+button:active{transform:scale(.96)}
+select,input{font-family:inherit;font-size:.9rem;padding:.55rem .8rem;border-radius:8px;border:2px solid var(--bg3);background:var(--bg);color:var(--txt);outline:none;transition:border-color .15s}
+select:focus,input:focus{border-color:var(--pri)}
+
+/* Top Bar */
+.topbar{background:var(--bg2);border-bottom:1px solid var(--bg3);padding:.8rem 1.5rem;display:flex;align-items:center;gap:1rem;flex-wrap:wrap;position:sticky;top:0;z-index:100}
+.topbar h1{font-size:1.15rem;white-space:nowrap}
+.status-group{display:flex;align-items:center;gap:1.2rem;margin-left:auto;flex-wrap:wrap}
+.status-item{display:flex;align-items:center;gap:.4rem;font-size:.85rem;color:var(--txt2)}
+.dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+.dot.on{background:var(--sec);box-shadow:0 0 8px var(--sec)}
+.dot.off{background:var(--err);box-shadow:0 0 8px var(--err)}
+.badge{background:var(--bg3);padding:.15rem .6rem;border-radius:20px;font-size:.8rem;color:var(--txt)}
+
+/* Layout */
+.container{max-width:1200px;margin:0 auto;padding:1.5rem}
+.section{margin-bottom:2rem}
+.section-title{font-size:1.1rem;font-weight:700;margin-bottom:1rem;display:flex;align-items:center;gap:.5rem}
+
+/* Create Room */
+.create-panel{background:var(--bg2);border-radius:var(--radius);padding:1.5rem;box-shadow:var(--shadow)}
+.form-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:1rem;margin-bottom:1.2rem}
+.form-group{display:flex;flex-direction:column;gap:.35rem}
+.form-group label{font-size:.8rem;color:var(--txt2);font-weight:600}
+.btn-create{background:var(--pri);color:#fff;padding:.7rem 2rem;font-size:1rem}
+.btn-create:hover{background:#818cf8}
+
+/* Room Cards */
+.room-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(380px,1fr));gap:1.2rem}
+.room-card{background:var(--bg2);border-radius:var(--radius);overflow:hidden;box-shadow:var(--shadow);border:2px solid transparent;transition:border-color .2s}
+.room-card[data-status="waiting"]{border-color:#3b82f6}
+.room-card[data-status="playing"]{border-color:var(--sec)}
+.room-card[data-status="finished"]{border-color:var(--acc)}
+.room-header{padding:1rem 1.2rem;display:flex;align-items:flex-start;justify-content:space-between;gap:.8rem}
+.room-code{font-size:4rem;font-weight:900;letter-spacing:.15em;line-height:1;font-variant-numeric:tabular-nums}
+.room-card[data-status="waiting"] .room-code{color:#60a5fa}
+.room-card[data-status="playing"] .room-code{color:var(--sec)}
+.room-card[data-status="finished"] .room-code{color:var(--acc)}
+.room-meta{text-align:right;flex-shrink:0}
+.room-status{display:inline-block;padding:.2rem .7rem;border-radius:20px;font-size:.75rem;font-weight:700;text-transform:uppercase}
+.status-waiting{background:rgba(59,130,246,.2);color:#60a5fa}
+.status-playing{background:rgba(16,185,129,.2);color:#34d399}
+.status-finished{background:rgba(245,158,11,.2);color:#fbbf24}
+.room-info{padding:0 1.2rem .6rem;font-size:.82rem;color:var(--txt2);display:flex;flex-wrap:wrap;gap:.4rem .8rem}
+.room-info span{display:flex;align-items:center;gap:.25rem}
+.timer-bar{margin:0 1.2rem;height:6px;background:var(--bg3);border-radius:3px;overflow:hidden}
+.timer-fill{height:100%;background:var(--sec);border-radius:3px;transition:width .5s linear}
+.timer-text{text-align:center;font-size:1.8rem;font-weight:800;padding:.4rem 0;color:var(--sec);font-variant-numeric:tabular-nums}
+.room-card[data-status="playing"] .timer-text{animation:pulse 1s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.6}}
+
+/* Player List */
+.player-section{padding:.6rem 1.2rem 1rem}
+.player-section h4{font-size:.8rem;color:var(--txt2);margin-bottom:.5rem;font-weight:600}
+.player-list{display:flex;flex-direction:column;gap:.35rem;max-height:300px;overflow-y:auto}
+.player-row{display:flex;align-items:center;gap:.6rem;padding:.4rem .6rem;background:var(--bg);border-radius:8px;font-size:.82rem}
+.player-rank{width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:.75rem;flex-shrink:0}
+.rank-1{background:linear-gradient(135deg,#fbbf24,#f59e0b);color:#1e293b}
+.rank-2{background:linear-gradient(135deg,#d1d5db,#9ca3af);color:#1e293b}
+.rank-3{background:linear-gradient(135deg,#d97706,#b45309);color:#fff}
+.rank-n{background:var(--bg3);color:var(--txt2)}
+.player-name{flex:1;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.player-stats{display:flex;gap:.6rem;color:var(--txt2);font-size:.75rem;flex-shrink:0}
+.player-stats span{white-space:nowrap}
+.stat-score{color:var(--acc);font-weight:700;font-size:.85rem}
+.btn-kick{background:rgba(239,68,68,.15);color:var(--err);padding:.2rem .5rem;font-size:.72rem;border-radius:6px}
+.btn-kick:hover{background:rgba(239,68,68,.3)}
+
+/* Room Actions */
+.room-actions{padding:.6rem 1.2rem 1rem;display:flex;gap:.5rem;flex-wrap:wrap}
+.btn-start{background:var(--sec);color:#fff}.btn-start:hover{background:#34d399}
+.btn-stop{background:var(--acc);color:#1e293b}.btn-stop:hover{background:#fbbf24}
+.btn-delete{background:var(--err);color:#fff}.btn-delete:hover{background:#f87171}
+.btn-start:disabled,.btn-stop:disabled{opacity:.4;cursor:not-allowed;transform:none}
+
+/* Toast */
+.toast-container{position:fixed;top:5rem;right:1.5rem;z-index:200;display:flex;flex-direction:column;gap:.5rem}
+.toast{padding:.7rem 1.2rem;border-radius:8px;font-size:.85rem;font-weight:600;animation:slideIn .3s;box-shadow:var(--shadow)}
+.toast-error{background:rgba(239,68,68,.9);color:#fff}
+.toast-success{background:rgba(16,185,129,.9);color:#fff}
+@keyframes slideIn{from{transform:translateX(100%);opacity:0}to{transform:translateX(0);opacity:1}}
+
+.empty-state{text-align:center;padding:3rem;color:var(--txt2);font-size:.95rem}
+
+/* Stats Bar */
+.stats-bar{display:flex;gap:1rem;flex-wrap:wrap}
+.stat-box{flex:1;min-width:120px;background:var(--bg2);border-radius:var(--radius);padding:1rem 1.2rem;text-align:center;box-shadow:var(--shadow)}
+.stat-num{font-size:1.8rem;font-weight:800;color:var(--acc);font-variant-numeric:tabular-nums}
+.stat-label{font-size:.78rem;color:var(--txt2);margin-top:.2rem;font-weight:600}
+
+/* CSV button */
+.btn-csv{background:rgba(99,102,241,.15);color:var(--pri);padding:.35rem .7rem;font-size:.78rem;border-radius:6px}
+.btn-csv:hover{background:rgba(99,102,241,.3)}
+
+/* Scrollbar */
+::-webkit-scrollbar{width:6px}
+::-webkit-scrollbar-track{background:var(--bg)}
+::-webkit-scrollbar-thumb{background:var(--bg3);border-radius:3px}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <h1>&#x1f52c; 유효숫자 마스터 - 교사 대시보드</h1>
+  <div class="status-group">
+    <div class="status-item"><div class="dot off" id="wsDot"></div><span id="wsLabel">연결 끊김</span></div>
+    <div class="status-item">&#x1f465; 접속: <span class="badge" id="playerCount">0</span></div>
+    <div class="status-item">&#x1f310; IP: <span class="badge" id="serverIp">-</span></div>
+  </div>
+</div>
+
+<div class="container">
+  <!-- Create Room -->
+  <div class="section">
+    <div class="section-title">&#x1f3e0; 방 만들기</div>
+    <div class="create-panel">
+      <div class="form-grid">
+        <div class="form-group">
+          <label>게임 모드</label>
+          <select id="cfgMode">
+            <option value="1">1 - 유효숫자 개수 세기</option>
+            <option value="2">2 - 유효숫자 찾기</option>
+            <option value="3">3 - 측정값 읽기</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>플레이 모드</label>
+          <select id="cfgPlay">
+            <option value="multi">멀티플레이</option>
+            <option value="battle">대전 플레이</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>제한 시간</label>
+          <select id="cfgTime">
+            <option value="30">30초</option>
+            <option value="60" selected>60초</option>
+            <option value="90">90초</option>
+            <option value="120">120초</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>난이도</label>
+          <select id="cfgDiff">
+            <option value="easy">쉬움</option>
+            <option value="medium" selected>보통</option>
+            <option value="hard">어려움</option>
+            <option value="mixed">혼합</option>
+          </select>
+        </div>
+      </div>
+      <button class="btn-create" id="btnCreate">&#x2795; 방 만들기</button>
+    </div>
+  </div>
+
+  <!-- Stats Summary -->
+  <div class="section" id="statsSection" style="display:none">
+    <div class="stats-bar">
+      <div class="stat-box"><div class="stat-num" id="stRooms">0</div><div class="stat-label">활성 방</div></div>
+      <div class="stat-box"><div class="stat-num" id="stPlayers">0</div><div class="stat-label">총 참가자</div></div>
+      <div class="stat-box"><div class="stat-num" id="stAnswered">0</div><div class="stat-label">총 문제 수</div></div>
+      <div class="stat-box"><div class="stat-num" id="stAccuracy">-</div><div class="stat-label">평균 정답률</div></div>
+    </div>
+  </div>
+
+  <!-- Room List -->
+  <div class="section">
+    <div class="section-title">&#x1f4cb; 방 목록</div>
+    <div class="room-grid" id="roomGrid">
+      <div class="empty-state" id="emptyState">생성된 방이 없습니다.</div>
+    </div>
+  </div>
+</div>
+
+<div class="toast-container" id="toasts"></div>
+
+<script>
+(function(){
+  /* ---- Helpers ---- */
+  const $ = s => document.querySelector(s);
+  const MODE_NAMES = {1:'유효숫자 개수 세기',2:'유효숫자 찾기',3:'측정값 읽기'};
+  const PLAY_NAMES = {multi:'멀티플레이',battle:'대전 플레이'};
+  const DIFF_NAMES = {easy:'쉬움',medium:'보통',hard:'어려움',mixed:'혼합'};
+  const STATUS_NAMES = {waiting:'대기중',playing:'진행중',finished:'종료'};
+  const STATUS_CLASS = {waiting:'status-waiting',playing:'status-playing',finished:'status-finished'};
+
+  let ws = null;
+  let rooms = [];
+  let reconnectTimer = null;
+  let statusInterval = null;
+
+  /* ---- Toast ---- */
+  function toast(msg, type='error'){
+    const el = document.createElement('div');
+    el.className = 'toast toast-' + type;
+    el.textContent = msg;
+    $('#toasts').appendChild(el);
+    setTimeout(() => { el.style.opacity='0'; el.style.transition='opacity .3s'; setTimeout(()=>el.remove(),300); }, 3000);
+  }
+
+  /* ---- WebSocket ---- */
+  function connect(){
+    if(ws && ws.readyState < 2) return;
+    try { ws = new WebSocket('ws://' + window.location.host); } catch(e){ scheduleReconnect(); return; }
+
+    ws.onopen = () => {
+      $('#wsDot').className = 'dot on';
+      $('#wsLabel').textContent = '연결됨';
+      ws.send(JSON.stringify({type:'admin:auth'}));
+      if(statusInterval) clearInterval(statusInterval);
+      statusInterval = setInterval(() => send({type:'admin:status'}), 2000);
+    };
+
+    ws.onmessage = e => {
+      let d; try { d = JSON.parse(e.data); } catch(_){ return; }
+      handle(d);
+    };
+
+    ws.onclose = () => {
+      $('#wsDot').className = 'dot off';
+      $('#wsLabel').textContent = '연결 끊김';
+      if(statusInterval){ clearInterval(statusInterval); statusInterval = null; }
+      scheduleReconnect();
+    };
+
+    ws.onerror = () => {};
+  }
+
+  function scheduleReconnect(){
+    if(reconnectTimer) return;
+    reconnectTimer = setTimeout(() => { reconnectTimer = null; connect(); }, 2000);
+  }
+
+  function send(obj){
+    if(ws && ws.readyState === 1) ws.send(JSON.stringify(obj));
+  }
+
+  /* ---- Message Handler ---- */
+  function handle(d){
+    switch(d.type){
+      case 'room:created':
+        toast('방 ' + d.code + ' 생성됨', 'success');
+        break;
+      case 'admin:rooms':
+        rooms = d.rooms || [];
+        updateTotalPlayers();
+        renderRooms();
+        break;
+      case 'admin:serverIp':
+        $('#serverIp').textContent = d.ip || '-';
+        break;
+      case 'error':
+        toast(d.msg || '오류 발생');
+        break;
+    }
+  }
+
+  function updateTotalPlayers(){
+    let n = 0;
+    rooms.forEach(r => n += (r.players ? r.players.length : 0));
+    $('#playerCount').textContent = n;
+  }
+
+  /* ---- Render Rooms ---- */
+  function renderRooms(){
+    const grid = $('#roomGrid');
+    if(!rooms.length){
+      grid.innerHTML = '<div class="empty-state">생성된 방이 없습니다.</div>';
+      return;
+    }
+    grid.innerHTML = rooms.map(r => roomCard(r)).join('');
+    updateStats();
+  }
+
+  function roomCard(r){
+    const st = r.status || 'waiting';
+    const players = (r.players || []).slice().sort((a,b) => (b.score||0) - (a.score||0));
+    const pct = (st === 'playing' && r.timeLimit) ? Math.max(0, ((r.timeLeft||0) / r.timeLimit) * 100) : 0;
+    const timeDisp = (st === 'playing') ? formatTime(r.timeLeft || 0) : (st === 'finished' ? '종료' : formatTime(r.timeLimit || 0));
+
+    return `<div class="room-card" data-status="${st}">
+      <div class="room-header">
+        <div class="room-code">${esc(r.code)}</div>
+        <div class="room-meta">
+          <div class="room-status ${STATUS_CLASS[st]}">${STATUS_NAMES[st]}</div>
+        </div>
+      </div>
+      <div class="room-info">
+        <span>&#x1f3ae; ${esc(MODE_NAMES[r.gameMode] || r.gameMode)}</span>
+        <span>&#x1f465; ${esc(PLAY_NAMES[r.playMode] || r.playMode)}</span>
+        <span>&#x23f1; ${r.timeLimit}초</span>
+        <span>&#x2b50; ${esc(DIFF_NAMES[r.difficulty] || r.difficulty)}</span>
+        <span>&#x1f464; ${players.length}명</span>
+      </div>
+      ${st === 'playing' ? `
+        <div class="timer-text">${timeDisp}</div>
+        <div class="timer-bar"><div class="timer-fill" style="width:${pct}%"></div></div>` : ''}
+      <div class="player-section">
+        <h4>참가자 ${players.length}명</h4>
+        <div class="player-list">
+          ${players.length ? players.map((p,i) => playerRow(p, i, r.code, st)).join('') : '<div style="color:var(--txt2);font-size:.82rem;padding:.3rem 0">참가자 없음</div>'}
+        </div>
+      </div>
+      <div class="room-actions">
+        <button class="btn-start" onclick="adminAction('start','${esc(r.code)}')" ${st!=='waiting'&&st!=='finished'?'disabled':''}>&#x25b6; ${st==='finished'?'다시 시작':'시작'}</button>
+        <button class="btn-stop" onclick="adminAction('stop','${esc(r.code)}')" ${st!=='playing'?'disabled':''}>&#x23f9; 종료</button>
+        <button class="btn-csv" onclick="exportCSV('${esc(r.code)}')">&#x1f4be; CSV</button>
+        <button class="btn-delete" onclick="adminAction('delete','${esc(r.code)}')">&#x1f5d1; 삭제</button>
+      </div>
+    </div>`;
+  }
+
+  function playerRow(p, idx, code, st){
+    const rank = idx + 1;
+    let rc = 'rank-n';
+    if(rank === 1) rc = 'rank-1';
+    else if(rank === 2) rc = 'rank-2';
+    else if(rank === 3) rc = 'rank-3';
+    const showRank = st === 'playing' || st === 'finished';
+    return `<div class="player-row">
+      ${showRank ? `<div class="player-rank ${rc}">${rank}</div>` : ''}
+      <div class="player-name">${esc(p.name || p.id)}</div>
+      <div class="player-stats">
+        <span class="stat-score">${p.score || 0}점</span>
+        <span>&#x2705;${p.correct||0}</span>
+        <span>&#x274c;${p.wrong||0}</span>
+        <span>&#x1f525;${p.combo||0}/${p.maxCombo||0}</span>
+      </div>
+      <button class="btn-kick" onclick="adminKick('${esc(code)}','${esc(p.id)}')">강퇴</button>
+    </div>`;
+  }
+
+  function formatTime(s){
+    const m = Math.floor(s / 60);
+    const sec = Math.floor(s % 60);
+    return m > 0 ? m + ':' + String(sec).padStart(2,'0') : sec + '초';
+  }
+
+  function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
+
+  /* ---- Stats ---- */
+  function updateStats(){
+    const sec = $('#statsSection');
+    if(!rooms.length){ sec.style.display = 'none'; return; }
+    sec.style.display = '';
+    let totalPlayers = 0, totalAnswered = 0, totalCorrect = 0;
+    rooms.forEach(r => {
+      (r.players||[]).forEach(p => {
+        totalPlayers++;
+        totalAnswered += (p.answered||p.correct||0) + (p.wrong||0);
+        totalCorrect += (p.correct||0);
+      });
+    });
+    $('#stRooms').textContent = rooms.length;
+    $('#stPlayers').textContent = totalPlayers;
+    $('#stAnswered').textContent = totalAnswered;
+    $('#stAccuracy').textContent = totalAnswered > 0 ? Math.round(totalCorrect / totalAnswered * 100) + '%' : '-';
+  }
+
+  /* ---- CSV Export ---- */
+  window.exportCSV = function(code){
+    const r = rooms.find(rm => rm.code === code);
+    if(!r || !r.players || !r.players.length){ toast('내보낼 데이터가 없습니다.'); return; }
+    const header = '\uFEFF이름,점수,정답,오답,정답률,최대콤보\n';
+    const rows = [...r.players].sort((a,b)=>(b.score||0)-(a.score||0)).map(p => {
+      const total = (p.correct||0) + (p.wrong||0);
+      const acc = total > 0 ? Math.round((p.correct||0) / total * 100) + '%' : '-';
+      return `${p.name},${p.score||0},${p.correct||0},${p.wrong||0},${acc},${p.maxCombo||0}`;
+    }).join('\n');
+    const blob = new Blob([header + rows], {type:'text/csv;charset=utf-8'});
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `유효숫자마스터_${code}_결과.csv`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+    toast('CSV 다운로드 완료', 'success');
+  };
+
+  /* ---- Global Actions ---- */
+  window.adminAction = function(action, code){
+    send({type:'admin:'+action, code});
+  };
+  window.adminKick = function(code, playerId){
+    send({type:'admin:kick', code, playerId});
+  };
+
+  /* ---- Create Room ---- */
+  $('#btnCreate').addEventListener('click', () => {
+    send({
+      type: 'admin:create',
+      gameMode: parseInt($('#cfgMode').value),
+      playMode: $('#cfgPlay').value,
+      timeLimit: parseInt($('#cfgTime').value),
+      difficulty: $('#cfgDiff').value
+    });
+  });
+
+  /* ---- Init ---- */
+  connect();
+})();
+</script>
+</body>
+</html>

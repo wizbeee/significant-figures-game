@@ -1,0 +1,2640 @@
+<script>
+/* =========================================================
+ * 전역 상태
+ * ========================================================= */
+let ALL = [];                 // 서버 원본
+let VIEW = [];                // 필터/정렬 반영된 뷰
+let SELECTED = new Set();     // 체크된 신청ID
+let PENDING = new Map();      // {appId: {필드:값}}
+let SORT = {
+  // 드롭다운 다중 정렬(1~4순위)
+  primary: '',      primaryDir: 'asc',
+  secondary: '',    secondaryDir: 'asc',
+  tertiary: '',     tertiaryDir: 'asc',
+  quaternary: '',   quaternaryDir: 'asc',
+
+  // 시간 우선순위(ET/EP1/7교시 순서)
+  timeOrder: 'ET-EP1-7',
+
+  // (표 헤더 클릭 단일정렬용 — 기존 기능 유지)
+  key: '', dir: 'asc'
+};
+let STATUS_FILTER = '';       // 카드 클릭 상태 필터
+let EDIT_MODE = false;        // 편집 모드 플래그
+let ORIG_ALL = null;   // 편집모드 진입 시점의 원본 스냅샷
+const PAGE = { current: 1, size: 50 };
+
+const filters = {
+  basis: '실험할날짜',
+  dateFrom: '',
+  dateTo: '',
+  lab: '',
+  status: '',
+  search: ''
+};
+
+/* === 실험실 공통 옵션(명칭 단일화) === */
+const LAB_OPTIONS = ['화학실험실','생물실험실','프로젝트실험실','첨단기기실험실','오픈랩',
+                     '물리실험실','광학파동실험실','AP Lab','Tecｈ&Art LaB'];
+
+/* =========================================================
+ * 유틸
+ * ========================================================= */
+const $  = (s, el=document) => el.querySelector(s);
+const $$ = (s, el=document) => Array.from(el.querySelectorAll(s));
+const pad2 = n => String(n).padStart(2,'0');
+const fmtDate = (v, withTime=false) => {
+  if (!v) return '-';
+  const d = v instanceof Date ? v : new Date(v);
+  if (isNaN(d.getTime())) return v;
+  const date = `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`;
+  if (!withTime) return date;
+  return `${date} ${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+};
+const escapeHtml = s => String(s ?? '').replace(/[&<>"']/g, m=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[m]));
+function cssEsc(id){
+  try { return CSS && CSS.escape ? CSS.escape(String(id)) : String(id).replace(/(["\\.#\[\] ])/g,'\\$1'); }
+  catch(_){ return String(id); }
+}
+// '시간' 정렬이 1~4순위 중 하나라도 선택됐는지
+function shouldUseTimeOrder(){
+  return (
+    ($('#primarySort')?.value === '시간') ||
+    ($('#secondarySort')?.value === '시간') ||
+    ($('#tertiarySort')?.value === '시간') ||
+    ($('#quaternarySort')?.value === '시간')
+  );
+}
+
+// '시간'을 쓸 때만 시간 우선순위 셀렉트를 보여주고, 숨길 땐 기본값으로 되돌림
+function updateTimeOrderVisibility(){
+  const wrap = document.getElementById('timeOrderGroup');
+  if (!wrap) return;
+
+  const use = shouldUseTimeOrder();
+  wrap.style.display = use ? '' : 'none';
+
+  if (!use) {
+    const def = 'ET-EP1-7';
+    const sel = document.getElementById('timeOrder');
+    if (sel) sel.value = def;
+    SORT.timeOrder = def;
+  }
+}
+
+// ==== 전역 작업 오버레이 유틸 (loading / success / error 상태 지원) ====
+let BUSY_COUNT = 0;
+
+function ensureBusyOverlay(){
+  // 1) 스타일 없으면 주입
+  if (!document.getElementById('busyOverlayStyle')) {
+    const st = document.createElement('style');
+    st.id = 'busyOverlayStyle';
+    st.textContent = `
+      #busyOverlay{
+        position:fixed; inset:0; display:none;
+        align-items:center; justify-content:center;
+        background:rgba(255,255,255,0.85); z-index:99999;
+        -webkit-backdrop-filter:blur(4px); backdrop-filter:blur(4px);
+        animation:busyOverlayFadeIn .18s ease-out;
+      }
+      @keyframes busyOverlayFadeIn { from { opacity:0; } to { opacity:1; } }
+      #busyOverlay .busy-card{
+        background:#fff; padding:32px 44px; border-radius:16px;
+        box-shadow:0 8px 32px rgba(0,0,0,.18);
+        min-width:260px; max-width:92vw;
+        text-align:center; border:1px solid #e5e7eb;
+      }
+      #busyOverlay .busy-visual{
+        margin:0 auto 14px;
+        display:flex; align-items:center; justify-content:center;
+      }
+      #busyOverlay .busy-spinner{
+        width:48px; height:48px; border:5px solid #e5e7eb;
+        border-top-color:#2563eb; border-radius:50%;
+        animation:busyspin .9s linear infinite;
+      }
+      #busyOverlay .busy-icon{
+        width:56px; height:56px; border-radius:50%;
+        display:flex; align-items:center; justify-content:center;
+        font-size:30px; font-weight:bold; color:#fff;
+        animation:busyPop .32s ease-out;
+      }
+      #busyOverlay .busy-icon.success{ background:#15803d; } /* WCAG AA 4.54:1 */
+      #busyOverlay .busy-icon.warning{ background:#b45309; } /* WCAG AA 4.66:1 */
+      #busyOverlay .busy-icon.error{ background:#b91c1c; }   /* WCAG AA 6.36:1 */
+      @keyframes busyspin { to { transform: rotate(360deg); } }
+      @keyframes busyPop { 0%{transform:scale(0.5);opacity:0;} 60%{transform:scale(1.08);opacity:1;} 100%{transform:scale(1);opacity:1;} }
+      #busyOverlay .busy-title{
+        font-size:1.1rem; font-weight:700; color:#111827;
+        margin:0 0 4px;
+      }
+      #busyOverlay .busy-sub{
+        font-size:0.92rem; color:#4b5563;
+        line-height:1.5; white-space:pre-wrap; word-break:keep-all;
+      }
+      #busyOverlay .busy-close{
+        display:none;
+        margin-top:14px; padding:11px 24px;
+        background:#2563eb; color:#fff; border:none;
+        border-radius:8px; font-size:14px; font-weight:600;
+        cursor:pointer; min-height:44px; min-width:88px;
+      }
+      #busyOverlay .busy-close:hover{ background:#1d4ed8; }
+      #busyOverlay .busy-close:focus-visible{ outline:3px solid #60a5fa; outline-offset:2px; }
+      #busyOverlay .busy-close.show{ display:inline-block; }
+      @media (prefers-reduced-motion: reduce) {
+        #busyOverlay, #busyOverlay .busy-icon, #busyOverlay .busy-spinner { animation:none !important; }
+      }
+    `;
+    document.head.appendChild(st);
+  }
+
+  // 2) 오버레이 없으면 생성
+  if (!document.getElementById('busyOverlay')){
+    const wrap = document.createElement('div');
+    wrap.id = 'busyOverlay';
+    wrap.innerHTML = `
+      <div class="busy-card" role="status" aria-live="assertive">
+        <div class="busy-visual" id="busyVisual"><div class="busy-spinner"></div></div>
+        <div class="busy-title" id="busyTitle">작업 중입니다</div>
+        <div class="busy-sub" id="busyMsg">잠시만 기다려주세요…</div>
+        <button type="button" class="busy-close" id="busyCloseBtn">닫기</button>
+      </div>`;
+    document.body.appendChild(wrap);
+    document.getElementById('busyCloseBtn').addEventListener('click', hideGlobalBusy);
+  }
+}
+
+function _applyBusyState(state, title, sub) {
+  const visual = document.getElementById('busyVisual');
+  const tEl    = document.getElementById('busyTitle');
+  const sEl    = document.getElementById('busyMsg');
+  const closeBtn = document.getElementById('busyCloseBtn');
+  if (!visual) return;
+  if (state === 'loading') {
+    visual.innerHTML = '<div class="busy-spinner" aria-hidden="true"></div>';
+    tEl.textContent  = title || '저장 중입니다';
+    sEl.textContent  = sub   || '잠시만 기다려주세요…';
+    closeBtn.classList.remove('show');
+  } else if (state === 'success') {
+    visual.innerHTML = '<div class="busy-icon success" aria-hidden="true">✓</div>';
+    tEl.textContent  = title || '저장되었습니다';
+    sEl.textContent  = sub   || '작업이 완료되었습니다.';
+    closeBtn.classList.remove('show');
+  } else if (state === 'warning') {
+    visual.innerHTML = '<div class="busy-icon warning" aria-hidden="true">!</div>';
+    tEl.textContent  = title || '저장되었으나 수동 조치가 필요합니다';
+    sEl.textContent  = sub   || '';
+    closeBtn.classList.add('show');
+  } else if (state === 'error') {
+    visual.innerHTML = '<div class="busy-icon error" aria-hidden="true">!</div>';
+    tEl.textContent  = title || '오류가 발생했습니다';
+    sEl.textContent  = sub   || '다시 시도해 주세요.';
+    closeBtn.classList.add('show');
+  }
+}
+
+// 전역 경고 피드백 — 저장은 성공했지만 후속 조치가 필요한 경우
+function showGlobalWarning(title, sub){
+  ensureBusyOverlay();
+  if (BUSY_OVERLAY_AUTOCLOSE_TIMER) {
+    clearTimeout(BUSY_OVERLAY_AUTOCLOSE_TIMER);
+    BUSY_OVERLAY_AUTOCLOSE_TIMER = null;
+  }
+  BUSY_COUNT = 0;
+  _applyBusyState('warning', title, sub);
+  __showOverlayRaw();
+}
+
+// [C7] 오버레이 열림 상태를 관리하는 단일 진실
+// BUSY_COUNT는 '동시 loading 호출' 수만 추적. success/error는 항상 terminal 상태로 reset.
+// 이 설계가 핵심: loading → success/error 전이 후에는 누구도 BUSY_COUNT를 읽지 않음.
+let BUSY_OVERLAY_AUTOCLOSE_TIMER = null;
+
+function __showOverlayRaw(){
+  const el = document.getElementById('busyOverlay');
+  el.style.display = 'flex';
+  el.setAttribute('aria-hidden', 'false');
+  document.body.style.overflow = 'hidden';
+  document.body.style.pointerEvents = 'none';
+  el.style.pointerEvents = 'auto';
+}
+
+function __hideOverlayRaw(){
+  BUSY_COUNT = 0;
+  if (BUSY_OVERLAY_AUTOCLOSE_TIMER) {
+    clearTimeout(BUSY_OVERLAY_AUTOCLOSE_TIMER);
+    BUSY_OVERLAY_AUTOCLOSE_TIMER = null;
+  }
+  const el = document.getElementById('busyOverlay');
+  if (el) {
+    el.style.display = 'none';
+    el.setAttribute('aria-hidden', 'true');
+  }
+  document.body.style.overflow = '';
+  document.body.style.pointerEvents = '';
+}
+
+function showGlobalBusy(msg = '저장 중입니다'){
+  ensureBusyOverlay();
+  // 이전에 success/error 상태로 떠 있던 오버레이를 덮어쓰는 경우 타이머 정리
+  if (BUSY_OVERLAY_AUTOCLOSE_TIMER) {
+    clearTimeout(BUSY_OVERLAY_AUTOCLOSE_TIMER);
+    BUSY_OVERLAY_AUTOCLOSE_TIMER = null;
+  }
+  BUSY_COUNT++;
+  _applyBusyState('loading', msg, '잠시만 기다려주세요…');
+  __showOverlayRaw();
+}
+
+function hideGlobalBusy(){
+  // loading 상태에서만 참조되는 카운터 감소
+  BUSY_COUNT = Math.max(0, BUSY_COUNT - 1);
+  if (BUSY_COUNT > 0) return;
+  __hideOverlayRaw();
+}
+
+/**
+ * 전역 성공 피드백 — 스피너 → 체크 → 자동 닫힘
+ * 주의: 성공 상태는 terminal이므로 BUSY_COUNT를 reset하고 타이머로 자동 닫는다.
+ */
+function showGlobalSuccess(title, sub, autoCloseMs){
+  ensureBusyOverlay();
+  // 기존 타이머가 있으면 정리 (연속 호출 시 flicker 방지)
+  if (BUSY_OVERLAY_AUTOCLOSE_TIMER) {
+    clearTimeout(BUSY_OVERLAY_AUTOCLOSE_TIMER);
+    BUSY_OVERLAY_AUTOCLOSE_TIMER = null;
+  }
+  BUSY_COUNT = 0; // terminal 상태 — 이후 연산에서 참조되지 않도록 reset
+  _applyBusyState('success', title, sub);
+  __showOverlayRaw();
+  const delay = (typeof autoCloseMs === 'number') ? autoCloseMs : 2200;
+  if (delay > 0) {
+    BUSY_OVERLAY_AUTOCLOSE_TIMER = setTimeout(__hideOverlayRaw, delay);
+  } else {
+    const closeBtn = document.getElementById('busyCloseBtn');
+    if (closeBtn) closeBtn.classList.add('show');
+  }
+}
+
+/**
+ * 전역 오류 피드백 — 스피너 → X 아이콘 → 닫기 버튼 (수동 닫기)
+ */
+function showGlobalError(title, sub){
+  ensureBusyOverlay();
+  if (BUSY_OVERLAY_AUTOCLOSE_TIMER) {
+    clearTimeout(BUSY_OVERLAY_AUTOCLOSE_TIMER);
+    BUSY_OVERLAY_AUTOCLOSE_TIMER = null;
+  }
+  BUSY_COUNT = 0; // terminal 상태
+  _applyBusyState('error', title, sub);
+  __showOverlayRaw();
+}
+
+// ==== 날짜 파서(정렬 안정화용) ====
+// toDateTs: 다양한 입력을 '타임스탬프(ms)'로 변환. 실패 시 NaN.
+function toDateTs(v){
+  if (v instanceof Date) return v.getTime();
+  if (v == null) return NaN;
+  if (typeof v === 'number') return v;
+
+  const s = String(v).trim();
+  let m;
+
+  // 1) ISO 계열 (예: 2025-01-30T14:23:10Z)
+  if (/^\d{4}-\d{2}-\d{2}T/.test(s)) {
+    const d = new Date(s);
+    return d.getTime();
+  }
+
+  // 2) YYYY-MM-DD
+  m = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (m) return new Date(+m[1], +m[2]-1, +m[3]).getTime();
+
+  // 3) YYYY-MM-DD HH:mm(:ss)
+  m = s.match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})(?::(\d{2}))?$/);
+  if (m) return new Date(+m[1], +m[2]-1, +m[3], +m[4], +m[5], +(m[6]||0)).getTime();
+
+  // 4) YYYY/MM/DD 또는 YYYY.MM.DD
+  m = s.match(/^(\d{4})[./](\d{2})[./](\d{2})$/);
+  if (m) return new Date(+m[1], +m[2]-1, +m[3]).getTime();
+
+  // 5) 최후의 수단
+  const d = new Date(s);
+  return d.getTime();
+}
+
+// 공통 비교자(오름차순 기준)
+function cmpDateTs(a, b){
+  const A = toDateTs(a), B = toDateTs(b);
+  const aBad = isNaN(A), bBad = isNaN(B);
+  if (aBad && bBad) return 0;
+  if (aBad) return 1;   // 잘못된/빈 값은 뒤로
+  if (bBad) return -1;
+  return A - B;
+}
+
+// 정렬 항목 중복 선택 방지(같은 필드를 여러 순위에 못 넣게)
+function enforceUniqueSortSelections(){
+  const ids = ['primarySort','secondarySort','tertiarySort','quaternarySort'];
+  const selects = ids.map(id => document.getElementById(id)).filter(Boolean);
+
+  // 현재 선택값 모으기(빈값 제외)
+  const chosen = new Set(
+    selects.map(s => s.value).filter(v => v && v !== '')
+  );
+
+  // 각 셀렉트의 옵션 disable 처리
+  selects.forEach(sel => {
+    const myVal = sel.value;
+    Array.from(sel.options).forEach(opt => {
+      if (!opt.value) { opt.disabled = false; return; } // "선택 안 함"은 항상 가능
+      opt.disabled = (opt.value !== myVal && chosen.has(opt.value));
+    });
+
+    // 만약 내 값이 disable됐다면 충돌 해소 위해 비움
+    const cur = sel.value;
+    if (cur && sel.querySelector(`option[value="${cur}"]`)?.disabled) {
+      sel.value = '';
+    }
+  });
+}
+
+// 로컬 기준 날짜 문자열(YYYY-MM-DD) 생성
+function toLocalYMD(d){
+  const y = d.getFullYear();
+  const m = String(d.getMonth()+1).padStart(2,'0');
+  const day = String(d.getDate()).padStart(2,'0');
+  return `${y}-${m}-${day}`;
+}
+
+// 로컬 기준 자정(00:00:00)으로 정규화
+function startOfDay(d){
+  const nd = new Date(d);
+  nd.setHours(0,0,0,0);
+  return nd;
+}
+
+// 날짜 덧셈: 로컬 기준으로 n일 더한 날짜 반환
+function addDays(d, n){
+  const nd = new Date(d);
+  nd.setDate(nd.getDate() + n);
+  return nd;
+}
+
+/* =========================================================
+ * 빠른 기간 선택
+ * ========================================================= */
+function setQuickDate(type){
+  const today = startOfDay(new Date());
+  let from, to;
+  
+  switch(type){
+    case 'today':
+      from = to = today;
+      break;
+    case 'week':
+      // 이번 주 (일요일~토요일)
+      const dayOfWeek = today.getDay();
+      from = addDays(today, -dayOfWeek);
+      to = addDays(from, 6);
+      break;
+    case 'month':
+      // 이번 달 (1일~말일)
+      from = new Date(today.getFullYear(), today.getMonth(), 1);
+      to = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+      break;
+    case 'recent7':
+      // 최근 7일
+      from = addDays(today, -6);
+      to = today;
+      break;
+    default:
+      return;
+  }
+  
+  const dfEl = document.getElementById('dateFrom');
+  const dtEl = document.getElementById('dateTo');
+  if (dfEl) dfEl.value = toLocalYMD(from);
+  if (dtEl) dtEl.value = toLocalYMD(to);
+}
+
+
+/* =========================================================
+ * 고급 필터 토글
+ * ========================================================= */
+function toggleAdvanced() {
+  const panel = document.getElementById('advancedPanel');
+  if (!panel) return;
+  const hidden = panel.style.display === 'none';
+  panel.style.display = hidden ? '' : 'none';
+  localStorage.setItem('advPanelOpen', hidden ? '1' : '0');
+  const btn = panel.previousElementSibling;
+  if (btn && btn.tagName === 'BUTTON') btn.textContent = hidden ? '▲ 고급 필터 접기' : '▼ 고급 필터';
+}
+// 페이지 로드 시 상태 복원
+document.addEventListener('DOMContentLoaded', function() {
+  const panel = document.getElementById('advancedPanel');
+  if (panel && localStorage.getItem('advPanelOpen') === '0') {
+    panel.style.display = 'none';
+  }
+});
+
+/* =========================================================
+ * 필터 결과 카운트 & 칩
+ * ========================================================= */
+function updateResultCount() {
+  const bar = document.getElementById('resultCountBar');
+  if (!bar) return;
+  const total = (typeof ALL !== 'undefined') ? ALL.length : 0;
+  const filtered = (typeof FILTERED !== 'undefined') ? FILTERED.length : 0;
+  let html = '<span>' + filtered + '건 / 전체 ' + total + '건</span>';
+  // 활성 필터 칩 표시
+  const labVal = document.getElementById('labSelect')?.value;
+  if (labVal) html += ' <span class="filter-chip">' + escapeHtml(labVal) + ' <span class="chip-remove" onclick="clearFilter(\'labSelect\')">×</span></span>';
+  const statusVal = document.getElementById('statusSelect')?.value;
+  if (statusVal) html += ' <span class="filter-chip">' + escapeHtml(statusVal) + ' <span class="chip-remove" onclick="clearFilter(\'statusSelect\')">×</span></span>';
+  bar.innerHTML = html;
+}
+function clearFilter(selectId) {
+  const sel = document.getElementById(selectId);
+  if (sel) { sel.value = ''; applyFilters(); }
+}
+
+/* =========================================================
+ * 엑셀 내보내기 (CSV 형식)
+ * ========================================================= */
+function exportToExcel(){
+  if (!VIEW || VIEW.length === 0) {
+    alert('내보낼 데이터가 없습니다. 먼저 조회를 실행해주세요.');
+    return;
+  }
+  
+  // CSV 헤더
+  const headers = ['신청ID', '제출일시', '대표자학번', '대표자이름', '동반자명단', '총인원수',
+                   '신청실험실', '실험할날짜', '신청시간', '사용목적', '실험제목', '실험과정',
+                   '실험준비물', '지도교사이름', '상태', '지도승인여부', '최종승인여부'];
+  
+  // CSV 데이터 생성
+  const rows = [headers.join(',')];
+  
+  VIEW.forEach(app => {
+    const status = calcStatus(app);
+    const row = [
+      escapeCSV(app['신청ID'] || ''),
+      escapeCSV(fmtDate(app['제출일시'], true)),
+      escapeCSV(app['대표자학번'] || ''),
+      escapeCSV(app['대표자이름'] || ''),
+      escapeCSV(app['동반자명단'] || ''),
+      escapeCSV(app['총인원수'] || ''),
+      escapeCSV(app['신청실험실'] || ''),
+      escapeCSV(fmtDate(app['실험할날짜'], false)),
+      escapeCSV(app['신청시간'] || ''),
+      escapeCSV(app['사용목적'] || ''),
+      escapeCSV(app['실험제목'] || ''),
+      escapeCSV(app['실험과정'] || ''),
+      escapeCSV(app['실험준비물'] || ''),
+      escapeCSV(app['지도교사이름'] || ''),
+      escapeCSV(status),
+      escapeCSV(app['지도승인여부'] || ''),
+      escapeCSV(app['최종승인여부'] || '')
+    ];
+    rows.push(row.join(','));
+  });
+  
+  // BOM + CSV 다운로드
+  const csvContent = '\uFEFF' + rows.join('\n');
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `실험실신청_${toLocalYMD(new Date())}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+// CSV 필드 이스케이프
+function escapeCSV(val){
+  const s = String(val ?? '');
+  if (s.includes(',') || s.includes('"') || s.includes('\n') || s.includes('\r')) {
+    return '"' + s.replace(/"/g, '""') + '"';
+  }
+  return s;
+}
+/* =========================================================
+ * 상태 계산/뱃지
+ * ========================================================= */
+function calcStatus(app){
+  const f = String(app['최종승인여부']||'');
+  const s = String(app['지도승인여부']||'');
+  if (f === '승인') return '최종승인';
+  if (s === '반려' || f === '반려') return '반려';
+  if (s === '승인') return '1차승인';
+  return '대기';
+}
+function statusBadge(status){
+  const html = {
+    '대기'     : '<span class="status-badge status-pending">대기</span>',
+    '1차승인'  : '<span class="status-badge status-approved">1차 승인</span>',
+    '최종승인' : '<span class="status-badge status-final-approved">최종 승인</span>',
+    '반려'     : '<span class="status-badge status-rejected">반려</span>',
+    '신청제한' : '<span class="status-badge status-rejected">신청 제한</span>',
+  };
+  return html[status] ?? `<span class="status-badge">${escapeHtml(status)}</span>`;
+}
+
+/* =========================================================
+ * 초기화 (하이브리드: 자동 조회 X)
+ * ========================================================= */
+window.addEventListener('load', () => {
+  const today = startOfDay(new Date());
+  const in7   = startOfDay(addDays(today, 7));
+  // 기본 기간: 오늘부터 1주일 뒤까지 (로컬 기준)
+  $('#dateFrom').value = toLocalYMD(today);
+  $('#dateTo').value   = toLocalYMD(in7);
+
+  // 조회 기준 기본값을 '실험할날짜'로
+  const bs = $('#basisSelect');
+  if (bs) {
+    bs.value = '실험할날짜';
+    filters.basis = '실험할날짜';
+  }
+
+  // 필터 바인딩
+  $('#basisSelect').addEventListener('change', () => { filters.basis = $('#basisSelect').value; });
+  $('#labSelect').addEventListener('change', () => { filters.lab = $('#labSelect').value; refreshView(); });
+  $('#statusSelect').addEventListener('change', () => { filters.status = $('#statusSelect').value; STATUS_FILTER=''; refreshView(); });
+  $('#searchInput').addEventListener('input', debounce(e => { filters.search = e.target.value.trim(); refreshView(); }, 250));
+
+  // ▼ 정렬 셀렉트/방향 바인딩 (1~4순위)
+  const map = [
+    ['primarySort','primaryDir','primary','primaryDir'],
+    ['secondarySort','secondaryDir','secondary','secondaryDir'],
+    ['tertiarySort','tertiaryDir','tertiary','tertiaryDir'],
+    ['quaternarySort','quaternaryDir','quaternary','quaternaryDir'],
+  ];
+
+  map.forEach(([sid, did, keyK, dirK]) => {
+    const s = document.getElementById(sid);
+    const d = document.getElementById(did);
+    if (s) {
+      s.addEventListener('change', () => {
+        SORT[keyK] = s.value || '';
+        enforceUniqueSortSelections();
+        updateTimeOrderVisibility();
+        // 필요하면 즉시 미리보기: refreshView();
+        applySorting();
+      });
+    }
+    if (d) {
+      d.addEventListener('change', () => { SORT[dirK] = d.value || 'asc'; /* refreshView(); */ applySorting(); });
+    }
+  });
+
+  // 시간 우선순위
+  const t = document.getElementById('timeOrder');
+  if (t) {
+    t.addEventListener('change', () => { SORT.timeOrder = t.value || 'ET-EP1-7'; /* refreshView(); */ });
+  }
+
+  // 시작 시 1회 동기화
+  enforceUniqueSortSelections();
+  updateTimeOrderVisibility();
+
+  $('#selectAll').addEventListener('change', onToggleSelectAll);
+
+  // 헤더 클릭 정렬
+  $$('.data-table thead th').forEach((th, idx) => {
+    th.addEventListener('click', () => onSortHeader(idx));
+  });
+
+  // 제한 정책 UI 초기화
+  initRestrictionUI();
+
+  // 교사 목록 datalist 로드
+  loadTeacherList();
+
+  // 외부 클릭/ESC로 인라인 에디터 닫기
+  document.addEventListener('click', onDocumentClickCloseEditor, true);
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') closeAllInlineEditors(); });
+
+  // ★ Ctrl+S (또는 Cmd+S) 저장 단축키
+  document.addEventListener('keydown', e => {
+    if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+      e.preventDefault();
+      if (EDIT_MODE && PENDING.size > 0) {
+        saveAllEdits();
+      } else if (EDIT_MODE && PENDING.size === 0) {
+        alert('변경 사항이 없습니다.');
+      } else {
+        alert('편집모드에서만 저장할 수 있습니다.\n편집모드 버튼을 먼저 클릭해주세요.');
+      }
+    }
+  });
+
+  // ★ 페이지 이탈 경고 (미저장 변경사항이 있을 때)
+  window.addEventListener('beforeunload', e => {
+    if (EDIT_MODE && PENDING.size > 0) {
+      e.preventDefault();
+      e.returnValue = '저장하지 않은 변경사항이 있습니다. 페이지를 떠나시겠습니까?';
+      return e.returnValue;
+    }
+  });
+
+  // 툴팁/리플 이펙트 활성화
+  initTooltips();
+  initRipples();
+
+  // 하이브리드: 최초에는 조회하지 않고 안내 문구 표시
+  setInitialEmptyState();
+});
+
+function resetAllFilters(){
+  // 기본 기간: 최근 1주
+  const today = startOfDay(new Date());
+  const in7   = startOfDay(addDays(today, 7));
+
+  // UI 값 초기화 (필터)
+  $('#basisSelect').value = '실험할날짜';
+  $('#dateFrom').value = toLocalYMD(today);
+  $('#dateTo').value   = toLocalYMD(in7);
+  $('#labSelect').value = '';
+  $('#statusSelect').value = '';
+  $('#searchInput').value = '';
+  $('#selectAll').checked = false;
+
+  // 내부 필터 상태 초기화
+  Object.assign(filters, {
+    basis: '실험할날짜',
+    dateFrom: $('#dateFrom').value,
+    dateTo:   $('#dateTo').value,
+    lab: '',
+    status: '',
+    search: ''
+  });
+
+  // 🔁 정렬(1~4순위/방향/시간우선) 초기화는 공용 함수로 한 번에 처리
+  resetSort();
+
+  STATUS_FILTER = '';
+  SELECTED.clear();
+  PENDING.clear();
+
+  // 편집모드였다면 종료
+  if (EDIT_MODE) toggleEditMode(false);
+
+  // 표/통계 초기 안내로 복원
+  setInitialEmptyState();
+
+  // VIEW도 비움
+  VIEW = [];
+}
+
+
+function setInitialEmptyState(){
+  const tb = $('#applicationTableBody');
+  if (!tb) return;
+  tb.innerHTML = `<tr><td class="loading" colspan="10">기간을 설정하고 <b>조회</b> 버튼을 클릭하세요.</td></tr>`;
+  // 통계도 초기화
+  $('#stat-total').textContent = '-';
+  $('#stat-pending').textContent = '-';
+  $('#stat-firstApproved').textContent = '-';
+  $('#stat-finalApproved').textContent = '-';
+  $('#stat-rejected').textContent = '-';
+}
+
+/* =========================================================
+ * 디바운스
+ * ========================================================= */
+function debounce(fn, ms){ let t; return (...a)=>{ clearTimeout(t); t=setTimeout(()=>fn(...a), ms); };}
+
+/* =========================================================
+ * 서버 호출
+ * ========================================================= */
+function loadApplications(){
+  try {
+    // 재조회할 때는 미저장 흔적 제거
+    PENDING.clear();
+    ORIG_ALL = null;
+    SELECTED.clear();
+    $('#selectAll').checked = false;
+    showLoading();
+
+    filters.basis   = $('#basisSelect').value;
+    filters.dateFrom= $('#dateFrom').value || '';
+    filters.dateTo  = $('#dateTo').value || '';
+    filters.lab     = $('#labSelect').value || '';
+    filters.status  = $('#statusSelect').value || '';
+    filters.search  = $('#searchInput').value.trim();
+
+    google.script.run
+      .withSuccessHandler(list => {
+        ALL = Array.isArray(list) ? list : [];
+        applyStats();
+        refreshView(true);
+      })
+      .withFailureHandler(err => showError(err))
+      .getAllApplications({
+        dateFrom: filters.dateFrom,
+        dateTo: filters.dateTo,
+        lab: filters.lab,
+        status: filters.status,
+        searchTerm: filters.search,
+        basis: filters.basis,
+        includeChemicals: false  // ✅ 대시보드 목록에서는 시약 데이터 불필요 → 별도 스프레드시트 호출 생략
+      });
+  } catch(e){
+    showError(e);
+  }
+}
+
+/* =========================================================
+ * 통계 카드 (✅ 성능 최적화: 클라이언트에서 직접 계산, 별도 서버 호출 제거)
+ * ========================================================= */
+function applyStats(){
+  var pending = 0, first = 0, final_ = 0, rejected = 0;
+  ALL.forEach(function(app) {
+    var st = calcStatus(app);
+    if (st === '대기') pending++;
+    else if (st === '1차승인') first++;
+    else if (st === '최종승인') final_++;
+    else if (st === '반려') rejected++;
+  });
+  $('#stat-total').textContent = ALL.length;
+  $('#stat-pending').textContent = pending;
+  $('#stat-firstApproved').textContent = first;
+  $('#stat-finalApproved').textContent = final_;
+  $('#stat-rejected').textContent = rejected;
+}
+/* =========================================================
+ * 뷰 필터/정렬
+ * ========================================================= */
+function refreshView(){
+  let rows = ALL.slice();
+
+  // 카드 상태 필터 우선
+  if (STATUS_FILTER){
+    rows = rows.filter(a => calcStatus(a) === STATUS_FILTER);
+  }
+
+  // 드롭다운 상태 필터
+  if (filters.status){
+    rows = rows.filter(a => calcStatus(a) === filters.status);
+  }
+
+  // 실험실
+  if (filters.lab){
+    rows = rows.filter(a => String(a['신청실험실']||'') === filters.lab);
+  }
+
+  // 검색(학번/이름/지도교사/제목)
+  if (filters.search){
+    const t = filters.search.toLowerCase();
+    rows = rows.filter(a => (
+      String(a['대표자학번']||'').toLowerCase().includes(t) ||
+      String(a['대표자이름']||'').toLowerCase().includes(t) ||
+      String(a['지도교사이름']||'').toLowerCase().includes(t) ||
+      String(a['실험제목']||'').toLowerCase().includes(t)
+    ));
+  }
+
+  // 다중 정렬
+  VIEW = applyMultiSort(rows, SORT);
+  renderTable(VIEW);
+}
+
+function applyMultiSort(list, opt){
+  // 선택된 정렬 스펙만 순서대로
+  const specs = [
+    { key: opt.primary,    dir: opt.primaryDir    || 'asc' },
+    { key: opt.secondary,  dir: opt.secondaryDir  || 'asc' },
+    { key: opt.tertiary,   dir: opt.tertiaryDir   || 'asc' },
+    { key: opt.quaternary, dir: opt.quaternaryDir || 'asc' },
+  ].filter(s => s.key);
+
+  // 시간 우선순위: '시간'을 선택했을 때만 사용
+  const timeOrder = (opt.timeOrder || 'ET-EP1-7').split('-');  // ["ET","EP1","7"]
+  const timeRank = (v) => {
+    if (!v) return 999;
+    const first = String(v).split(',')[0]?.trim() || '';
+    const key = (first === '7교시') ? '7' : first;   // "7교시" → "7"
+    const idx = timeOrder.indexOf(key);
+    return idx >= 0 ? idx : 999;
+  };
+
+  // 상태 우선순위(필요시 순서 바꿔도 됨)
+  const statusRank = { '대기':1, '1차승인':2, '최종승인':3, '반려':4 };
+  const cmpStatus = (a,b) => {
+    const sa = statusRank[calcStatus(a)] ?? 999;
+    const sb = statusRank[calcStatus(b)] ?? 999;
+    return sa - sb;
+  };
+
+  // 날짜 비교
+  const cmpDate = (a,b,field) => cmpDateTs(a[field], b[field]);
+
+  // 문자열 비교(기본)
+  const cmpStr = (a,b,field) =>
+    String(a[field]||'').localeCompare(String(b[field]||''), 'ko');
+
+  // 단일 필드 비교자
+  const makeComparator = (spec) => {
+    const dir = (spec.dir === 'desc') ? -1 : 1;
+    switch (spec.key) {
+      case '시간':
+        return (a,b) => dir * (timeRank(a['신청시간']) - timeRank(b['신청시간']));
+      case '상태':
+        return (a,b) => dir * cmpStatus(a,b);
+      case '제출일시':
+        return (a,b) => dir * cmpDate(a,b,'제출일시');
+      case '실험할날짜':
+        return (a,b) => dir * cmpDate(a,b,'실험할날짜');
+      default:
+        // 확장 대비 기본 문자열 비교
+        return (a,b) => dir * cmpStr(a,b, spec.key);
+    }
+  };
+
+  const cmps = specs.map(makeComparator);
+
+  return list.slice().sort((a,b) => {
+    for (const cmp of cmps) {
+      const c = cmp(a,b);
+      if (c !== 0) return c;
+    }
+    return 0; // 완전 동률이면 원래 순서 유지
+  });
+}
+
+function applySorting(){
+  // UI → SORT 동기화
+  SORT.primary      = $('#primarySort').value || '';
+  SORT.primaryDir   = $('#primaryDir').value || 'asc';
+  SORT.secondary    = $('#secondarySort').value || '';
+  SORT.secondaryDir = $('#secondaryDir').value || 'asc';
+  SORT.tertiary     = $('#tertiarySort').value || '';
+  SORT.tertiaryDir  = $('#tertiaryDir').value || 'asc';
+  SORT.quaternary   = $('#quaternarySort').value || '';
+  SORT.quaternaryDir= $('#quaternaryDir').value || 'asc';
+  SORT.timeOrder    = $('#timeOrder').value || 'ET-EP1-7';
+
+  enforceUniqueSortSelections();
+  updateTimeOrderVisibility();
+
+  refreshView();
+}
+
+function resetSort(){
+  // UI 리셋
+  $('#primarySort').value = '';
+  $('#secondarySort').value = '';
+  $('#tertiarySort').value = '';
+  $('#quaternarySort').value = '';
+
+  $('#primaryDir').value = 'asc';
+  $('#secondaryDir').value = 'asc';
+  $('#tertiaryDir').value = 'asc';
+  $('#quaternaryDir').value = 'asc';
+
+  $('#timeOrder').value = 'ET-EP1-7';
+
+  // 내부 상태 리셋
+  SORT.primary = SORT.secondary = SORT.tertiary = SORT.quaternary = '';
+  SORT.primaryDir = SORT.secondaryDir = SORT.tertiaryDir = SORT.quaternaryDir = 'asc';
+  SORT.timeOrder = 'ET-EP1-7';
+
+  enforceUniqueSortSelections();
+  updateTimeOrderVisibility();
+
+  refreshView();
+}
+
+/* =========================================================
+ * 카드 상태 필터
+ * ========================================================= */
+function filterByStatusFromCard(status){
+  STATUS_FILTER = (status === '전체') ? '' : status;
+  $('#statusSelect').value = '';
+  
+  // 모든 카드에서 active 제거 후 클릭한 카드에 추가
+  document.querySelectorAll('.stat-card').forEach(c => c.classList.remove('active'));
+  const clicked = document.querySelector(`.stat-card[data-status="${status}"]`);
+  if (clicked) clicked.classList.add('active');
+  
+  refreshView();
+}
+
+/* =========================================================
+ * 테이블 렌더
+ *   - 신청ID 열은 화면에 표시하지 않음
+ *   - 각 행/체크박스에는 data-id로만 보관
+ *   - 체크박스 칸은 head의 .col-select 규칙으로 폭 고정
+ * ========================================================= */
+function showLoading(){
+  $('#applicationTableBody').innerHTML = `<tr><td class="loading" colspan="10">데이터를 불러오는 중...</td></tr>`;
+}
+function showError(err){
+  const m = err && (err.message || err) ? escapeHtml(err.message || err) : '불러오기 실패';
+  $('#applicationTableBody').innerHTML = `<tr><td class="loading" colspan="10">${m}</td></tr>`;
+}
+
+function renderTable(list){
+  const tbody = $('#applicationTableBody');
+  if (!list || list.length === 0){
+    tbody.innerHTML = `<tr><td class="loading" colspan="10">조건에 맞는 신청서가 없습니다.</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = list.map(app => {
+    const id = escapeHtml(String(app['신청ID']||'')); // 화면 표시 X, data-id로만 사용
+    const pend = PENDING.get(id);
+    const status = pend && pend['__status__'] ? pend['__status__'] : calcStatus(app);
+    const checked = SELECTED.has(id) ? 'checked' : '';
+    const title = escapeHtml(app['실험제목']||'');
+
+    return `
+      <tr data-id="${id}">
+        <td class="col-select"><input type="checkbox" data-id="${id}" ${checked} onchange="onToggleOne(this)"></td>
+        <td>${fmtDate(app['제출일시'], true)}</td>
+        <td>
+          <div style="font-weight:600">${escapeHtml(app['대표자이름']||'')}</div>
+          <div class="muted mono">${escapeHtml(app['대표자학번']||'')}</div>
+        </td>
+        <td>${escapeHtml(app['신청실험실']||'')}</td>
+        <td>${fmtDate(app['실험할날짜'], false)}</td>
+        <td>${escapeHtml(app['신청시간']||'')}</td>
+        <td class="col-title" title="${title}">${title}</td>
+        <td class="col-status">${statusBadge(status)}</td>
+        <td class="col-teacher">${escapeHtml(app['지도교사이름']||'')}</td>
+        <td class="col-actions">
+          <button class="btn btn-primary btn-small" onclick="openDetail('${id}')">상세</button>
+          <button class="btn btn-warning btn-small" onclick="openEdit('${id}')">편집</button>
+        </td>
+      </tr>
+    `;
+  }).join('');
+
+  // 편집 모드라면 셀 편집 활성화
+  enableInlineEdit(EDIT_MODE);
+  // 새로 그려진 버튼에도 리플/툴팁 적용
+  initRipples();
+  initTooltips();
+}
+
+/* =========================================================
+ * 선택 처리
+ * ========================================================= */
+function onToggleOne(cb){
+  const id = cb.dataset.id;
+  if (cb.checked) SELECTED.add(id);
+  else SELECTED.delete(id);
+}
+function onToggleSelectAll(ev){
+  const master = ev.target || ev;
+  const chks = $$('#applicationTableBody input[type="checkbox"][data-id]');
+  chks.forEach(c => {
+    c.checked = master.checked;
+    const id = c.dataset.id;
+    if (master.checked) SELECTED.add(id); else SELECTED.delete(id);
+  });
+}
+
+/* =========================================================
+ * 헤더 정렬 (다중 정렬 1순위와 연동)
+ * - 헤더 클릭 시 해당 컬럼을 1순위 정렬로 설정하고 다중 정렬 적용
+ * ========================================================= */
+function onSortHeader(idx){
+  // 0:체크, 1:제출일시, 2:대표자, 3:실험실, 4:실험날짜, 5:시간, 6:실험제목, 7:상태, 8:지도교사, 9:관리
+  const map = {
+    1:'제출일시', 2:'대표자이름', 3:'신청실험실',
+    4:'실험할날짜', 5:'신청시간', 6:'실험제목', 7:'상태', 8:'지도교사이름'
+  };
+  if (!(idx in map)) return;
+  const key = map[idx];
+  
+  // 드롭다운 셀렉트 요소 가져오기
+  const primarySortSel = document.getElementById('primarySort');
+  const primaryDirSel = document.getElementById('primaryDir');
+  
+  if (!primarySortSel || !primaryDirSel) {
+    // 드롭다운이 없으면 기존 방식으로 폴백
+    legacySingleSort(idx, key);
+    return;
+  }
+  
+  // 현재 1순위와 같은 컬럼이면 방향만 토글
+  if (primarySortSel.value === key) {
+    primaryDirSel.value = (primaryDirSel.value === 'asc' ? 'desc' : 'asc');
+  } else {
+    // 새 컬럼을 1순위로 설정
+    primarySortSel.value = key;
+    primaryDirSel.value = 'asc';
+  }
+  
+  // 시간 우선순위 UI 업데이트
+  updateTimeOrderVisibility();
+  
+  // 다중 정렬 적용
+  applySorting();
+}
+
+// 드롭다운이 없을 경우 폴백용 단일 정렬
+function legacySingleSort(idx, key){
+  if (SORT.key === key){
+    SORT.dir = (SORT.dir === 'asc' ? 'desc' : 'asc');
+  } else {
+    SORT.key = key;
+    SORT.dir = 'asc';
+  }
+  VIEW.sort((a,b) => {
+    const dir = SORT.dir === 'asc' ? 1 : -1;
+    if (key === '상태'){
+      const rank = { '대기':1, '1차승인':2, '최종승인':3, '반려':4 };
+      const ra = rank[calcStatus(a)] ?? 999;
+      const rb = rank[calcStatus(b)] ?? 999;
+      return dir * (ra - rb);
+    }
+    if (key === '제출일시' || key === '실험할날짜'){
+      const cmp = cmpDateTs(a[key], b[key]);
+      return dir * cmp;
+    }
+    return dir * String(a[key]||'').localeCompare(String(b[key]||''), 'ko');
+  });
+  renderTable(VIEW);
+}
+/* =========================================================
+ * 편집 모드 & 일괄 변경
+ * ========================================================= */
+function toggleEditMode(on = true) {
+  EDIT_MODE = !!on;
+  const left  = document.getElementById('editModeLeft');
+  const bulk  = document.getElementById('bulkBar');
+  const banner = document.getElementById('editModeBanner');
+
+  if (EDIT_MODE) {
+     // 편집모드 진입 시: 현재 ALL을 얕은 복사로 스냅샷 떠 둠
+     ORIG_ALL = ALL.map(a => ({ ...a }));
+    // 편집모드 진입 → 좌측 버튼 교체
+    left.innerHTML = `
+      <button class="btn btn-success" onclick="saveAllEdits()">저장</button>
+      <button class="btn btn-warning" onclick="toggleEditMode(false)">편집모드 종료</button>
+    `;
+    if (bulk) bulk.style.display = 'flex';
+    if (banner) banner.classList.add('show');
+    enableInlineEdit(true);
+  } else {
+    // 편집모드 종료 → 좌측 원래대로
+    left.innerHTML = `
+      <button class="btn btn-success" id="editModeBtn" onclick="toggleEditMode(true)">편집모드</button>
+    `;
+    if (bulk) bulk.style.display = 'none';
+    if (banner) banner.classList.remove('show');
+    resetBulkControls();
+    enableInlineEdit(false);      // ★ 클릭 핸들러 제거
+    closeAllInlineEditors();
+
+    // ❗ 미저장 변경이 있다면 스냅샷으로 복원
+   if (PENDING.size > 0 && ORIG_ALL) {
+     ALL = ORIG_ALL.map(a => ({ ...a }));
+   }
+   // 미저장 메모리/표식 정리
+   PENDING.clear();
+   $$('#applicationTableBody td.pending-changed').forEach(td => td.classList.remove('pending-changed'));
+   ORIG_ALL = null;
+   // 화면 재그리기
+   refreshView();
+  }
+  // 새 버튼 툴팁/리플 재적용
+  initTooltips();
+  initRipples();
+}
+
+function resetBulkControls(){
+  $('#bulkLab').value='';
+  $('#bulkDate').value='';
+  $('#bulkTimeET').checked=false;
+  $('#bulkTimeEP1').checked=false;
+  $('#bulkTime7').checked=false;
+  $('#bulkStatus').value='';
+  $('#bulkTeacher').value='';
+}
+
+function applyBulkChanges(){
+  if (SELECTED.size===0){ alert('일괄 변경할 행(체크박스)을 선택하세요.'); return; }
+  const lab = $('#bulkLab').value || '';
+  const date = $('#bulkDate').value || '';
+  const times = [];
+  if ($('#bulkTimeET').checked) times.push('ET');
+  if ($('#bulkTimeEP1').checked) times.push('EP1');
+  if ($('#bulkTime7').checked) times.push('7교시');
+  const timeStr = times.join(', ');
+  const status = $('#bulkStatus').value || '';
+  const teacher = $('#bulkTeacher').value || '';
+
+  if (!lab && !date && !timeStr && !status && !teacher){
+    alert('적용할 항목을 선택하거나 입력하세요.');
+    return;
+  }
+
+  // 로컬/PENDING 반영 + 즉시 화면 반영
+  SELECTED.forEach(id=>{
+    const row = ALL.find(a=>String(a['신청ID'])===String(id));
+    if (!row) return;
+    if (!PENDING.has(id)) PENDING.set(id,{});
+    const changes = PENDING.get(id);
+    if (lab){ changes['신청실험실']=lab; row['신청실험실']=lab; }
+    if (date){ changes['실험할날짜']=date; row['실험할날짜']=date; }
+    if (timeStr){ changes['신청시간']=timeStr; row['신청시간']=timeStr; }
+    if (status){ changes['__status__']=status; }
+    if (teacher){ changes['지도교사이름']=teacher; row['지도교사이름']=teacher; }
+  });
+
+  refreshView();
+  alert(`선택된 ${SELECTED.size}건에 일괄 변경이 적용되었습니다.\n(상단 '저장'을 눌러야 실제 반영됩니다.)`);
+}
+
+/* =========================================================
+ * 일괄 승인/반려 (빠른 상태 변경)
+ * ========================================================= */
+function bulkApprove(newStatus){
+  if (!EDIT_MODE) {
+    alert('편집모드에서만 사용할 수 있습니다.');
+    return;
+  }
+  if (SELECTED.size === 0) {
+    alert('상태를 변경할 행(체크박스)을 선택하세요.');
+    return;
+  }
+  
+  const statusLabel = {
+    '1차승인': '1차 승인',
+    '최종승인': '최종 승인',
+    '반려': '반려'
+  };
+  
+  if (!confirm(`선택된 ${SELECTED.size}건을 "${statusLabel[newStatus] || newStatus}"(으)로 변경하시겠습니까?`)) {
+    return;
+  }
+  
+  // 로컬/PENDING 반영
+  SELECTED.forEach(id => {
+    const row = ALL.find(a => String(a['신청ID']) === String(id));
+    if (!row) return;
+    if (!PENDING.has(id)) PENDING.set(id, {});
+    const changes = PENDING.get(id);
+    changes['__status__'] = newStatus;
+  });
+  
+  refreshView();
+  alert(`선택된 ${SELECTED.size}건이 "${statusLabel[newStatus] || newStatus}"(으)로 변경되었습니다.\n(상단 '저장'을 눌러야 실제 반영됩니다.)`);
+}
+
+/* =========================================================
+ * 저장(일괄)
+ * ========================================================= */
+function mapStatusToApprovals(st){
+  const approval = {};
+  if (st === '대기'){ approval['지도승인여부']=''; approval['최종승인여부']=''; }
+  if (st === '1차승인'){ approval['지도승인여부']='승인'; approval['최종승인여부']=''; }
+  if (st === '최종승인'){ approval['지도승인여부']='승인'; approval['최종승인여부']='승인'; }
+  if (st === '반려'){ approval['지도승인여부']='반려'; approval['최종승인여부']=''; }
+  return approval;
+}
+
+function saveAllEdits(){
+  if (PENDING.size===0){ alert('변경 사항이 없습니다.'); return; }
+
+  // ★ 추가: 저장 시작 시 화면 잠금
+  showGlobalBusy('저장 중입니다');
+
+  const ids = Array.from(PENDING.keys());
+  const run = (i=0, ok=0, fail=0) => {
+    if (i>=ids.length){
+      $$('#applicationTableBody td.pending-changed').forEach(td=>td.classList.remove('pending-changed'));
+      PENDING.clear();
+      updateStatsLocal();
+      // hideGlobalBusy() 생략 — show*가 동일 overlay의 상태만 전환하므로 깜빡임 없음
+      if (fail === 0) {
+        showGlobalSuccess('저장되었습니다', ok + '건이 저장되었습니다.');
+      } else if (ok === 0) {
+        showGlobalError('저장 실패', '전체 ' + fail + '건이 저장되지 못했습니다. 네트워크를 확인한 뒤 다시 시도해 주세요.');
+      } else {
+        showGlobalError('일부 저장 실패', '성공 ' + ok + '건, 실패 ' + fail + '건입니다. 실패 건을 확인해 주세요.');
+      }
+      return;
+    }
+    const id = ids[i];
+    const changes = { ...PENDING.get(id) };
+    if (changes['__status__']){
+      const appr = mapStatusToApprovals(changes['__status__']);
+      delete changes['__status__'];
+      Object.assign(changes, appr);
+    }
+    google.script.run
+      .withSuccessHandler(r => {
+        if (r && r.success) run(i+1, ok+1, fail);
+        else run(i+1, ok, fail+1);
+      })
+      .withFailureHandler(_=> run(i+1, ok, fail+1))
+      .updateApplicationFields(id, changes);
+  };
+  run();
+}
+
+
+/* =========================================================
+ * 인라인 에디터
+ *  - 실험실/실험날짜/상태: 선택 즉시 셀 반영
+ *  - 시간/지도교사: 적용 버튼
+ * ========================================================= */
+function enableInlineEdit(on){
+  // 기존 바인딩 제거
+  $$('#applicationTableBody td').forEach(td => { td.onclick = null; });
+  closeAllInlineEditors();
+  if (!on) return;
+
+  // 각 셀에 인라인 에디터 연결
+  $$('#applicationTableBody tr').forEach(tr=>{
+    const tds = tr.children;
+    // 0체크, 1제출일시, 2대표자, 3실험실, 4실험날짜, 5시간, 6제목, 7상태, 8지도교사, 9관리
+    tds[3].onclick = () => startInlineEditor(tds[3], 'lab');
+    tds[4].onclick = () => startInlineEditor(tds[4], 'date');
+    tds[5].onclick = () => startInlineEditor(tds[5], 'time');
+    tds[7].onclick = () => startInlineEditor(tds[7], 'status');
+    tds[8].onclick = () => startInlineEditor(tds[8], 'teacher');
+  });
+}
+
+function startInlineEditor(td, type){
+  if (!EDIT_MODE) return;
+  const tr = td.closest('tr');
+  const id = tr?.getAttribute('data-id');
+  const app = ALL.find(x => String(x['신청ID'])===String(id));
+  if (!app) return;
+
+  // 기존 편집 UI 제거
+  closeAllInlineEditors();
+
+  const prevOverflow = td.style.overflow;
+  td.style.overflow = 'visible';
+  td.dataset._prevOverflow = prevOverflow || '';
+
+  const box = document.createElement('div');
+  box.className = 'inline-editor';
+  box.addEventListener('mousedown', ev => ev.stopPropagation());
+  box.addEventListener('click', ev => ev.stopPropagation());
+
+  const removeBox = ()=>{
+    box.remove();
+    td.style.overflow = td.dataset._prevOverflow || '';
+    delete td.dataset._prevOverflow;
+  };
+
+  const commit = (field, value, renderHTML) => {
+    if (!PENDING.has(id)) PENDING.set(id,{});
+    PENDING.get(id)[field] = value;
+    app[field] = value; // 즉시 뷰 반영
+    td.classList.add('pending-changed');
+    td.innerHTML = renderHTML;
+    removeBox();
+  };
+
+  if (type === 'lab'){
+    const sel = document.createElement('select');
+    LAB_OPTIONS.forEach(v=>{
+      const o=document.createElement('option'); o.value=v; o.textContent=v; sel.appendChild(o);
+    });
+    sel.value = String(app['신청실험실']||'');
+    sel.onchange = ()=> commit('신청실험실', sel.value, escapeHtml(sel.value||'-'));
+    box.appendChild(sel);
+  }
+  else if (type === 'date'){
+    const inp = document.createElement('input'); inp.type='date';
+    const v = app['실험할날짜'] ? new Date(app['실험할날짜']) : null;
+    inp.value = v && !isNaN(v) ? toLocalYMD(v) : '';
+    inp.onchange = ()=> commit('실험할날짜', inp.value, escapeHtml(fmtDate(inp.value,false)));
+    box.appendChild(inp);
+  }
+  else if (type === 'time'){
+    const cur = String(app['신청시간']||'').split(',').map(s=>s.trim());
+    const wrap = document.createElement('div');
+    wrap.style.display='flex'; wrap.style.gap='10px'; wrap.style.flexWrap='wrap';
+    wrap.innerHTML = `
+      <label><input type="checkbox" value="ET" ${cur.includes('ET')?'checked':''}> ET</label>
+      <label><input type="checkbox" value="EP1" ${cur.includes('EP1')?'checked':''}> EP1</label>
+      <label><input type="checkbox" value="7교시" ${cur.includes('7교시')?'checked':''}> 7교시</label>
+    `;
+    const ok = document.createElement('button'); ok.className='btn btn-success btn-mini'; ok.textContent='적용';
+    ok.style.marginLeft = '8px';
+    ok.onclick = ()=>{
+      const sel = Array.from(wrap.querySelectorAll('input[type="checkbox"]:checked')).map(c=>c.value).join(', ');
+      commit('신청시간', sel, escapeHtml(sel||'-'));
+    };
+    const row = document.createElement('div');
+    row.style.display='flex'; row.style.alignItems='center'; row.style.gap='8px';
+    row.appendChild(wrap); row.appendChild(ok);
+    box.appendChild(row);
+  }
+  else if (type === 'status'){
+    const sel = document.createElement('select');
+    [['대기','대기'],['1차승인','1차승인'],['최종승인','최종승인'],['반려','반려']].forEach(([val,txt])=>{
+      const o=document.createElement('option'); o.value=val; o.textContent=txt; sel.appendChild(o);
+    });
+
+    const pend    = PENDING.get(id);
+    const current = calcStatus(app); // 현재(저장된) 상태
+    // 보이는 값: pending 값이 있으면 그걸, 없으면 현재 상태
+    sel.value = pend && pend['__status__'] ? pend['__status__'] : current;
+
+    sel.onchange = ()=>{
+      const next = sel.value;
+
+      if (next === current) {
+        // 원래 상태로 되돌린 경우 → pending에서 __status__ 제거
+        const changes = PENDING.get(id);
+        if (changes && ('__status__' in changes)) {
+          delete changes['__status__'];
+          if (Object.keys(changes).length === 0) PENDING.delete(id);
+        }
+        td.classList.remove('pending-changed');
+        td.innerHTML = statusBadge(current);
+      } else {
+        // 달라진 상태 → pending에 기록
+        if (!PENDING.has(id)) PENDING.set(id,{});
+        PENDING.get(id)['__status__'] = next;
+        td.classList.add('pending-changed');
+        td.innerHTML = statusBadge(next);
+      }
+      removeBox();
+    };
+
+    box.appendChild(sel);
+  }
+  else if (type === 'teacher'){
+    const inp = document.createElement('input'); inp.type='text'; inp.style.width='160px';
+    inp.value = String(app['지도교사이름']||'');
+    const ok = document.createElement('button'); ok.className='btn btn-success btn-mini'; ok.textContent='적용';
+    ok.style.marginLeft = '8px';
+    ok.onclick = ()=> commit('지도교사이름', inp.value, escapeHtml(inp.value||'-'));
+    const row = document.createElement('div');
+    row.style.display='flex'; row.style.alignItems='center'; row.style.gap='8px';
+    row.appendChild(inp); row.appendChild(ok);
+    box.appendChild(row);
+  }
+
+  // 위치/표시
+  box.style.position='absolute';
+  box.style.inset='-2px auto auto -2px';
+  td.style.position='relative';
+  td.appendChild(box);
+}
+
+function onDocumentClickCloseEditor(e){
+  const editor = $('.inline-editor');
+  if (!editor) return;
+  if (editor.contains(e.target)) return;
+  const td = editor.parentElement;
+  if (td && td.dataset && '_prevOverflow' in td.dataset) {
+    td.style.overflow = td.dataset._prevOverflow || '';
+    delete td.dataset._prevOverflow;
+  }
+  editor.remove();
+}
+function closeAllInlineEditors(){
+  $$('.inline-editor').forEach(el => {
+    const td = el.parentElement;
+    if (td && td.dataset && '_prevOverflow' in td.dataset) {
+      td.style.overflow = td.dataset._prevOverflow || '';
+      delete td.dataset._prevOverflow;
+    }
+    el.remove();
+  });
+}
+
+/* =========================================================
+ * 상세/편집 모달
+ * ========================================================= */
+// [H5] 상세 모달에서 시약 비동기 로딩의 race 방지용 토큰
+var CURRENT_DETAIL_ID = '';
+
+function openDetail(id){
+  const app = ALL.find(a => String(a['신청ID'])===String(id));
+  if (!app) return;
+  CURRENT_DETAIL_ID = String(id);
+
+  const body = $('#detailBody');
+  body.innerHTML = `
+    <div class="detail-grid">
+      <div class="info-card"><div class="detail-label">신청 ID</div><div class="detail-value mono">${escapeHtml(app['신청ID']||'')}</div></div>
+      <div class="info-card"><div class="detail-label">제출 일시</div><div class="detail-value">${fmtDate(app['제출일시'], true)}</div></div>
+      <div class="info-card"><div class="detail-label">대표자</div><div class="detail-value">${escapeHtml(app['대표자이름']||'')} (${escapeHtml(app['대표자학번']||'')})</div></div>
+      <div class="info-card"><div class="detail-label">총 인원수</div><div class="detail-value">${escapeHtml(app['총인원수']||'-')}명</div></div>
+      <div class="info-card"><div class="detail-label">신청 실험실</div><div class="detail-value">${escapeHtml(app['신청실험실']||'')}</div></div>
+      <div class="info-card"><div class="detail-label">실험 날짜</div><div class="detail-value">${fmtDate(app['실험할날짜'], false)}</div></div>
+      <div class="info-card"><div class="detail-label">신청 시간</div><div class="detail-value">${escapeHtml(app['신청시간']||'')}</div></div>
+      <div class="info-card"><div class="detail-label">사용 목적</div><div class="detail-value">${escapeHtml(app['사용목적']||'-')}</div></div>
+      <div class="info-card"><div class="detail-label">지도교사</div><div class="detail-value">${escapeHtml(app['지도교사이름']||'-')}</div></div>
+      <div class="info-card"><div class="detail-label">현재 상태</div><div class="detail-value">${statusBadge(calcStatus(app))}</div></div>
+      <div class="info-card"><div class="detail-label">동반자 명단</div><div class="detail-value">${escapeHtml(app['동반자명단']||'없음')}</div></div>
+      <div class="info-card"><div class="detail-label">후드 사용 여부/이유</div><div class="detail-value">${escapeHtml(app['후드사용여부']||'-')} ${app['후드이유']?`(${escapeHtml(app['후드이유'])})`:''}</div></div>
+      <div class="info-card"><div class="detail-label">첨단기기실 사용 여부/이유</div><div class="detail-value">${escapeHtml(app['첨단기기실사용여부']||'-')} ${app['첨단기기실이유']?`(${escapeHtml(app['첨단기기실이유'])})`:''}</div></div>
+    </div>
+
+    <div style="margin-top:14px;">
+      <h3 style="margin:0 0 6px 0;">실험 제목</h3>
+      <div class="info-card"><div class="detail-value" style="white-space:pre-wrap">${escapeHtml(app['실험제목']||'')}</div></div>
+    </div>
+
+    <div style="margin-top:14px;">
+      <h3 style="margin:0 0 6px 0;">실험 준비물</h3>
+      <div class="info-card"><div class="detail-value" style="white-space:pre-wrap">${escapeHtml(app['실험준비물']||'')}</div></div>
+    </div>
+
+    <div style="margin-top:14px;">
+      <h3 style="margin:0 0 6px 0;">실험 과정</h3>
+      <div class="info-card"><div class="detail-value" style="white-space:pre-wrap">${escapeHtml(app['실험과정']||'')}</div></div>
+    </div>
+
+    <div id="chemSection" style="margin-top:18px;">
+      <h3 style="margin:0 0 6px 0;">시약 신청 목록</h3>
+      <div class="info-card"><div class="detail-value">불러오는 중...</div></div>
+    </div>
+
+    <div style="margin-top:20px;text-align:right">
+      <button class="btn btn-warning" onclick="openEdit('${escapeHtml(id)}')">전체 편집</button>
+      <button class="btn btn-danger"  onclick="deleteOne('${escapeHtml(id)}')">삭제</button>
+      <button class="btn btn-primary" onclick="printOne('${escapeHtml(id)}')">인쇄</button>
+    </div>
+  `;
+  $('#detailModal').style.display = 'flex';
+  initTooltips(); initRipples();
+
+  // 시약 정보 지연 로드 — [H5] 현재 detail id와 다르면 stale 응답 무시
+  const loadToken = String(id);
+  google.script.run
+    .withSuccessHandler(list=>{
+      if (CURRENT_DETAIL_ID !== loadToken) return; // 사용자가 다른 신청으로 넘어감
+      const sec = $('#chemSection');
+      if (!sec) return;
+      if (!Array.isArray(list) || list.length===0){
+        sec.innerHTML = `
+          <h3 style="margin:0 0 6px 0;">시약 신청 목록</h3>
+          <div class="info-card"><div class="detail-value">등록된 시약 정보가 없습니다.</div></div>
+        `;
+      } else {
+        sec.innerHTML = `
+          <h3 style="margin:0 0 6px 0;">시약 신청 목록</h3>
+          <table class="chemical-table">
+            <thead><tr><th>시약명</th><th>상태</th><th>농도</th><th>용량</th><th>MSDS</th><th>교사임장여부</th></tr></thead>
+            <tbody>
+              ${list.map(c=>`
+                <tr>
+                  <td>${escapeHtml(c['시약명']||'')}</td>
+                  <td>${escapeHtml(c['상태']||'')}</td>
+                  <td>${escapeHtml(c['농도']||'-')}</td>
+                  <td>${escapeHtml(c['용량']||'')}</td>
+                  <td>${escapeHtml(c['MSDS']||'')}</td>
+                  <td>${escapeHtml(c['교사임장여부']||'')}</td>
+                </tr>`).join('')}
+            </tbody>
+          </table>
+        `;
+      }
+    })
+    .withFailureHandler(_=>{
+      if (CURRENT_DETAIL_ID !== loadToken) return;
+      const sec = $('#chemSection');
+      if (sec) {
+        sec.innerHTML = `
+          <h3 style="margin:0 0 6px 0;">시약 신청 목록</h3>
+          <div class="info-card"><div class="detail-value">시약 정보를 불러오지 못했습니다.</div></div>
+        `;
+      }
+    })
+    .getApplicationChemicals(id);
+}
+function closeDetail(){
+  CURRENT_DETAIL_ID = ''; // [H5] 모달이 닫히면 토큰 무효화
+  $('#detailModal').style.display='none';
+}
+
+function printOne(id){
+  const a = ALL.find(x => String(x['신청ID'])===String(id));
+  if (!a) return;
+  
+  // 시약 목록 HTML 생성
+  let chemHtml = '';
+  if (a.chemicals && Array.isArray(a.chemicals) && a.chemicals.length > 0) {
+    const chemRows = a.chemicals.map(c => `
+      <tr>
+        <td>${escapeHtml(c['시약명']||'')}</td>
+        <td>${escapeHtml(c['상태']||'')}</td>
+        <td>${escapeHtml(c['농도']||'')}</td>
+        <td>${escapeHtml(c['용량']||'')}</td>
+        <td>${escapeHtml(c['MSDS']||'')}</td>
+        <td>${escapeHtml(c['교사임장여부']||'')}</td>
+      </tr>
+    `).join('');
+    chemHtml = `
+      <div class="section">
+        <h3>시약 신청 목록</h3>
+        <table class="info-table">
+          <thead>
+            <tr><th>시약명</th><th>상태</th><th>농도</th><th>용량</th><th>MSDS</th><th>교사임장여부</th></tr>
+          </thead>
+          <tbody>${chemRows}</tbody>
+        </table>
+      </div>
+    `;
+  } else {
+    chemHtml = `<div class="section"><h3>시약 신청 목록</h3><div class="section-content">등록된 시약 정보가 없습니다.</div></div>`;
+  }
+  
+  const w = window.open('','_blank');
+  w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>실험실 사용 신청서 - ${escapeHtml(a['신청ID'])}</title>
+  <style>
+    body{font-family:Arial,sans-serif;margin:20px;line-height:1.6}
+    .header{text-align:center;margin-bottom:30px;border-bottom:2px solid #000;padding-bottom:15px}
+    .info-table{width:100%;border-collapse:collapse;margin-bottom:20px}
+    .info-table th,.info-table td{border:1px solid #000;padding:8px;text-align:left}
+    .info-table th{background:#f0f0f0;width:150px;font-weight:bold}
+    .info-table thead th{width:auto;text-align:center}
+    .info-table tbody td{text-align:center}
+    .section{margin-bottom:25px}
+    .section h3{background:#f0f0f0;padding:10px;margin:0 0 10px 0;border:1px solid #000}
+    .section-content{padding:10px;border:1px solid #ddd;white-space:pre-wrap}
+  </style></head><body>
+  <div class="header"><h1>과학실험실 사용 신청서</h1><p><strong>신청 ID:</strong> ${escapeHtml(a['신청ID'])}</p></div>
+  <table class="info-table">
+    <tr><th>제출일시</th><td>${fmtDate(a['제출일시'],true)}</td></tr>
+    <tr><th>대표자</th><td>${escapeHtml(a['대표자이름']||'')} (${escapeHtml(a['대표자학번']||'')})</td></tr>
+    <tr><th>동반자 명단</th><td>${escapeHtml(a['동반자명단']||'-')}</td></tr>
+    <tr><th>총 인원수</th><td>${escapeHtml(a['총인원수']||'-')}명</td></tr>
+    <tr><th>실험실</th><td>${escapeHtml(a['신청실험실']||'')}</td></tr>
+    <tr><th>실험날짜</th><td>${fmtDate(a['실험할날짜'],false)}</td></tr>
+    <tr><th>신청시간</th><td>${escapeHtml(a['신청시간']||'')}</td></tr>
+    <tr><th>지도교사</th><td>${escapeHtml(a['지도교사이름']||'')}</td></tr>
+    <tr><th>상태</th><td>${escapeHtml(calcStatus(a))}</td></tr>
+  </table>
+  <div class="section"><h3>실험 제목</h3><div class="section-content">${escapeHtml(a['실험제목']||'')}</div></div>
+  <div class="section"><h3>실험 준비물</h3><div class="section-content">${escapeHtml(a['실험준비물']||'')}</div></div>
+  <div class="section"><h3>실험 과정</h3><div class="section-content">${escapeHtml(a['실험과정']||'')}</div></div>
+  ${chemHtml}
+  <div style="margin-top:50px;text-align:right;border-top:1px solid #ccc;padding-top:20px"><p><strong>인쇄일:</strong> ${new Date().toLocaleString('ko-KR')}</p></div>
+  </body></html>`);
+  w.document.close(); setTimeout(()=>w.print(),400);
+}
+
+function openEdit(id){
+  const app = ALL.find(a => String(a['신청ID'])===String(id));
+  if (!app) return;
+  const body = $('#detailBody');
+
+  const timeHas = (t) => String(app['신청시간']||'').includes(t);
+  const st = calcStatus(app);
+
+  body.innerHTML = `
+    <form id="editForm" onsubmit="return false;">
+      <div class="detail-grid">
+        <div class="detail-item"><span class="detail-label">신청 ID</span><input class="detail-input" value="${escapeHtml(app['신청ID'])}" readonly></div>
+        <div class="detail-item"><span class="detail-label">대표자 학번</span><input id="f_sid" class="detail-input" value="${escapeHtml(app['대표자학번']||'')}"></div>
+        <div class="detail-item"><span class="detail-label">대표자 이름</span><input id="f_name" class="detail-input" value="${escapeHtml(app['대표자이름']||'')}"></div>
+        <div class="detail-item"><span class="detail-label">동반자 명단</span><input id="f_mates" class="detail-input" value="${escapeHtml(app['동반자명단']||'')}"></div>
+        <div class="detail-item"><span class="detail-label">총 인원수</span><input id="f_cnt" class="detail-input" type="number" value="${escapeHtml(app['총인원수']||'')}"></div>
+        <div class="detail-item"><span class="detail-label">신청 실험실</span>
+          <select id="f_lab" class="detail-select"></select>
+        </div>
+        <div class="detail-item"><span class="detail-label">실험 날짜</span><input id="f_date" type="date" class="detail-input"></div>
+        <div class="detail-item"><span class="detail-label">신청 시간</span>
+          <label><input id="tET"  type="checkbox" value="ET"  ${timeHas('ET')?'checked':''}> ET</label>
+          <label><input id="tEP1" type="checkbox" value="EP1" ${timeHas('EP1')?'checked':''}> EP1</label>
+          <label><input id="t7"   type="checkbox" value="7교시" ${timeHas('7교시')?'checked':''}> 7교시</label>
+        </div>
+        <div class="detail-item"><span class="detail-label">사용 목적</span>
+          <select id="f_purpose" class="detail-select">
+            <option value="">선택</option>
+            <option value="과제연구" ${String(app['사용목적']||'')==='과제연구'?'selected':''}>과제연구</option>
+            <option value="학급활동" ${String(app['사용목적']||'')==='학급활동'?'selected':''}>학급활동</option>
+            <option value="동아리 활동" ${String(app['사용목적']||'')==='동아리 활동'?'selected':''}>동아리 활동</option>
+            <option value="기타" ${String(app['사용목적']||'')==='기타'?'selected':''}>기타</option>
+          </select>
+        </div>
+        <div class="detail-item"><span class="detail-label">지도교사</span><input id="f_teacher" class="detail-input" value="${escapeHtml(app['지도교사이름']||'')}"></div>
+        <div class="detail-item"><span class="detail-label">지도교사 이메일</span><input id="f_teacherEmail" class="detail-input" type="email" value="${escapeHtml(app['지도교사이메일']||'')}"></div>
+        <div class="detail-item"><span class="detail-label">승인 상태</span>
+          <select id="f_status" class="detail-select">
+            <option value="대기" ${st==='대기'?'selected':''}>대기</option>
+            <option value="1차승인" ${st==='1차승인'?'selected':''}>1차승인</option>
+            <option value="최종승인" ${st==='최종승인'?'selected':''}>최종승인</option>
+            <option value="반려" ${st==='반려'?'selected':''}>반려</option>
+          </select>
+        </div>
+      </div>
+
+      <div style="margin-top:12px;">
+        <h3 style="margin:0 0 6px 0;">실험 제목</h3>
+        <input id="f_title" class="detail-input" value="${escapeHtml(app['실험제목']||'')}" style="font-weight:600">
+      </div>
+
+      <div style="margin-top:12px;">
+        <h3 style="margin:0 0 6px 0;">실험 준비물</h3>
+        <textarea id="f_materials" class="detail-textarea" rows="4">${escapeHtml(app['실험준비물']||'')}</textarea>
+      </div>
+
+      <div style="margin-top:12px;">
+        <h3 style="margin:0 0 6px 0;">실험 과정</h3>
+        <textarea id="f_process" class="detail-textarea" rows="6">${escapeHtml(app['실험과정']||'')}</textarea>
+      </div>
+
+      <div style="margin-top:18px;text-align:right">
+        <button class="btn btn-success" onclick="saveEdit('${escapeHtml(id)}')">전체 저장</button>
+        <button class="btn btn-warning" onclick="closeDetail()">취소</button>
+      </div>
+    </form>
+  `;
+
+  // f_lab 옵션 동적 주입(중복 주입 방지)
+  const labSel = $('#f_lab');
+  if (labSel && !labSel.dataset._filled) {
+    labSel.innerHTML = LAB_OPTIONS.map(v => `<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`).join('');
+    labSel.dataset._filled = '1';
+  }
+  $('#f_lab').value = String(app['신청실험실']||'');
+
+  // 날짜 세팅
+  const d = app['실험할날짜'] ? new Date(app['실험할날짜']) : null;
+  $('#f_date').value = (d && !isNaN(d)) ? toLocalYMD(d) : '';
+
+  $('#detailModal').style.display = 'flex';
+  initTooltips(); initRipples();
+}
+
+function saveEdit(id){
+  showGlobalBusy('저장 중... 잠시 기다려주세요.');
+
+  const time = [
+    $('#tET').checked  ? 'ET'    : '',
+    $('#tEP1').checked ? 'EP1'   : '',
+    $('#t7').checked   ? '7교시' : ''
+  ].filter(Boolean).join(', ');
+
+  const st = $('#f_status').value;
+  const approval = mapStatusToApprovals(st);
+
+  const updated = {
+    '대표자학번': $('#f_sid').value,
+    '대표자이름': $('#f_name').value,
+    '동반자명단': $('#f_mates').value,
+    '총인원수': $('#f_cnt').value,
+    '신청실험실': $('#f_lab').value,
+    '실험할날짜': $('#f_date').value,
+    '신청시간': time,
+    '사용목적': $('#f_purpose').value,
+    '지도교사이름': $('#f_teacher').value,
+    '지도교사이메일': $('#f_teacherEmail').value,
+    '실험제목': $('#f_title').value,
+    '실험과정': $('#f_process').value,
+    ...approval
+  };
+
+  google.script.run
+    .withSuccessHandler(r => {
+      if (r && r.success){
+        const app = ALL.find(a => String(a['신청ID'])===String(id));
+        if (app) Object.assign(app, updated);
+        const tr = document.querySelector(`#applicationTableBody tr[data-id="${cssEsc(id)}"]`);
+        if (tr){
+          const tds = tr.children;
+          tds[3].textContent = String(updated['신청실험실']||app['신청실험실']||'');
+          tds[4].textContent = fmtDate(updated['실험할날짜']||app['실험할날짜']||'', false);
+          tds[5].textContent = String(updated['신청시간']||app['신청시간']||'');
+          tds[6].textContent = String(updated['실험제목']||app['실험제목']||'');
+          tds[7].innerHTML  = statusBadge(calcStatus(app));
+          tds[8].textContent = String(updated['지도교사이름']||app['지도교사이름']||'');
+        }
+        updateStatsLocal();
+        closeDetail();
+        showGlobalSuccess('저장되었습니다', '신청 정보가 반영되었습니다.');
+      } else {
+        showGlobalError('수정 실패', (r && r.message) || '알 수 없는 오류');
+      }
+    })
+    .withFailureHandler(err => {
+      showGlobalError('수정 실패', (err && (err.message||err)) || '알 수 없는 오류');
+    })
+    .updateFullApplication(id, updated);
+}
+/* =========================================================
+ * 삭제(단건/일괄)
+ * ========================================================= */
+function removeLocallyById(appId){
+  const id = String(appId);
+  const i1 = ALL.findIndex(a => String(a['신청ID'])===id);
+  if (i1>-1) ALL.splice(i1,1);
+  const i2 = VIEW.findIndex(a => String(a['신청ID'])===id);
+  if (i2>-1) VIEW.splice(i2,1);
+
+  const tr = document.querySelector(`#applicationTableBody tr[data-id="${cssEsc(id)}"]`);
+  if (tr) tr.remove();
+
+  if (!$('#applicationTableBody').children.length){
+    $('#applicationTableBody').innerHTML = `<tr><td class="loading" colspan="10">조건에 맞는 신청서가 없습니다.</td></tr>`;
+  }
+  updateStatsLocal();
+}
+
+/* =========================================================
+ * 상세 모달 인라인 편집
+ * ========================================================= */
+var DETAIL_CHANGES = {};
+function detailInlineEdit(appId, field, iconEl) {
+  var app = ALL.find(function(a) { return a['신청ID'] === appId; });
+  if (!app) return;
+  var valDiv = iconEl.closest('.info-card').querySelector('.detail-value');
+  if (!valDiv) return;
+
+  if (field === '신청실험실') {
+    var sel = document.createElement('select');
+    sel.className = 'detail-input';
+    LAB_OPTIONS.forEach(function(lab) {
+      var opt = document.createElement('option');
+      opt.value = lab; opt.textContent = lab;
+      if (lab === app[field]) opt.selected = true;
+      sel.appendChild(opt);
+    });
+    sel.onchange = function() { DETAIL_CHANGES[field] = sel.value; showDetailSaveBar(appId); };
+    valDiv.innerHTML = '';
+    valDiv.appendChild(sel);
+  } else if (field === '실험할날짜') {
+    var inp = document.createElement('input');
+    inp.type = 'date';
+    inp.className = 'detail-input';
+    var d = app[field] ? new Date(app[field]) : null;
+    inp.value = d && !isNaN(d) ? toLocalYMD(d) : '';
+    inp.onchange = function() { DETAIL_CHANGES[field] = inp.value; showDetailSaveBar(appId); };
+    valDiv.innerHTML = '';
+    valDiv.appendChild(inp);
+  }
+}
+function showDetailSaveBar(appId) {
+  var bar = document.getElementById('detailSaveBar_' + CSS.escape(appId));
+  if (bar) bar.style.display = '';
+}
+function saveDetailInlineChanges(appId) {
+  if (Object.keys(DETAIL_CHANGES).length === 0) return;
+  showGlobalBusy('저장 중입니다');
+  google.script.run
+    .withSuccessHandler(function() {
+      DETAIL_CHANGES = {};
+      loadAll();
+      showGlobalSuccess('저장되었습니다', '상세 항목이 반영되었습니다.');
+    })
+    .withFailureHandler(function(e) {
+      showGlobalError('저장 실패', (e && (e.message || e)) || '알 수 없는 오류');
+    })
+    .updateApplicationField(appId, DETAIL_CHANGES);
+}
+
+function deleteOne(id){
+  if (!confirm('정말 삭제하시겠습니까?')) return;
+  if (prompt('삭제를 확인하려면 "삭제"를 입력하세요') !== '삭제') return;
+  showGlobalBusy('삭제 중입니다');
+
+  google.script.run
+    .withSuccessHandler(msg => {
+      removeLocallyById(id);
+      closeDetail();
+      showGlobalSuccess('삭제되었습니다', msg || '신청 1건이 삭제되었습니다.');
+    })
+    .withFailureHandler(err => {
+      showGlobalError('삭제 실패', (err && (err.message || err)) || '알 수 없는 오류');
+    })
+    .deleteApplication(id);
+}
+
+function bulkDelete(){
+  if (SELECTED.size === 0){ alert('삭제할 신청을 선택하세요.'); return; }
+  if (!confirm(`선택한 ${SELECTED.size}건을 삭제하시겠습니까?`)) return;
+
+  showGlobalBusy('삭제 중입니다');
+
+  const ids = Array.from(SELECTED);
+  const run = (i=0,ok=0,fail=0)=>{
+    if (i>=ids.length){
+      $('#selectAll').checked = false;
+      if (fail === 0) {
+        showGlobalSuccess('삭제되었습니다', ok + '건이 삭제되었습니다.');
+      } else if (ok === 0) {
+        showGlobalError('삭제 실패', '전체 ' + fail + '건이 삭제되지 못했습니다.');
+      } else {
+        showGlobalError('일부 삭제 실패', '성공 ' + ok + '건, 실패 ' + fail + '건입니다.');
+      }
+      return;
+    }
+    const id = ids[i];
+    google.script.run
+      .withSuccessHandler(_=>{
+        removeLocallyById(id);
+        SELECTED.delete(String(id));
+        run(i+1,ok+1,fail);
+      })
+      .withFailureHandler(_=> run(i+1,ok,fail+1))
+      .deleteApplication(id);
+  };
+  run();
+}
+
+
+/* =========================================================
+ * 지도 일지: 작성/조회/통계
+ * ========================================================= */
+function openGuidanceModal(){
+  const body = $('#guidanceBody');
+  body.innerHTML = `
+    <!-- 1줄: 실험날짜, 실험실 -->
+    <div class="form-row"
+         style="display:grid;grid-template-columns:1fr 1fr;
+                column-gap:16px;row-gap:10px;margin-bottom:12px;align-items:start;">
+      <div class="detail-item">
+        <span class="detail-label">실험날짜</span>
+        <input id="g_date" type="date" class="detail-input">
+      </div>
+      <div class="detail-item">
+        <span class="detail-label">실험실</span>
+        <select id="g_lab" class="detail-select"></select>
+      </div>
+    </div>
+
+    <!-- 2줄: 학번, 이름 -->
+    <div class="form-row"
+         style="display:grid;grid-template-columns:1fr 1fr;
+                column-gap:16px;row-gap:10px;margin-bottom:12px;align-items:start;">
+      <div class="detail-item">
+        <span class="detail-label">학번</span>
+        <input id="g_sid" class="detail-input">
+      </div>
+      <div class="detail-item">
+        <span class="detail-label">이름</span>
+        <input id="g_name" class="detail-input">
+      </div>
+    </div>
+
+    <!-- 3줄: 시간, 지도교사, 경고여부 -->
+    <div class="form-row"
+         style="display:grid;grid-template-columns:1fr 1fr 1fr;
+                column-gap:16px;row-gap:10px;margin-bottom:12px;align-items:start;">
+      <div class="detail-item">
+        <span class="detail-label">시간</span>
+        <select id="g_time" class="detail-select">
+          <option value="ET">ET</option>
+          <option value="EP1">EP1</option>
+          <option value="7교시">7교시</option>
+        </select>
+      </div>
+      <div class="detail-item">
+        <span class="detail-label">지도교사</span>
+        <!-- 자동완성 없이 '입력만' -->
+        <input id="g_teacher" class="detail-input" placeholder="이름 입력">
+      </div>
+      <div class="detail-item">
+        <span class="detail-label">경고여부</span>
+        <select id="g_level" class="detail-select">
+          <option value="">선택하세요</option>
+          <option value="지도">지도</option>
+          <option value="경고">경고</option>
+          <option value="칭찬">칭찬</option>
+          <option value="안전사고">안전사고</option>
+          <option value="기타 특이사항">기타 특이사항</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- 4줄: 지도 내용 -->
+    <div class="form-row" style="display:block;margin-top:4px;">
+      <span class="detail-label">지도 내용</span>
+      <textarea id="g_content" rows="6" class="detail-textarea"
+                placeholder="상세 지도 내용을 입력하세요."></textarea>
+    </div>
+
+    <div style="margin-top:14px;text-align:right">
+      <button class="btn btn-success" onclick="saveGuidance()">저장</button>
+      <button class="btn btn-warning" onclick="closeGuidanceModal()">닫기</button>
+    </div>
+  `;
+
+  // 모달 열기
+  $('#guidanceModal').style.display='flex';
+
+  // g_lab 옵션 주입
+  const glab = $('#g_lab');
+  if (glab) {
+    glab.innerHTML = LAB_OPTIONS.map(v => `<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`).join('');
+  }
+
+  // (선택) 교사 목록 자동완성 채우기 — 서버에 이미 구현된 getTeacherListForEdit 사용
+  google.script.run
+    .withSuccessHandler(list => {
+      const dl = document.getElementById('teacherList');
+      if (!dl) return;
+      dl.innerHTML = (list || [])
+        .map(t => `<option value="${escapeHtml(t.name)}">${escapeHtml(t.name)}${t.subject ? ` (${escapeHtml(t.subject)})` : ''}</option>`)
+        .join('');
+    })
+    .withFailureHandler(()=>{})  // 실패해도 자유 입력 가능
+    .getTeacherListForEdit();
+
+  initTooltips();
+  initRipples();
+}
+function closeGuidanceModal(){ $('#guidanceModal').style.display='none'; }
+
+function saveGuidance(){
+  const entry = {
+    date: $('#g_date').value,
+    studentId: $('#g_sid').value,
+    name: $('#g_name').value,
+    lab: $('#g_lab').value,
+    teacher: $('#g_teacher').value,
+    time: $('#g_time').value,
+    level: $('#g_level').value,
+    content: $('#g_content').value
+  };
+  if (!entry.date || !entry.studentId || !entry.name){
+    alert('실험날짜/학번/이름은 필수입니다.'); return;
+  }
+
+  showGlobalBusy('저장 중입니다');
+
+  google.script.run
+    .withSuccessHandler(r=>{
+      if (r && r.success){
+        closeGuidanceModal();
+        showGlobalSuccess('저장되었습니다', '지도 일지가 저장되었습니다.');
+      } else {
+        showGlobalError('저장 실패', (r && r.message) || '알 수 없는 오류');
+      }
+    })
+    .withFailureHandler(err=>{
+      showGlobalError('저장 실패', (err && (err.message||err)) || '알 수 없는 오류');
+    })
+    .addLabGuidanceLog(entry);
+}
+
+function openGuidanceList(){
+  const body = $('#guidanceListBody');
+  body.innerHTML = `<div class="loading">로딩 중...</div>`;
+  $('#guidanceListModal').style.display='flex';
+
+  google.script.run
+    .withSuccessHandler(list=>{
+      if (!Array.isArray(list) || list.length===0){
+        body.innerHTML = `<div class="loading">기록이 없습니다.</div>`;
+      } else {
+        // 페이지네이션 데이터 초기화
+        GL_PAGINATION.data = list.slice();
+        GL_PAGINATION.filtered = list.slice();
+        GL_PAGINATION.page = 1;
+        GL_PAGINATION.sortKey = '';
+        GL_PAGINATION.sortDir = 'asc';
+        
+        body.innerHTML = `
+          <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;">
+            <input id="gl_search" class="detail-input" placeholder="학번/이름/구분/실험실 검색" style="max-width:260px;">
+            <button class="btn btn-success" onclick="openWarningStats()">지도 횟수 통계</button>
+          </div>
+          <div class="table-container" style="overflow:visible">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th style="cursor:pointer" onclick="glSort('실험날짜')">실험날짜</th>
+                  <th style="cursor:pointer" onclick="glSort('학번')">학번</th>
+                  <th style="cursor:pointer" onclick="glSort('이름')">이름</th>
+                  <th style="cursor:pointer" onclick="glSort('실험실')">실험실</th>
+                  <th style="cursor:pointer" onclick="glSort('지도교사')">지도교사</th>
+                  <th style="cursor:pointer" onclick="glSort('시간')">시간</th>
+                  <th style="cursor:pointer" onclick="glSort('경고여부')">구분</th>
+                  <th style="cursor:pointer" onclick="glSort('지도내용')">지도내용</th>
+                  <th style="cursor:pointer" onclick="glSort('작성일시')">작성일시</th>
+                </tr>
+              </thead>
+              <tbody id="gl_tbody"></tbody>
+            </table>
+          </div>
+        `;
+        
+        // 초기 렌더링
+        glRenderPage();
+        
+        // 검색 이벤트
+        $('#gl_search').addEventListener('input', debounce(e => {
+          glFilter(e.target.value);
+        }, 250));
+      }
+    })
+    .withFailureHandler(err=>{ body.innerHTML = `<div class="loading">조회 실패: ${(err.message||err)}</div>`; })
+    .listLabGuidanceLogs();
+}
+function closeGuidanceList(){ $('#guidanceListModal').style.display='none'; }
+
+function openWarningStats(){
+  const body = $('#warningStatsBody');
+  body.innerHTML = `<div class="loading">로딩 중...</div>`;
+  $('#warningStatsModal').style.display='flex';
+
+  google.script.run
+    .withSuccessHandler(arr=>{
+      body.innerHTML = `
+        <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;">
+          <input id="ws_query" class="detail-input" placeholder="학번 또는 이름" style="max-width:220px;">
+          <select id="ws_key" class="detail-select" style="max-width:120px;">
+            <option value="학번">학번으로</option>
+            <option value="이름">이름으로</option>
+          </select>
+          <button class="btn btn-primary" onclick="filterWarningStats()">검색</button>
+        </div>
+        <div class="table-container" style="overflow:visible">
+          <table class="data-table">
+            <thead>
+              <tr><th>학번</th><th>이름</th><th>지도</th><th>경고</th><th>안전사고</th><th>기타 특이사항</th><th>총계</th></tr>
+            </thead>
+            <tbody id="ws_tbody"></tbody>
+          </table>
+        </div>
+      `;
+      const tb = $('#ws_tbody');
+      tb.dataset.raw = JSON.stringify(arr||[]);
+      renderWarningStats(arr||[]);
+    })
+    .withFailureHandler(err=>{ body.innerHTML = `<div class="loading">통계 조회 실패: ${(err.message||err)}</div>`; })
+    .warningStatsByStudent();
+}
+function closeWarningStats(){ $('#warningStatsModal').style.display='none'; }
+
+function renderWarningStats(rows){
+  const tb = $('#ws_tbody');
+  tb.innerHTML = rows.map(r=>`
+    <tr>
+      <td>${escapeHtml(r['학번']||'')}</td>
+      <td>${escapeHtml(r['이름']||'')}</td>
+      <td>${escapeHtml(r['지도']||0)}</td>
+      <td>${escapeHtml(r['경고']||0)}</td>
+      <td>${escapeHtml(r['안전사고']||0)}</td>
+      <td>${escapeHtml(r['기타 특이사항']||0)}</td>
+      <td>${escapeHtml(r['total']||0)}</td>
+    </tr>
+  `).join('');
+}
+function filterWarningStats(){
+  const raw = JSON.parse($('#ws_tbody').dataset.raw || '[]');
+  const key = $('#ws_key').value;      // '학번' | '이름'
+  const q = ($('#ws_query').value||'').trim().toLowerCase();
+  if (!q) { renderWarningStats(raw); return; }
+  renderWarningStats(raw.filter(r => String(r[key]||'').toLowerCase().includes(q)));
+}
+
+/* =========================================================
+ * 제한 정책 UI
+ * ========================================================= */
+function initRestrictionUI(){
+  if (!google?.script?.run?.getRestrictionPolicy) return;
+  google.script.run
+    .withSuccessHandler(res=>{
+      const on = !!(res && res.enabled);
+      $('#restrictionToggle').checked = on;
+      $('#restrictionSettings').style.display = on ? 'flex' : 'none';
+      if (res){
+        $('#restrictionCount').value = res.count ?? 2;
+        $('#restrictionDays').value = res.days ?? 30;
+      }
+    })
+    .withFailureHandler(()=>{})
+    .getRestrictionPolicy();
+}
+function toggleRestrictionPolicy(){
+  const on = $('#restrictionToggle').checked;
+  $('#restrictionSettings').style.display = on ? 'flex' : 'none';
+  if (!google?.script?.run?.setRestrictionEnabled) return;
+  google.script.run
+    .withSuccessHandler(()=>{})
+    .withFailureHandler(()=>{})
+    .setRestrictionEnabled(on);
+}
+function saveRestrictionPolicy(){
+  const payload = {
+    enabled: $('#restrictionToggle').checked,
+    count: parseInt($('#restrictionCount').value || '2', 10),
+    days:  parseInt($('#restrictionDays').value  || '30', 10)
+  };
+  if (!google?.script?.run?.saveRestrictionPolicy){
+    alert('서버 기능 미구현');
+    return;
+  }
+
+  showGlobalBusy('설정 저장 중입니다');
+
+  google.script.run
+    .withSuccessHandler(_=>{
+      // 저장 성공 후 즉시 만료 정리(요청 이슈 대응)
+      google.script.run
+        .withSuccessHandler(()=>{
+          showGlobalSuccess('저장되었습니다', '제한 정책이 저장되었습니다.');
+        })
+        .withFailureHandler(err=>{
+          showGlobalError('만료 정리 오류', '정책 저장은 완료했지만 만료 정리 중 오류: ' + ((err && (err.message||err)) || ''));
+        })
+        .purgeExpiredRestrictions();
+    })
+    .withFailureHandler(err=>{
+      showGlobalError('정책 저장 실패', (err && (err.message||err)) || '알 수 없는 오류');
+    })
+    .saveRestrictionPolicy(payload);
+}
+
+
+/* =========================================================
+ * 로컬 갱신 헬퍼
+ * ========================================================= */
+function updateStatsLocal(){
+  const stats = { total: ALL.length, pending:0, firstApproved:0, finalApproved:0, rejected:0 };
+  ALL.forEach(app=>{
+    const s = calcStatus(app);
+    if (s==='대기') stats.pending++;
+    else if (s==='1차승인') stats.firstApproved++;
+    else if (s==='최종승인') stats.finalApproved++;
+    else if (s==='반려') stats.rejected++;
+  });
+  $('#stat-total').textContent = stats.total;
+  $('#stat-pending').textContent = stats.pending;
+  $('#stat-firstApproved').textContent = stats.firstApproved;
+  $('#stat-finalApproved').textContent = stats.finalApproved;
+  $('#stat-rejected').textContent = stats.rejected;
+}
+
+/* =========================================================
+ * UX: 버튼 툴팁 & 리플 이펙트
+ * ========================================================= */
+function initTooltips(){
+  // data-tip이 있는 요소들에 title 대체 툴팁
+  $$( '[data-tip]' ).forEach(el=>{
+    if (el._tipBound) return;
+    el._tipBound = true;
+    let tipEl;
+    el.addEventListener('mouseenter', ()=>{
+      const txt = el.getAttribute('data-tip');
+      if (!txt) return;
+      tipEl = document.createElement('div');
+      tipEl.className = 'btn-tooltip';
+      tipEl.textContent = txt;
+      document.body.appendChild(tipEl);
+      const rect = el.getBoundingClientRect();
+      const tw = tipEl.offsetWidth, th = tipEl.offsetHeight;
+      tipEl.style.position='fixed';
+      tipEl.style.left = (rect.left + rect.width/2 - tw/2) + 'px';
+      tipEl.style.top  = (rect.top - th - 8) + 'px';
+    });
+    el.addEventListener('mouseleave', ()=>{
+      if (tipEl){ tipEl.remove(); tipEl=null; }
+    });
+  });
+}
+function initRipples(){
+  $$('.btn').forEach(btn=>{
+    if (btn._rippleBound) return;
+    btn._rippleBound = true;
+    btn.style.position = btn.style.position || 'relative';
+    btn.style.overflow = 'hidden';
+    btn.addEventListener('click', function(e){
+      const rect = this.getBoundingClientRect();
+      const ripple = document.createElement('span');
+      ripple.className = 'ripple';
+      const size = Math.max(rect.width, rect.height);
+      ripple.style.width = ripple.style.height = size + 'px';
+      ripple.style.left = (e.clientX - rect.left - size/2) + 'px';
+      ripple.style.top  = (e.clientY - rect.top  - size/2) + 'px';
+      this.appendChild(ripple);
+      setTimeout(()=>ripple.remove(), 450);
+    });
+  });
+}
+
+/* =========================================================
+ * 신청 제한 조회 모달 + 데이터 로딩/렌더
+ *   - 만료 정리(purgeExpiredRestrictions) 선행 호출로
+ *     "날짜 지나도 안 지워짐" 이슈 해결
+ * ========================================================= */
+function openRestrictionModal(){
+  const el = document.getElementById('restrictionModal');
+  if (el) el.style.display = 'flex';
+}
+function closeRestrictionModal(){
+  const el = document.getElementById('restrictionModal');
+  if (el) el.style.display = 'none';
+}
+
+function loadRestrictedList(){
+  const box = document.getElementById('restrictionResult');
+  if (box) box.innerHTML = '<div class="loading">로딩 중...</div>';
+
+  // ★ 만료 정리 → 목록 조회 순으로 체인
+  google.script.run
+    .withSuccessHandler(_=>{
+      google.script.run
+        .withSuccessHandler(renderRestrictionList)
+        .withFailureHandler(err=>{
+          if (box) box.innerHTML = `<div class="loading">조회 실패: ${err.message||err}</div>`;
+        })
+        .getRestrictedListLite();
+    })
+    .withFailureHandler(err=>{
+      if (box) box.innerHTML = `<div class="loading">정리 실패: ${err.message||err}</div>`;
+    })
+    .purgeExpiredRestrictions();
+}
+
+function loadRestrictAccumList(){
+  const box = document.getElementById('restrictionResult');
+  if (box) box.innerHTML = '<div class="loading">로딩 중...</div>';
+
+  google.script.run
+    .withSuccessHandler(_=>{
+      google.script.run
+        .withSuccessHandler(renderRestrictionAccumList)
+        .withFailureHandler(err=>{
+          if (box) box.innerHTML = `<div class="loading">조회 실패: ${err.message||err}</div>`;
+        })
+        .getRestrictedAccumList();
+    })
+    .withFailureHandler(err=>{
+      if (box) box.innerHTML = `<div class="loading">정리 실패: ${err.message||err}</div>`;
+    })
+    .purgeExpiredRestrictions();
+}
+
+function renderRestrictionList(list){
+  const box = document.getElementById('restrictionResult');
+  if (!box) return;
+  if (!Array.isArray(list) || list.length===0){
+    box.innerHTML = '<div class="loading">현재 신청 제한 명단이 없습니다.</div>';
+    return;
+  }
+  const rows = list.map(r=>`
+    <tr>
+      <td>${escapeHtml(r['학번']||'')}</td>
+      <td>${escapeHtml(r['이름']||'')}</td>
+      <td>${escapeHtml(r['시작일']||'')}</td>
+      <td>${escapeHtml(r['종료일']||'')}</td>
+    </tr>
+  `).join('');
+  box.innerHTML = `
+    <div class="table-container" style="overflow:visible">
+      <table class="data-table">
+        <thead><tr><th>학번</th><th>이름</th><th>시작일</th><th>종료일</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+  `;
+}
+
+function renderRestrictionAccumList(list){
+  const box = document.getElementById('restrictionResult');
+  if (!box) return;
+  if (!Array.isArray(list) || list.length===0){
+    box.innerHTML = '<div class="loading">신청 제한 누적 기록이 없습니다.</div>';
+    return;
+  }
+  const rows = list.map(r=>`
+    <tr>
+      <td>${escapeHtml(r['학번']||'')}</td>
+      <td>${escapeHtml(r['이름']||'')}</td>
+      <td>${escapeHtml(r['누적횟수']||0)}</td>
+    </tr>
+  `).join('');
+  box.innerHTML = `
+    <div class="table-container" style="overflow:visible">
+      <table class="data-table">
+        <thead><tr><th>학번</th><th>이름</th><th>누적횟수</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+  `;
+}
+
+
+/* =========================================================
+ * 별도 페이지 이동 함수 (시약목록, 학생명단, 임장일정)
+ * - 기존 모달 기능은 별도 페이지로 분리되었습니다
+ * - chemical_list.html, student_list.html, teacher_schedule.html
+ * ========================================================= */
+
+/**
+ * 지정된 view 페이지로 이동 (같은 탭에서)
+ * @param {string} viewName - 페이지 이름 (chemical_list, student_list, teacher_schedule)
+ */
+function goToPage(viewName) {
+  // admin.html에서 설정한 전역 변수 APP_BASE_URL 사용
+  if (typeof APP_BASE_URL !== 'undefined' && APP_BASE_URL) {
+    const url = APP_BASE_URL + '?view=' + encodeURIComponent(viewName);
+    window.top.location.href = url;  // 같은 탭에서 이동
+  } else {
+    // 폴백: 서버에서 URL 가져오기
+    google.script.run
+      .withSuccessHandler(function(baseUrl) {
+        const url = baseUrl + '?view=' + encodeURIComponent(viewName);
+        window.top.location.href = url;  // 같은 탭에서 이동
+      })
+      .withFailureHandler(function(err) {
+        alert('페이지 이동 실패: ' + (err.message || err));
+      })
+      .getAppUrl();
+  }
+}
+
+
+/* ---- 파일 맨 끝에 추가 ---- */
+
+// 인라인 on* 핸들러에서 접근 가능하도록 전역 노출
+Object.assign(window, {
+  // 조회/뷰/정렬
+  loadApplications,
+  applySorting,
+  resetSort,
+  filterByStatusFromCard,
+  onSortHeader,
+  onToggleSelectAll,
+
+  // 전체 조건 초기
+  resetAllFilters,
+
+  // 편집 모드 / 일괄 변경 / 저장
+  toggleEditMode,
+  applyBulkChanges,
+  resetBulkControls,
+  saveAllEdits,
+
+  // 상세/편집/삭제/인쇄
+  openDetail,
+  closeDetail,
+  openEdit,
+  saveEdit,
+  deleteOne,
+  bulkDelete,
+  printOne,
+
+  // 지도일지
+  openGuidanceModal,
+  closeGuidanceModal,
+  saveGuidance,
+  openGuidanceList,
+  closeGuidanceList,
+  openWarningStats,
+  closeWarningStats,
+  filterWarningStats,
+
+  // 제한 정책
+  initRestrictionUI,
+  toggleRestrictionPolicy,
+  saveRestrictionPolicy,
+
+  // 신청 제한 조회 모달/로딩
+  openRestrictionModal,
+  closeRestrictionModal,
+  loadRestrictedList,
+  loadRestrictAccumList,
+
+  // 페이지 이동 (시약목록, 학생명단, 임장일정)
+  goToPage,
+  // 고급 필터 토글 / 결과 카운트
+  toggleAdvanced,
+  updateResultCount,
+  clearFilter,
+
+  // 상세 모달 인라인 편집
+  detailInlineEdit,
+  showDetailSaveBar,
+  saveDetailInlineChanges
+});
+
+/* =========================================================
+ * 교사 목록 로드 (datalist 자동완성용)
+ * ========================================================= */
+
+function loadTeacherList() {
+  google.script.run
+    .withSuccessHandler(function(list) {
+      var dl = document.getElementById("teacherList");
+      if (!dl) return;
+      dl.innerHTML = "";
+      (list || []).forEach(function(t) {
+        var opt = document.createElement("option");
+        opt.value = t.name || "";
+        dl.appendChild(opt);
+      });
+    })
+    .withFailureHandler(function(e) {
+      console.error("교사 목록 로드 실패:", e);
+    })
+    .getTeacherListForEdit();
+}
+
+/* =========================================================
+ * 다크모드 토글
+ * ========================================================= */
+function toggleDarkMode() {
+  const html = document.documentElement;
+  const currentTheme = html.getAttribute('data-theme');
+  const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+  
+  html.setAttribute('data-theme', newTheme);
+  localStorage.setItem('lab-system-theme', newTheme);
+  
+  // 토글 버튼 상태 업데이트
+  const toggle = document.getElementById('themeToggle');
+  if (toggle) {
+    toggle.setAttribute('aria-pressed', newTheme === 'dark');
+  }
+}
+
+// 페이지 로드 시 저장된 테마 적용
+function initTheme() {
+  const savedTheme = localStorage.getItem('lab-system-theme') || 'light';
+  document.documentElement.setAttribute('data-theme', savedTheme);
+  
+  const toggle = document.getElementById('themeToggle');
+  if (toggle) {
+    toggle.setAttribute('aria-pressed', savedTheme === 'dark');
+  }
+}
+
+// DOMContentLoaded에서 테마 초기화
+document.addEventListener('DOMContentLoaded', initTheme);
+
+/* =========================================================
+ * 지도일지 페이지네이션 유틸
+ * ========================================================= */
+const GL_PAGINATION = {
+  data: [],
+  filtered: [],
+  page: 1,
+  perPage: 20,
+  sortKey: '',
+  sortDir: 'asc'
+};
+
+function glRenderPage() {
+  const { filtered, page, perPage } = GL_PAGINATION;
+  const start = (page - 1) * perPage;
+  const end = start + perPage;
+  const pageData = filtered.slice(start, end);
+  
+  const tb = document.getElementById('gl_tbody');
+  if (!tb) return;
+  
+  tb.innerHTML = pageData.map(r => `
+    <tr>
+      <td>${escapeHtml(r['실험날짜']||'')}</td>
+      <td>${escapeHtml(r['학번']||'')}</td>
+      <td>${escapeHtml(r['이름']||'')}</td>
+      <td>${escapeHtml(r['실험실']||'')}</td>
+      <td>${escapeHtml(r['지도교사']||'')}</td>
+      <td>${escapeHtml(r['시간']||'')}</td>
+      <td>${escapeHtml(r['경고여부']||'')}</td>
+      <td style="max-width:360px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${escapeHtml(r['지도내용']||'')}">${escapeHtml(r['지도내용']||'')}</td>
+      <td>${escapeHtml(r['작성일시']||'')}</td>
+    </tr>
+  `).join('');
+  
+  glRenderPagination();
+}
+
+function glRenderPagination() {
+  const { filtered, page, perPage } = GL_PAGINATION;
+  const totalPages = Math.ceil(filtered.length / perPage) || 1;
+  
+  let paginationEl = document.getElementById('gl_pagination');
+  if (!paginationEl) {
+    paginationEl = document.createElement('div');
+    paginationEl.id = 'gl_pagination';
+    paginationEl.style.cssText = 'display:flex;justify-content:center;align-items:center;gap:8px;margin-top:12px;flex-wrap:wrap;';
+    const tableContainer = document.querySelector('#guidanceListModal .table-container');
+    if (tableContainer && tableContainer.parentNode) {
+      tableContainer.parentNode.appendChild(paginationEl);
+    }
+  }
+  
+  let html = '';
+  
+  // 이전 버튼
+  html += `<button class="btn btn-small" onclick="glGoPage(1)" ${page === 1 ? 'disabled' : ''}>≪</button>`;
+  html += `<button class="btn btn-small" onclick="glGoPage(${page - 1})" ${page === 1 ? 'disabled' : ''}>‹</button>`;
+  
+  // 페이지 번호 (현재 페이지 주변 5개)
+  const range = 2;
+  let startP = Math.max(1, page - range);
+  let endP = Math.min(totalPages, page + range);
+  
+  if (startP > 1) {
+    html += `<button class="btn btn-small" onclick="glGoPage(1)">1</button>`;
+    if (startP > 2) html += `<span>...</span>`;
+  }
+  
+  for (let i = startP; i <= endP; i++) {
+    html += `<button class="btn btn-small ${i === page ? 'btn-primary' : ''}" onclick="glGoPage(${i})">${i}</button>`;
+  }
+  
+  if (endP < totalPages) {
+    if (endP < totalPages - 1) html += `<span>...</span>`;
+    html += `<button class="btn btn-small" onclick="glGoPage(${totalPages})">${totalPages}</button>`;
+  }
+  
+  // 다음 버튼
+  html += `<button class="btn btn-small" onclick="glGoPage(${page + 1})" ${page === totalPages ? 'disabled' : ''}>›</button>`;
+  html += `<button class="btn btn-small" onclick="glGoPage(${totalPages})" ${page === totalPages ? 'disabled' : ''}>≫</button>`;
+  
+  // 페이지 정보
+  html += `<span style="margin-left:12px;color:#666;font-size:13px;">${filtered.length}건 중 ${(page-1)*perPage+1}-${Math.min(page*perPage, filtered.length)}건</span>`;
+  
+  // 페이지당 건수 선택
+  html += `<select id="gl_perPage" onchange="glChangePerPage(this.value)" style="margin-left:12px;padding:4px 8px;">
+    <option value="10" ${perPage===10?'selected':''}>10건</option>
+    <option value="20" ${perPage===20?'selected':''}>20건</option>
+    <option value="50" ${perPage===50?'selected':''}>50건</option>
+    <option value="100" ${perPage===100?'selected':''}>100건</option>
+  </select>`;
+  
+  paginationEl.innerHTML = html;
+}
+
+function glGoPage(p) {
+  const totalPages = Math.ceil(GL_PAGINATION.filtered.length / GL_PAGINATION.perPage) || 1;
+  GL_PAGINATION.page = Math.max(1, Math.min(p, totalPages));
+  glRenderPage();
+}
+
+function glChangePerPage(val) {
+  GL_PAGINATION.perPage = parseInt(val) || 20;
+  GL_PAGINATION.page = 1;
+  glRenderPage();
+}
+
+function glSort(key) {
+  const { sortKey, sortDir, filtered } = GL_PAGINATION;
+  GL_PAGINATION.sortDir = (sortKey === key && sortDir === 'asc') ? 'desc' : 'asc';
+  GL_PAGINATION.sortKey = key;
+  
+  const isDate = (key === '실험날짜' || key === '작성일시');
+  filtered.sort((a, b) => {
+    let av = a[key] || '', bv = b[key] || '';
+    if (isDate) {
+      const da = new Date(av), db = new Date(bv);
+      const cmp = (isNaN(da) && isNaN(db)) ? 0 : (isNaN(da) ? 1 : (isNaN(db) ? -1 : (da - db)));
+      return GL_PAGINATION.sortDir === 'asc' ? cmp : -cmp;
+    } else {
+      const cmp = String(av).localeCompare(String(bv), 'ko');
+      return GL_PAGINATION.sortDir === 'asc' ? cmp : -cmp;
+    }
+  });
+  
+  GL_PAGINATION.page = 1;
+  glRenderPage();
+}
+
+function glFilter(term) {
+  const t = (term || '').trim().toLowerCase();
+  if (!t) {
+    GL_PAGINATION.filtered = GL_PAGINATION.data.slice();
+  } else {
+    const fields = ['학번', '이름', '경고여부', '실험실'];
+    GL_PAGINATION.filtered = GL_PAGINATION.data.filter(r =>
+      fields.some(f => String(r[f] || '').toLowerCase().includes(t))
+    );
+  }
+  GL_PAGINATION.page = 1;
+  glRenderPage();
+}
+
+/* =========================================================
+ * 키보드 단축키 (접근성)
+ * ========================================================= */
+document.addEventListener('keydown', function(e) {
+  // Ctrl+F: 검색 입력으로 포커스
+  if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
+    const searchInput = document.getElementById('searchInput') || document.querySelector('input[type="search"]');
+    if (searchInput) { e.preventDefault(); searchInput.focus(); }
+  }
+  // Ctrl+E: 편집모드 토글
+  if ((e.ctrlKey || e.metaKey) && e.key === 'e') {
+    e.preventDefault();
+    if (typeof toggleEditMode === 'function') {
+      toggleEditMode(!EDIT_MODE);
+    }
+  }
+});
+
+/* =========================================================
+ * 끝
+ * ========================================================= */
+</script>

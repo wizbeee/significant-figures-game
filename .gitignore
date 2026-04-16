@@ -2,6 +2,7 @@
 *.task
 *.py
 requirements.txt
-server.js
 입학전형위원_전자서명/
 .claude/
+node_modules/
+package-lock.json

@@ -1,0 +1,62 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'kr.hs.cnsa.sciencelab'
+    compileSdk 34
+
+    signingConfigs {
+        release {
+            storeFile file('../keystore/sciencelab.jks')
+            storePassword 'cnsa3000'
+            keyAlias 'sciencelab'
+            keyPassword 'cnsa3000'
+        }
+    }
+
+    defaultConfig {
+        applicationId "kr.hs.cnsa.sciencelab"
+        minSdk 24          // Android 7.0+
+        targetSdk 34       // Android 14
+        versionCode 16
+        versionName "2.4.0"
+
+        // 웹앱 URL 설정 - 모바일 전용 UI (?platform=mobile)
+        // @166 배포: v3.3.1 모바일 날짜 지정 기능 추가
+        buildConfigField "String", "WEB_APP_URL",
+            "\"https://script.google.com/macros/s/AKfycbypW5NBwZcaCwGSSVSWOowjY89R8ZwTfxFXJyQg4atQqxcDEfCAjHYbrn0d1rbXzE4xGg/exec?platform=mobile\""
+    }
+
+    buildTypes {
+        release {
+            signingConfig signingConfigs.release
+            minifyEnabled true
+            shrinkResources true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+        debug {
+            applicationIdSuffix ".debug"
+            versionNameSuffix "-debug"
+        }
+    }
+
+    buildFeatures {
+        buildConfig true
+        viewBinding true
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+}
+
+dependencies {
+    implementation 'androidx.appcompat:appcompat:1.6.1'
+    implementation 'androidx.core:core:1.12.0'
+    implementation 'androidx.swiperefreshlayout:swiperefreshlayout:1.1.0'
+    implementation 'androidx.webkit:webkit:1.9.0'
+    implementation 'com.google.android.material:material:1.11.0'
+    implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
+}

@@ -1,0 +1,432 @@
+<!-- admin_body.html -->
+<!-- 중복 body 태그 제거됨 - admin.html에서 관리 -->
+<!-- ✅ 수정: 조회기준을 hidden으로 변경 (실험할날짜 고정) -->
+<a href="#main-content" class="skip-link">본문으로 건너뛰기</a>
+<div class="container">
+<main id="main-content">
+<script>setActiveDesktopNav('admin');</script>
+  <!-- 헤더 -->
+  <div class="header" role="banner">
+    <h1>과학 실험·실습실 관리 시스템</h1>
+    <p>실험·실습실 사용 신청 현황 및 관리</p>
+  </div>
+
+  <!-- 통계 카드 -->
+  <div class="stats-grid" aria-label="신청 통계">
+    <div class="stat-card total" role="button" tabindex="0" data-status="전체" onclick="filterByStatusFromCard('전체')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click();}">
+      <div class="stat-number" id="stat-total">-</div>
+      <div class="stat-label">전체 신청</div>
+      <div class="stat-sublabel">총 신청 건수</div>
+    </div>
+    <div class="stat-card pending" role="button" tabindex="0" data-status="대기" onclick="filterByStatusFromCard('대기')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click();}">
+      <div class="stat-number" id="stat-pending">-</div>
+      <div class="stat-label">대기중</div>
+      <div class="stat-sublabel">승인 대기</div>
+    </div>
+    <div class="stat-card" role="button" tabindex="0" data-status="1차승인" onclick="filterByStatusFromCard('1차승인')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click();}">
+      <div class="stat-number" id="stat-firstApproved">-</div>
+      <div class="stat-label">1차 승인</div>
+      <div class="stat-sublabel">지도 승인</div>
+    </div>
+    <div class="stat-card" role="button" tabindex="0" data-status="최종승인" onclick="filterByStatusFromCard('최종승인')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click();}">
+      <div class="stat-number" id="stat-finalApproved">-</div>
+      <div class="stat-label">최종승인</div>
+      <div class="stat-sublabel">최종 승인</div>
+    </div>
+    <div class="stat-card" role="button" tabindex="0" data-status="반려" onclick="filterByStatusFromCard('반려')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click();}">
+      <div class="stat-number" id="stat-rejected">-</div>
+      <div class="stat-label">반려</div>
+      <div class="stat-sublabel">반려 처리</div>
+    </div>
+  </div>
+
+  <!-- 컨트롤 영역 -->
+  <div class="controls">
+    <!-- 1줄: 조회기준 + 기간 + 빠른기간선택 + 조회버튼 -->
+    <div class="control-row">
+      <!-- ✅ 수정: 조회기준 드롭다운 추가 -->
+      <div class="control-group">
+        <label for="basisSelect">조회기준</label>
+        <select id="basisSelect">
+          <option value="실험할날짜">실험날짜</option>
+          <option value="제출일시">신청일시</option>
+        </select>
+      </div>
+
+      <div class="control-group period-inline">
+        <label for="dateFrom">기간</label>
+        <input type="date" id="dateFrom" />
+        <span>~</span>
+        <input type="date" id="dateTo" />
+      </div>
+
+      <!-- 빠른 기간 선택 버튼 -->
+      <div class="quick-date-btns">
+        <button class="btn" onclick="setQuickDate('today')" title="오늘">오늘</button>
+        <button class="btn" onclick="setQuickDate('week')" title="이번 주">이번 주</button>
+        <button class="btn" onclick="setQuickDate('month')" title="이번 달">이번 달</button>
+        <button class="btn" onclick="setQuickDate('recent7')" title="최근 7일">최근 7일</button>
+      </div>
+
+      <button class="btn btn-primary btn-query" id="btnQuery" onclick="loadApplications()">조회</button>
+        
+      <!-- 오른쪽 끝: 전체 조건 초기화 + 내보내기 + 추가 기능 페이지 링크 -->
+      <div class="export-btns">
+        <button class="btn btn-info" id="btnResetAll" onclick="resetAllFilters()">전체 조건 초기화</button>
+        <button class="btn btn-success" id="btnExportExcel" onclick="exportToExcel()">엑셀 내보내기</button>
+        <span class="sep"></span>
+        <!-- ✅ 변경: 모달 대신 새 페이지로 이동 -->
+        <button class="btn btn-warning" onclick="goToPage('chemical_list')" title="시약 목록 페이지로 이동">📦 시약 목록</button>
+        <button class="btn btn-secondary" onclick="goToPage('student_list')" title="학생 명단 페이지로 이동">👥 학생 명단</button>
+        <button class="btn btn-info" onclick="goToPage('teacher_schedule')" title="임장 일정 페이지로 이동">🧑‍🏫 임장 일정</button>
+      </div>
+    </div>
+    
+    <!-- 2줄: 실험실, 상태, 검색(학번/이름/지도교사) -->
+    <div class="control-row">
+      <div class="control-group">
+        <label for="labSelect">실험·실습실</label>
+        <select id="labSelect">
+          <option value="">전체</option>
+          <option value="화학실험실">화학실험실</option>
+          <option value="생물실험실">생물실험실</option>
+          <option value="프로젝트실험실">프로젝트실험실</option>
+          <option value="첨단기기실험실">첨단기기실험실</option>
+          <option value="오픈랩">오픈랩</option>
+          <option value="물리실험실">물리실험실</option>
+          <option value="파동광학 실험실">파동광학 실험실</option>
+          <option value="AP Lab">AP Lab</option>
+          <option value="Tech&Art Lab">Tech&Art Lab</option>
+        </select>
+      </div>
+
+      <div class="control-group">
+        <label for="statusSelect">상태</label>
+        <select id="statusSelect">
+          <option value="">전체</option>
+          <option value="대기">대기</option>
+          <option value="1차승인">1차승인</option>
+          <option value="최종승인">최종승인</option>
+          <option value="반려">반려</option>
+        </select>
+      </div>
+
+      <div class="control-group" style="min-width:280px;flex:1">
+        <label for="searchInput">검색</label>
+        <input type="text" id="searchInput" placeholder="학번, 이름, 지도교사, 실험제목" />
+      </div>
+    </div>
+
+    <button class="btn btn-small" onclick="toggleAdvanced()">▼ 고급 필터</button>
+    <div id="advancedPanel">
+    <!-- 3줄: 정렬 -->
+    <div class="control-row">
+      <!-- 1순위 -->
+      <div class="control-group">
+        <label for="primarySort">정렬 1순위</label>
+        <select id="primarySort">
+          <option value="">선택 안 함</option>
+          <option value="제출일시">제출일시</option>
+          <option value="실험할날짜">실험할날짜</option>
+          <option value="시간">시간</option>
+          <option value="상태">상태</option>
+        </select>
+      </div>
+      <div class="control-group">
+        <label for="primaryDir">방향</label>
+        <select id="primaryDir">
+          <option value="asc">오름</option>
+          <option value="desc">내림</option>
+        </select>
+      </div>
+
+      <!-- 2순위 -->
+      <div class="control-group">
+        <label for="secondarySort">정렬 2순위</label>
+        <select id="secondarySort">
+          <option value="">선택 안 함</option>
+          <option value="제출일시">제출일시</option>
+          <option value="실험할날짜">실험할날짜</option>
+          <option value="시간">시간</option>
+          <option value="상태">상태</option>
+        </select>
+      </div>
+      <div class="control-group">
+        <label for="secondaryDir">방향</label>
+        <select id="secondaryDir">
+          <option value="asc">오름</option>
+          <option value="desc">내림</option>
+        </select>
+      </div>
+
+      <!-- 3순위 -->
+      <div class="control-group">
+        <label for="tertiarySort">정렬 3순위</label>
+        <select id="tertiarySort">
+          <option value="">선택 안 함</option>
+          <option value="제출일시">제출일시</option>
+          <option value="실험할날짜">실험할날짜</option>
+          <option value="시간">시간</option>
+          <option value="상태">상태</option>
+        </select>
+      </div>
+      <div class="control-group">
+        <label for="tertiaryDir">방향</label>
+        <select id="tertiaryDir">
+          <option value="asc">오름</option>
+          <option value="desc">내림</option>
+        </select>
+      </div>
+
+      <!-- 4순위 -->
+      <div class="control-group">
+        <label for="quaternarySort">정렬 4순위</label>
+        <select id="quaternarySort">
+          <option value="">선택 안 함</option>
+          <option value="제출일시">제출일시</option>
+          <option value="실험할날짜">실험할날짜</option>
+          <option value="시간">시간</option>
+          <option value="상태">상태</option>
+        </select>
+      </div>
+      <div class="control-group">
+        <label for="quaternaryDir">방향</label>
+        <select id="quaternaryDir">
+          <option value="asc">오름</option>
+          <option value="desc">내림</option>
+        </select>
+      </div>
+
+      <!-- '시간'을 한 번이라도 선택하면만 표시 -->
+      <div class="control-group" id="timeOrderGroup" style="display:none;">
+        <label for="timeOrder">시간 우선순위</label>
+        <select id="timeOrder" title="좌→우 순서대로 정렬">
+          <option value="ET-EP1-7">ET → EP1 → 7교시</option>
+          <option value="EP1-ET-7">EP1 → ET → 7교시</option>
+          <option value="7-ET-EP1">7교시 → ET → EP1</option>
+          <option value="7-EP1-ET">7교시 → EP1 → ET</option>
+          <option value="ET-7-EP1">ET → 7교시 → EP1</option>
+          <option value="EP1-7-ET">EP1 → 7교시 → ET</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- 4줄: 지도일지/통계/신청제한 -->
+    <div class="control-row">
+      <div class="control-group" style="display:flex;gap:8px;flex-wrap:wrap;">
+        <button class="btn btn-info" onclick="openGuidanceModal()">지도일지 작성</button>
+        <button class="btn btn-secondary" onclick="openGuidanceList()">지도일지 조회</button>
+        <button class="btn btn-success" onclick="openWarningStats()">지도 횟수 통계</button>
+        <button class="btn btn-primary"
+                onclick="openRestrictionModal(); loadRestrictedList();">
+          실험실 사용신청 제한 조회
+        </button>
+      </div>
+    </div>
+    </div><!-- /advancedPanel -->
+
+    <!-- 5줄: 편집모드 좌/우 영역 -->
+    <div class="control-row editbar-wrap" id="editModeButtons">
+      <div class="editbar">
+        <!-- 좌측: 편집모드 UI(동적 교체) -->
+        <div id="editModeLeft">
+          <button class="btn btn-success" id="editModeBtn" onclick="toggleEditMode(true)">편집모드</button>
+        </div>
+
+        <!-- 우측: 신청 제한 토글 + 선택 삭제 (항상 유지) -->
+        <div id="editModeRight" style="display:flex; align-items:center; gap:12px;">
+          <div style="display:flex;align-items:center;gap:8px;">
+            <label style="margin-right:6px;">신청 제한 활성화</label>
+            <label class="switch">
+              <input type="checkbox" id="restrictionToggle" onchange="toggleRestrictionPolicy()" />
+              <span class="slider"></span>
+            </label>
+            <div id="restrictionSettings" style="display:none;gap:8px;align-items:center;margin-left:10px;">
+              <label>경고</label>
+              <input id="restrictionCount" type="number" min="1" value="2" style="width:64px" />
+              <label>회 → 금지</label>
+              <input id="restrictionDays" type="number" min="1" value="30" style="width:72px" />
+              <label>일</label>
+              <button class="btn btn-info btn-small" onclick="saveRestrictionPolicy()">정책 저장</button>
+            </div>
+          </div>
+
+          <button class="btn btn-danger" onclick="bulkDelete()" id="bulkDeleteBtn">선택 삭제</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 편집모드 활성화 배너 -->
+    <div class="edit-mode-banner" id="editModeBanner">
+      <span class="icon">✏️</span>
+      <span>편집 모드가 활성화되어 있습니다. 변경 후 반드시 '저장' 버튼을 눌러주세요.</span>
+    </div>
+
+    <!-- (편집모드에서만 표시) 일괄 변경 바 -->
+    <div class="bulkbar" id="bulkBar" aria-label="일괄 변경 바" style="display:none;">
+      <strong style="color:#2c3e50">일괄 변경:</strong>
+
+      <label for="bulkLab">실험실</label>
+      <select id="bulkLab">
+        <option value="">선택 안 함</option>
+        <option value="화학실험실">화학실험실</option>
+        <option value="생물실험실">생물실험실</option>
+        <option value="프로젝트실험실">프로젝트실험실</option>
+        <option value="첨단기기실험실">첨단기기실험실</option>
+        <option value="오픈랩">오픈랩</option>
+        <option value="물리실험실">물리실험실</option>
+        <option value="파동광학 실험실">파동광학 실험실</option>
+        <option value="AP Lab">AP Lab</option>
+        <option value="Tech&Art Lab">Tech&Art Lab</option>
+      </select>
+
+      <span class="sep"></span>
+
+      <label for="bulkDate">실험날짜</label>
+      <input type="date" id="bulkDate" />
+
+      <span class="sep"></span>
+
+      <label>시간</label>
+      <label style="display:inline-flex;align-items:center;gap:4px;"><input type="checkbox" id="bulkTimeET" value="ET" /> ET</label>
+      <label style="display:inline-flex;align-items:center;gap:4px;"><input type="checkbox" id="bulkTimeEP1" value="EP1" /> EP1</label>
+      <label style="display:inline-flex;align-items:center;gap:4px;"><input type="checkbox" id="bulkTime7" value="7교시" /> 7교시</label>
+
+      <span class="sep"></span>
+
+      <label for="bulkStatus">상태</label>
+      <select id="bulkStatus">
+        <option value="">선택 안 함</option>
+        <option value="대기">대기</option>
+        <option value="1차승인">1차승인</option>
+        <option value="최종승인">최종승인</option>
+        <option value="반려">반려</option>
+      </select>
+
+      <span class="sep"></span>
+
+      <label for="bulkTeacher">지도교사</label>
+      <input type="text" id="bulkTeacher" placeholder="이름 입력" list="teacherList" style="max-width:160px;padding:6px 10px;border:2px solid #ddd;border-radius:6px;font-size:13px" />
+
+      <button class="btn btn-success btn-small" onclick="applyBulkChanges()" style="margin-left:8px">일괄 적용</button>
+      <button class="btn btn-primary btn-small" onclick="resetBulkControls()">초기화</button>
+
+      <span class="sep"></span>
+
+      <!-- 일괄 승인/반려 버튼 추가 -->
+      <button class="btn btn-info btn-small" onclick="bulkApprove('1차승인')">일괄 1차승인</button>
+      <button class="btn btn-success btn-small" onclick="bulkApprove('최종승인')">일괄 최종승인</button>
+      <button class="btn btn-danger btn-small" onclick="bulkApprove('반려')">일괄 반려</button>
+
+      <span style="color:#666;font-size:12px;margin-left:auto;">※ 체크된 행에만 적용됩니다(저장 전 상태).</span>
+    </div>
+  </div>
+
+  <!-- 필터 칩 영역 -->
+  <div id="resultCountBar" class="result-count-bar" aria-live="polite"></div>
+
+  <!-- 표 -->
+  <div class="table-container">
+    <table class="data-table" aria-label="신청 목록">
+      <thead>
+        <tr>
+          <th class="col-select" onclick="event.stopPropagation()" title="현재 화면에 보이는 행만 선택/해제">
+            <input type="checkbox" id="selectAll" aria-label="전체 선택" />
+          </th>
+          <th data-sort-key="제출일시">제출일시<span class="sort-indicator"></span></th>
+          <th data-sort-key="대표자이름">대표자<span class="sort-indicator"></span></th>
+          <th data-sort-key="신청실험실">실험실<span class="sort-indicator"></span></th>
+          <th data-sort-key="실험할날짜">실험날짜<span class="sort-indicator"></span></th>
+          <th data-sort-key="신청시간">시간<span class="sort-indicator"></span></th>
+          <th class="col-title" data-sort-key="실험제목">실험제목<span class="sort-indicator"></span></th>
+          <th class="col-status" data-sort-key="__status__">상태<span class="sort-indicator"></span></th>
+          <th class="col-teacher" data-sort-key="지도교사이름">지도교사<span class="sort-indicator"></span></th>
+          <th class="col-actions">관리</th>
+        </tr>
+      </thead>
+      <tbody id="applicationTableBody" aria-live="polite">
+        <tr><td colspan="10" class="loading">데이터를 불러오는 중...</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- 페이지네이션 바 -->
+  <div id="paginationBar" class="pagination-bar"></div>
+</main><!-- /main-content -->
+</div>
+
+<!-- 교사 목록 datalist (자동완성용) -->
+<datalist id="teacherList"></datalist>
+
+<!-- 상세/편집 모달 -->
+<div id="detailModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h2 id="modalTitle">상세 정보</h2>
+      <button class="close-modal" onclick="closeDetail()" aria-label="닫기">&times;</button>
+    </div>
+    <div class="modal-body" id="detailBody" aria-live="polite"></div>
+  </div>
+</div>
+
+<!-- 지도일지 작성 모달 -->
+<div id="guidanceModal" class="modal" role="dialog" aria-modal="true">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h2>실험실 지도 일지 작성</h2>
+      <button class="close-modal" onclick="closeGuidanceModal()" aria-label="닫기">&times;</button>
+    </div>
+    <div class="modal-body" id="guidanceBody"></div>
+  </div>
+</div>
+
+<!-- 지도일지 조회 모달 -->
+<div id="guidanceListModal" class="modal" role="dialog" aria-modal="true">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h2>실험실 지도 일지 조회</h2>
+      <button class="close-modal" onclick="closeGuidanceList()" aria-label="닫기">&times;</button>
+    </div>
+    <div class="modal-body" id="guidanceListBody"></div>
+  </div>
+</div>
+
+<!-- 지도 횟수 통계 모달 -->
+<div id="warningStatsModal" class="modal" role="dialog" aria-modal="true">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h2>지도 횟수 통계</h2>
+      <button class="close-modal" onclick="closeWarningStats()" aria-label="닫기">&times;</button>
+    </div>
+    <div class="modal-body" id="warningStatsBody"></div>
+  </div>
+</div>
+
+<!-- ✅ 시약 목록 모달 제거됨 - 별도 페이지로 이동 -->
+<!-- ✅ 학생 명단 모달 제거됨 - 별도 페이지로 이동 -->
+
+<!-- 신청 제한 조회 모달 -->
+<div id="restrictionModal" class="modal" role="dialog" aria-modal="true">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h2>실험실 사용신청 제한 조회</h2>
+      <button class="close-modal" onclick="closeRestrictionModal()" aria-label="닫기">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="control-group">
+        <button class="btn btn-info" onclick="loadRestrictedList()">현재 신청제한 명단 조회</button>
+        <button class="btn btn-warning" onclick="loadRestrictAccumList()">신청제한 누적 기록 조회</button>
+      </div>
+      <div id="restrictionResult"></div>
+    </div>
+  </div>
+</div>
+
+<div id="busyOverlay" role="status" aria-live="assertive" aria-hidden="true" style="display:none">
+  <div class="busy-card">
+    <div class="busy-visual" id="busyVisual"><div class="busy-spinner"></div></div>
+    <div class="busy-title" id="busyTitle">저장 중입니다</div>
+    <div class="busy-sub" id="busyMsg">잠시만 기다려주세요…</div>
+    <button type="button" class="busy-close" id="busyCloseBtn">닫기</button>
+  </div>
+</div>

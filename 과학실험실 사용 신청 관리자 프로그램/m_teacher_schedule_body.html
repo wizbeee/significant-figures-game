@@ -1,0 +1,75 @@
+<!-- ===== 임장 — 데스크탑 기능 완전 반영 ===== -->
+
+<!-- 교사 칩 -->
+<div class="teacher-chips" id="teacher-chips-container">
+  <span class="teacher-chip active" data-teacher="" onclick="mtFilterTeacher('',this)">전체</span>
+</div>
+
+<!-- 필터 컨트롤 -->
+<div class="filter-controls">
+  <div class="filter-row" style="display:flex;gap:6px;">
+    <select class="filter-select-sm" id="mt-presenceFilter" onchange="mtRender()">
+      <option value="">임장 전체</option>
+      <option value="need">임장필요만</option>
+      <option value="noneed">불필요만</option>
+    </select>
+    <select class="filter-select-sm" id="mt-labFilter" onchange="mtRender()">
+      <option value="">실험실 전체</option>
+    </select>
+    <select class="filter-select-sm" id="mt-timeFilter" onchange="mtRender()">
+      <option value="">시간 전체</option>
+      <option value="ET">ET</option>
+      <option value="EP1">EP1</option>
+      <option value="7교시">7교시</option>
+    </select>
+  </div>
+  <div class="filter-row" style="display:flex;gap:6px;">
+    <select class="filter-select-sm" id="mt-approvalFilter" onchange="mtProcessData();mtRender();">
+      <option value="approved">승인된 신청만</option>
+      <option value="">전체 상태</option>
+    </select>
+    <select class="filter-select-sm" id="mt-sortBy" onchange="mtRender()">
+      <option value="date">날짜순</option>
+      <option value="time">시간순</option>
+      <option value="lab">실험실순</option>
+      <option value="teacher">교사순</option>
+    </select>
+  </div>
+</div>
+
+<!-- 보기 전환 + 통계 -->
+<div style="padding:6px 16px;display:flex;align-items:center;justify-content:space-between;">
+  <div class="view-toggle">
+    <button class="view-btn" onclick="mtSetView('list',this)">📋 목록</button>
+    <button class="view-btn active" onclick="mtSetView('calendar',this)">📅 달력</button>
+  </div>
+  <div class="stats-row" style="padding:0;gap:8px;">
+    <div class="mini-stat" style="padding:6px 12px;">
+      <div class="mini-stat-num" style="color:var(--primary);" id="mt-stat-total">-</div>
+      <div class="mini-stat-label">총 임장</div>
+    </div>
+    <div class="mini-stat" style="padding:6px 12px;">
+      <div class="mini-stat-num" style="color:var(--warning);" id="mt-stat-need">-</div>
+      <div class="mini-stat-label">필요</div>
+    </div>
+    <div class="mini-stat" style="padding:6px 12px;">
+      <div class="mini-stat-num" style="color:var(--success);" id="mt-stat-ok">-</div>
+      <div class="mini-stat-label">불필요</div>
+    </div>
+  </div>
+</div>
+
+<!-- 달력 보기 -->
+<div id="mt-calendar-view">
+  <div class="calendar" id="mt-calendar"></div>
+  <div class="legend">
+    <span class="legend-item"><span class="legend-dot" style="background:var(--warning);"></span> 임장 필요</span>
+    <span class="legend-item"><span class="legend-dot" style="background:var(--success);"></span> 불필요</span>
+  </div>
+  <div class="day-section" id="mt-day-schedules" style="padding-bottom:120px;"></div>
+</div>
+
+<!-- 목록 보기 -->
+<div id="mt-list-view" style="display:none;padding:8px 16px 120px;">
+  <div id="mt-list-content"></div>
+</div>

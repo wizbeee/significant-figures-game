@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>모바일 시약 목록 목업</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+:root {
+  --primary: #2563eb; --primary-light: #dbeafe; --success: #16a34a;
+  --warning: #f59e0b; --danger: #dc2626; --bg: #f1f5f9;
+  --surface: #ffffff; --text: #1e293b; --text-muted: #64748b;
+  --border: #e2e8f0; --shadow: 0 1px 3px rgba(0,0,0,0.08);
+}
+body { font-family: 'Pretendard', -apple-system, 'Noto Sans KR', sans-serif; background: var(--bg); color: var(--text); max-width: 390px; margin: 0 auto; min-height: 100vh; }
+
+.topbar { background: var(--primary); color: white; padding: 14px 16px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 100; }
+.topbar-left { display: flex; align-items: center; gap: 12px; }
+.topbar-hamburger { font-size: 22px; cursor: pointer; background: none; border: none; color: white; padding: 4px; }
+.topbar-title { font-size: 16px; font-weight: 700; }
+.topbar-right { display: flex; gap: 8px; }
+.topbar-btn { background: rgba(255,255,255,0.15); border: none; color: white; width: 36px; height: 36px; border-radius: 10px; font-size: 16px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+
+.date-bar { background: var(--surface); padding: 14px 16px; border-bottom: 1px solid var(--border); }
+.date-row { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; }
+.date-input { flex: 1; padding: 10px 12px; border: 1.5px solid var(--border); border-radius: 10px; font-size: 13px; background: var(--bg); text-align: center; color: var(--text); }
+.date-sep { color: var(--text-muted); font-size: 14px; }
+.quick-row { display: flex; gap: 6px; }
+.quick-btn { flex: 1; padding: 8px 0; border: 1.5px solid var(--border); border-radius: 8px; background: var(--surface); font-size: 12px; font-weight: 600; color: var(--text-muted); cursor: pointer; text-align: center; }
+.quick-btn.active { background: var(--primary); color: white; border-color: var(--primary); }
+
+.filter-chips { padding: 10px 16px; display: flex; gap: 8px; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.filter-chips::-webkit-scrollbar { display: none; }
+.chip { padding: 7px 14px; border-radius: 20px; font-size: 12px; font-weight: 600; white-space: nowrap; border: 1.5px solid var(--border); background: var(--surface); color: var(--text-muted); cursor: pointer; }
+.chip.active { background: var(--primary-light); color: var(--primary); border-color: var(--primary); }
+
+.stats-bar { padding: 10px 16px; display: flex; gap: 12px; }
+.mini-stat { flex: 1; background: var(--surface); border-radius: 10px; padding: 10px; text-align: center; box-shadow: var(--shadow); }
+.mini-stat-num { font-size: 20px; font-weight: 800; color: var(--primary); }
+.mini-stat-label { font-size: 11px; color: var(--text-muted); font-weight: 600; margin-top: 2px; }
+
+.group-header { padding: 10px 16px 6px; font-size: 13px; font-weight: 700; color: var(--text-muted); display: flex; align-items: center; gap: 8px; }
+.group-badge { background: var(--primary-light); color: var(--primary); padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 700; }
+
+.chem-card { background: var(--surface); margin: 0 16px 8px; border-radius: 12px; padding: 14px 16px; box-shadow: var(--shadow); display: flex; justify-content: space-between; align-items: center; }
+.chem-info { flex: 1; }
+.chem-name { font-size: 15px; font-weight: 700; margin-bottom: 4px; }
+.chem-detail { font-size: 12px; color: var(--text-muted); display: flex; gap: 8px; flex-wrap: wrap; }
+.chem-detail span { display: flex; align-items: center; gap: 3px; }
+.chem-right { text-align: right; }
+.chem-amount { font-size: 18px; font-weight: 800; color: var(--primary); }
+.chem-unit { font-size: 12px; color: var(--text-muted); }
+.chem-status { margin-top: 4px; padding: 3px 8px; border-radius: 12px; font-size: 10px; font-weight: 700; display: inline-block; }
+.solid { background: #fef3c7; color: #92400e; }
+.liquid { background: #dbeafe; color: #1e3a8a; }
+
+.bottom-nav { position: fixed; bottom: 0; left: 50%; transform: translateX(-50%); width: 100%; max-width: 390px; background: var(--surface); border-top: 1px solid var(--border); display: flex; padding: 6px 0 10px; z-index: 100; box-shadow: 0 -2px 10px rgba(0,0,0,0.05); }
+.nav-item { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 6px 0; background: none; border: none; cursor: pointer; color: var(--text-muted); font-size: 11px; font-weight: 600; }
+.nav-item.active { color: var(--primary); }
+.nav-icon { font-size: 22px; }
+
+.card-list { padding-bottom: 80px; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-left">
+    <button class="topbar-hamburger">☰</button>
+    <span class="topbar-title">📦 시약 목록</span>
+  </div>
+  <div class="topbar-right">
+    <button class="topbar-btn">🖨️</button>
+    <button class="topbar-btn">📥</button>
+  </div>
+</div>
+
+<div class="date-bar">
+  <div class="date-row">
+    <input class="date-input" type="text" value="2026-04-01" readonly>
+    <span class="date-sep">~</span>
+    <input class="date-input" type="text" value="2026-04-08" readonly>
+  </div>
+  <div class="quick-row">
+    <button class="quick-btn">오늘</button>
+    <button class="quick-btn active">이번 주</button>
+    <button class="quick-btn">이번 달</button>
+    <button class="quick-btn">전체</button>
+  </div>
+</div>
+
+<div class="filter-chips">
+  <span class="chip active">전체 상태</span>
+  <span class="chip">화학실험실</span>
+  <span class="chip">생물실험실</span>
+  <span class="chip">물리실험실</span>
+  <span class="chip">프로젝트실</span>
+</div>
+
+<div class="stats-bar">
+  <div class="mini-stat">
+    <div class="mini-stat-num">15</div>
+    <div class="mini-stat-label">시약 종류</div>
+  </div>
+  <div class="mini-stat">
+    <div class="mini-stat-num">28</div>
+    <div class="mini-stat-label">총 신청건</div>
+  </div>
+  <div class="mini-stat">
+    <div class="mini-stat-num">04.01~08</div>
+    <div class="mini-stat-label">조회 기간</div>
+  </div>
+</div>
+
+<div class="card-list">
+  <div class="group-header">🧪 화학실험실 <span class="group-badge">6건</span></div>
+
+  <div class="chem-card">
+    <div class="chem-info">
+      <div class="chem-name">NaOH (수산화나트륨)</div>
+      <div class="chem-detail">
+        <span>📅 04-08</span> <span>🕐 ET</span> <span>👤 김민준</span>
+      </div>
+    </div>
+    <div class="chem-right">
+      <div class="chem-amount">50</div>
+      <div class="chem-unit">mL</div>
+      <span class="chem-status liquid">액체</span>
+    </div>
+  </div>
+
+  <div class="chem-card">
+    <div class="chem-info">
+      <div class="chem-name">HCl (염산)</div>
+      <div class="chem-detail">
+        <span>📅 04-08</span> <span>🕐 ET</span> <span>👤 김민준</span>
+      </div>
+    </div>
+    <div class="chem-right">
+      <div class="chem-amount">30</div>
+      <div class="chem-unit">mL</div>
+      <span class="chem-status liquid">액체</span>
+    </div>
+  </div>
+
+  <div class="chem-card">
+    <div class="chem-info">
+      <div class="chem-name">페놀프탈레인</div>
+      <div class="chem-detail">
+        <span>📅 04-08</span> <span>🕐 ET</span> <span>👤 김민준</span>
+      </div>
+    </div>
+    <div class="chem-right">
+      <div class="chem-amount">5</div>
+      <div class="chem-unit">mL</div>
+      <span class="chem-status liquid">액체</span>
+    </div>
+  </div>
+
+  <div class="chem-card">
+    <div class="chem-info">
+      <div class="chem-name">CuSO₄ (황산구리)</div>
+      <div class="chem-detail">
+        <span>📅 04-09</span> <span>🕐 EP1</span> <span>👤 정우진</span>
+      </div>
+    </div>
+    <div class="chem-right">
+      <div class="chem-amount">20</div>
+      <div class="chem-unit">g</div>
+      <span class="chem-status solid">고체</span>
+    </div>
+  </div>
+
+  <div class="group-header">🧬 생물실험실 <span class="group-badge">3건</span></div>
+
+  <div class="chem-card">
+    <div class="chem-info">
+      <div class="chem-name">메틸렌블루</div>
+      <div class="chem-detail">
+        <span>📅 04-07</span> <span>🕐 EP1</span> <span>👤 박서연</span>
+      </div>
+    </div>
+    <div class="chem-right">
+      <div class="chem-amount">10</div>
+      <div class="chem-unit">mL</div>
+      <span class="chem-status liquid">액체</span>
+    </div>
+  </div>
+
+  <div class="chem-card">
+    <div class="chem-info">
+      <div class="chem-name">아세트산카민</div>
+      <div class="chem-detail">
+        <span>📅 04-07</span> <span>🕐 EP1</span> <span>👤 박서연</span>
+      </div>
+    </div>
+    <div class="chem-right">
+      <div class="chem-amount">5</div>
+      <div class="chem-unit">mL</div>
+      <span class="chem-status liquid">액체</span>
+    </div>
+  </div>
+
+  <div class="group-header">⚡ 물리실험실 <span class="group-badge">1건</span></div>
+
+  <div class="chem-card">
+    <div class="chem-info">
+      <div class="chem-name">글리세린</div>
+      <div class="chem-detail">
+        <span>📅 04-07</span> <span>🕐 7교시</span> <span>👤 최지우</span>
+      </div>
+    </div>
+    <div class="chem-right">
+      <div class="chem-amount">100</div>
+      <div class="chem-unit">mL</div>
+      <span class="chem-status liquid">액체</span>
+    </div>
+  </div>
+</div>
+
+<div class="bottom-nav">
+  <button class="nav-item"><span class="nav-icon">📊</span>대시보드</button>
+  <button class="nav-item active"><span class="nav-icon">📦</span>시약</button>
+  <button class="nav-item"><span class="nav-icon">👥</span>학생</button>
+  <button class="nav-item"><span class="nav-icon">🧑‍🏫</span>일정</button>
+</div>
+</body>
+</html>

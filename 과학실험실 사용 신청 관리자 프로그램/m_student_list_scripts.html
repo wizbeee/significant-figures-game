@@ -1,0 +1,350 @@
+<script>
+/* ===== 모바일 학생 명단 — 데스크탑 기능 완전 반영 ===== */
+var MS_ALL = [], MS_TEAMS = [], MS_STUDENTS = [];
+var MS_DATE_FROM = '', MS_DATE_TO = '';
+var MS_SHOW_ATTENDANCE = true;
+var MS_TIME_ORDER = {'ET':0,'EP1':1,'7교시':2};
+
+/* ===== 데이터 로딩 ===== */
+function msLoadData() {
+  $('#ms-card-list').innerHTML = '<div class="m-loading"><div class="m-loading-spinner"></div><span>데이터를 불러오는 중...</span></div>';
+  google.script.run
+    .withSuccessHandler(function(list) { MS_ALL = Array.isArray(list)?list:[]; msUpdateLabFilter(); msProcessAndRender(); })
+    .withFailureHandler(function(err) { $('#ms-card-list').innerHTML = '<div class="m-empty"><div class="m-empty-icon">⚠️</div><div>' + escapeHtml(err.message||err) + '</div></div>'; })
+    .getApplicationsForPeriod(MS_DATE_FROM, MS_DATE_TO);
+}
+
+/* ===== 실험실 드롭다운 동적 업데이트 ===== */
+function msUpdateLabFilter() {
+  var labs = new Set();
+  MS_ALL.forEach(function(app) { var l = app['신청실험실']||''; if (l) labs.add(l); });
+  var sel = $('#ms-labFilter'), val = sel.value;
+  var html = '<option value="">실험실 전체</option>';
+  Array.from(labs).sort(function(a,b){return a.localeCompare(b,'ko');}).forEach(function(l) {
+    html += '<option value="'+escapeHtml(l)+'">'+escapeHtml(l)+'</option>';
+  });
+  sel.innerHTML = html;
+  sel.value = val;
+}
+
+/* ===== 데이터 가공 (데스크탑 동일 로직) ===== */
+function msProcessAndRender() {
+  var approval = $('#ms-approvalFilter').value;
+  MS_TEAMS = [];
+  MS_STUDENTS = [];
+
+  MS_ALL.forEach(function(app) {
+    var status = calcStatus(app);
+    // 승인 필터
+    if (approval === 'approved' && status !== '1차승인' && status !== '최종승인') return;
+    if (approval && approval !== 'approved' && status !== approval) return;
+
+    var team = {
+      appId: app['신청ID']||'', date: fmtDate(app['실험할날짜']), dateRaw: app['실험할날짜'],
+      lab: app['신청실험실']||'', time: app['신청시간']||'', title: app['실험제목']||'',
+      status: status, students: []
+    };
+
+    // 대표자
+    team.students.push({ name: app['대표자이름']||'', id: app['대표자학번']||'', role: '대표' });
+    MS_STUDENTS.push({ name: app['대표자이름']||'', id: app['대표자학번']||'', role: '대표',
+      date: team.date, dateRaw: app['실험할날짜'], lab: team.lab, time: team.time, title: team.title, appId: team.appId, status: status });
+
+    // 동반자 파싱
+    var comp = app['동반자명단'] || '';
+    if (comp) {
+      var regex = /(\d+)\s*([가-힣]+)/g, m;
+      var found = false;
+      while ((m = regex.exec(String(comp))) !== null) {
+        found = true;
+        team.students.push({ name: m[2], id: m[1], role: '동반' });
+        MS_STUDENTS.push({ name: m[2], id: m[1], role: '동반',
+          date: team.date, dateRaw: app['실험할날짜'], lab: team.lab, time: team.time, title: team.title, appId: team.appId, status: status });
+      }
+      if (!found && comp.trim()) {
+        String(comp).split(',').forEach(function(s) {
+          s = s.trim(); if (!s) return;
+          team.students.push({ name: s, id: '', role: '동반' });
+          MS_STUDENTS.push({ name: s, id: '', role: '동반',
+            date: team.date, dateRaw: app['실험할날짜'], lab: team.lab, time: team.time, title: team.title, appId: team.appId, status: status });
+        });
+      }
+    }
+    MS_TEAMS.push(team);
+  });
+
+  msApplyFilter();
+}
+
+/* ===== 필터 + 정렬 + 렌더 ===== */
+function msApplyFilter() {
+  var labFilter = $('#ms-labFilter').value;
+  var timeFilter = $('#ms-timeFilter').value;
+  var roleFilter = $('#ms-roleFilter').value;
+  var search = ($('#ms-search').value||'').trim().toLowerCase();
+  var groupBy = $('#ms-groupBy').value;
+  var displayMode = $('#ms-displayMode').value;
+  var sortBy = $('#ms-sortBy').value;
+
+  if (groupBy === 'student' || displayMode === 'individual') {
+    // 개별 학생 모드
+    var filtered = MS_STUDENTS.filter(function(s) {
+      if (labFilter && s.lab !== labFilter) return false;
+      if (timeFilter) {
+        var times = String(s.time).split(/[,\s]+/);
+        if (times.indexOf(timeFilter) === -1) return false;
+      }
+      if (roleFilter && s.role !== roleFilter) return false;
+      if (search && s.name.toLowerCase().indexOf(search) < 0 && s.id.indexOf(search) < 0) return false;
+      return true;
+    });
+
+    // 정렬
+    filtered.sort(function(a, b) { return msSortFn(a, b, sortBy); });
+
+    if (groupBy === 'student') {
+      msRenderStudentView(filtered);
+    } else {
+      msRenderIndividual(filtered, groupBy);
+    }
+  } else {
+    // 팀 모드
+    var filtered = MS_TEAMS.filter(function(t) {
+      if (labFilter && t.lab !== labFilter) return false;
+      if (timeFilter) {
+        var times = String(t.time).split(/[,\s]+/);
+        if (times.indexOf(timeFilter) === -1) return false;
+      }
+      if (roleFilter) {
+        var hasRole = t.students.some(function(s) { return s.role === roleFilter; });
+        if (!hasRole) return false;
+      }
+      if (search) {
+        var found = t.students.some(function(s) { return s.name.toLowerCase().indexOf(search)>=0 || s.id.indexOf(search)>=0; });
+        if (!found && t.title.toLowerCase().indexOf(search) < 0) return false;
+      }
+      return true;
+    });
+
+    // 정렬
+    filtered.sort(function(a, b) { return msSortFn(a, b, sortBy); });
+
+    msRenderTeams(filtered, groupBy);
+  }
+}
+
+function msSortFn(a, b, sortBy) {
+  switch(sortBy) {
+    case 'date-desc': return cmpDateTs(b.dateRaw || b.date, a.dateRaw || a.date);
+    case 'date-asc': return cmpDateTs(a.dateRaw || a.date, b.dateRaw || b.date);
+    case 'lab': return (a.lab||'').localeCompare(b.lab||'','ko');
+    case 'time':
+      var ta = MS_TIME_ORDER[String(a.time).split(/[,\s]+/)[0]] != null ? MS_TIME_ORDER[String(a.time).split(/[,\s]+/)[0]] : 99;
+      var tb = MS_TIME_ORDER[String(b.time).split(/[,\s]+/)[0]] != null ? MS_TIME_ORDER[String(b.time).split(/[,\s]+/)[0]] : 99;
+      return ta - tb;
+    case 'name': return (a.name||'').localeCompare(b.name||'','ko');
+    case 'id': return (a.id||'').localeCompare(b.id||'');
+    default: return 0;
+  }
+}
+
+/* ===== 팀별 카드 렌더링 ===== */
+function msRenderTeams(teams, groupBy) {
+  var container = $('#ms-card-list'), totalStudents = 0;
+  teams.forEach(function(t) { totalStudents += t.students.length; });
+  msUpdateStats(teams.length, totalStudents);
+
+  if (!teams.length) { container.innerHTML = '<div class="m-empty"><div class="m-empty-icon">📭</div><div>조건에 맞는 학생이 없습니다</div></div>'; return; }
+
+  var groups = {};
+  teams.forEach(function(t) {
+    var key;
+    switch(groupBy) {
+      case 'lab': key = t.lab || '미지정'; break;
+      case 'time': key = t.time || '미지정'; break;
+      case 'none': key = '전체'; break;
+      default: key = t.date || '미지정';
+    }
+    if (!groups[key]) groups[key] = [];
+    groups[key].push(t);
+  });
+
+  var icons = {'화학실험실':'🧪','생물실험실':'🧬','물리실험실':'⚡','프로젝트실험실':'🔬','첨단기기실험실':'🔧','오픈랩':'🏠','광학파동실험실':'🌊','AP Lab':'🔬'};
+  var groupIcon = groupBy === 'lab' ? function(k){return icons[k]||'🧪';} : groupBy === 'time' ? function(){return '🕐';} : function(){return '📅';};
+
+  var keys = Object.keys(groups);
+  if (groupBy === 'date') keys.sort().reverse();
+
+  var html = '';
+  keys.forEach(function(key) {
+    var dayTeams = groups[key], dayStu = 0;
+    dayTeams.forEach(function(t) { dayStu += t.students.length; });
+
+    if (groupBy !== 'none') {
+      html += '<div class="group-header"><div class="group-title">' + groupIcon(key) + ' ' + escapeHtml(key) + ' <span class="group-badge">' + dayTeams.length + '팀 · ' + dayStu + '명</span></div></div>';
+    }
+
+    dayTeams.forEach(function(team) {
+      var icon = icons[team.lab] || '🧪';
+      html += '<div class="team-card-m"><div class="team-header"><div><div class="team-title">' + icon + ' ' + escapeHtml(team.lab) + '</div>' +
+        '<div class="team-experiment">' + escapeHtml(team.title) + '</div>' +
+        '<div class="team-meta"><span>📅 ' + team.date + '</span><span>🕐 ' + escapeHtml(team.time) + '</span><span>' + team.students.length + '명</span></div>' +
+        '</div></div>';
+
+      team.students.forEach(function(s, idx) {
+        var isLeader = s.role === '대표';
+        var checkId = 'att-' + team.appId + '-' + idx;
+        html += '<div class="student-row"><div class="student-info">' +
+          '<div class="student-avatar ' + (isLeader?'avatar-leader':'avatar-member') + '">' + escapeHtml(s.name?s.name.charAt(0):'?') + '</div>' +
+          '<div><div class="student-name">' + escapeHtml(s.name) + '</div><div class="student-id">' + escapeHtml(s.id) + '</div></div></div>' +
+          '<div style="display:flex;align-items:center;gap:8px;">' +
+          '<span class="role-badge ' + (isLeader?'role-leader':'role-member') + '">' + escapeHtml(s.role) + '</span>' +
+          (MS_SHOW_ATTENDANCE ? '<div class="attendance-check" id="' + checkId + '" onclick="toggleAttendance(\'' + checkId + '\')"></div>' : '') +
+          '</div></div>';
+      });
+      html += '</div>';
+    });
+  });
+  container.innerHTML = html;
+}
+
+/* ===== 개별 학생 렌더링 ===== */
+function msRenderIndividual(students, groupBy) {
+  var container = $('#ms-card-list');
+  var uniqueTeams = new Set();
+  students.forEach(function(s) { uniqueTeams.add(s.appId); });
+  msUpdateStats(uniqueTeams.size, students.length);
+
+  if (!students.length) { container.innerHTML = '<div class="m-empty"><div class="m-empty-icon">📭</div><div>조건에 맞는 학생이 없습니다</div></div>'; return; }
+
+  var groups = {};
+  students.forEach(function(s) {
+    var key;
+    switch(groupBy) {
+      case 'lab': key = s.lab || '미지정'; break;
+      case 'time': key = s.time || '미지정'; break;
+      case 'none': key = '전체'; break;
+      default: key = s.date || '미지정';
+    }
+    if (!groups[key]) groups[key] = [];
+    groups[key].push(s);
+  });
+
+  var keys = Object.keys(groups);
+  if (groupBy === 'date') keys.sort().reverse();
+
+  var html = '';
+  keys.forEach(function(key) {
+    var items = groups[key];
+    if (groupBy !== 'none') {
+      html += '<div class="group-header"><div class="group-title">' + escapeHtml(key) + ' <span class="group-badge">' + items.length + '명</span></div></div>';
+    }
+    items.forEach(function(s, idx) {
+      var isLeader = s.role === '대표';
+      var checkId = 'att-ind-' + s.appId + '-' + idx;
+      html += '<div class="chem-card" style="padding:12px 16px;"><div class="student-info" style="gap:10px;">' +
+        '<div class="student-avatar ' + (isLeader?'avatar-leader':'avatar-member') + '">' + escapeHtml(s.name?s.name.charAt(0):'?') + '</div>' +
+        '<div style="flex:1;"><div class="student-name">' + escapeHtml(s.name) + ' <span class="student-id">' + escapeHtml(s.id) + '</span></div>' +
+        '<div style="font-size:12px;color:var(--text-muted);margin-top:2px;">' + escapeHtml(s.lab) + ' · ' + escapeHtml(s.time) + ' · ' + s.date + '</div>' +
+        '<div style="font-size:12px;color:var(--primary);margin-top:1px;">' + escapeHtml(s.title) + '</div></div>' +
+        '<div style="display:flex;align-items:center;gap:8px;">' +
+        '<span class="role-badge ' + (isLeader?'role-leader':'role-member') + '">' + escapeHtml(s.role) + '</span>' +
+        (MS_SHOW_ATTENDANCE ? '<div class="attendance-check" id="' + checkId + '" onclick="toggleAttendance(\'' + checkId + '\')"></div>' : '') +
+        '</div></div></div>';
+    });
+  });
+  container.innerHTML = html;
+}
+
+/* ===== 학생별 보기 (사용 이력) ===== */
+function msRenderStudentView(students) {
+  var container = $('#ms-card-list');
+  // 학생별 그룹핑
+  var studentMap = {};
+  students.forEach(function(s) {
+    var key = s.id || s.name;
+    if (!studentMap[key]) studentMap[key] = { name: s.name, id: s.id, items: [] };
+    studentMap[key].items.push(s);
+  });
+
+  var list = Object.values(studentMap);
+  list.sort(function(a,b) { return a.name.localeCompare(b.name,'ko'); });
+
+  var totalStudents = list.length, totalUsage = 0;
+  list.forEach(function(st) { totalUsage += st.items.length; });
+  msUpdateStats(totalUsage, totalStudents);
+
+  if (!list.length) { container.innerHTML = '<div class="m-empty"><div class="m-empty-icon">📭</div><div>조건에 맞는 학생이 없습니다</div></div>'; return; }
+
+  var html = '';
+  list.forEach(function(st) {
+    html += '<div class="student-history-card"><div class="sh-header"><div class="sh-name">' + escapeHtml(st.name) + ' <span class="student-id">' + escapeHtml(st.id) + '</span></div>' +
+      '<div class="sh-count">' + st.items.length + '회 사용</div></div>';
+    st.items.forEach(function(item) {
+      html += '<div class="sh-item"><span>' + item.date + ' · ' + escapeHtml(item.lab) + ' · ' + escapeHtml(item.time) + '</span><span style="color:var(--primary);font-weight:600;">' + escapeHtml(item.title) + '</span></div>';
+    });
+    html += '</div>';
+  });
+  container.innerHTML = html;
+}
+
+/* ===== 통계 업데이트 ===== */
+function msUpdateStats(teams, students) {
+  $('#ms-stat-teams').textContent = teams;
+  $('#ms-stat-students').textContent = students;
+  $('#ms-stat-date').textContent = MS_DATE_FROM && MS_DATE_TO ? MS_DATE_FROM.slice(5) + '~' + MS_DATE_TO.slice(5) : '-';
+}
+
+/* ===== 출석체크란 토글 ===== */
+function msToggleAttendance() {
+  MS_SHOW_ATTENDANCE = !MS_SHOW_ATTENDANCE;
+  var sw = $('#ms-attendanceSwitch');
+  if (sw) sw.classList.toggle('on', MS_SHOW_ATTENDANCE);
+  msApplyFilter();
+}
+
+function toggleAttendance(id) {
+  var el = document.getElementById(id);
+  if (!el) return;
+  el.classList.toggle('checked');
+  el.textContent = el.classList.contains('checked') ? '✓' : '';
+}
+
+/* ===== 빠른 기간 선택 ===== */
+function msQuick(type, btn) {
+  $$('.quick-btn').forEach(function(b) { b.classList.remove('active'); }); btn.classList.add('active');
+  var today = startOfDay(new Date()), from, to;
+  switch(type) {
+    case 'today': from = to = today; break;
+    case 'week': var dow = today.getDay(); from = addDays(today,-dow); to = addDays(from,6); break;
+    case 'month': from = new Date(today.getFullYear(),today.getMonth(),1); to = new Date(today.getFullYear(),today.getMonth()+1,0); break;
+  }
+  MS_DATE_FROM = toLocalYMD(from); MS_DATE_TO = toLocalYMD(to); msLoadData();
+}
+
+/* ===== CSV 내보내기 ===== */
+function msExportCSV() {
+  if (!MS_STUDENTS.length) { alert('내보낼 데이터가 없습니다.'); return; }
+  var rows = ['날짜,실험실,시간,실험제목,학번,이름,역할,상태'];
+  MS_STUDENTS.forEach(function(s) {
+    rows.push([s.date,s.lab,s.time,s.title,s.id,s.name,s.role,s.status].map(function(v) {
+      var sv = String(v == null ? '' : v);
+      return (sv.indexOf(',')>=0 || sv.indexOf('"')>=0) ? '"'+sv.replace(/"/g,'""')+'"' : sv;
+    }).join(','));
+  });
+  var blob = new Blob(['\uFEFF'+rows.join('\n')],{type:'text/csv;charset=utf-8;'});
+  var a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+  a.download = '학생명단_' + toLocalYMD(new Date()) + '.csv';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+}
+
+function msPrint() { window.print(); }
+
+/* ===== 초기화 ===== */
+function msInit() {
+  var today = startOfDay(new Date());
+  MS_DATE_FROM = toLocalYMD(today); MS_DATE_TO = toLocalYMD(today);
+  msLoadData();
+}
+if (typeof SPA_MODE === 'undefined') window.addEventListener('load', msInit);
+</script>

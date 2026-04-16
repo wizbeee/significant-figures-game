@@ -1,0 +1,1945 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>성적 분석 프로그램 - 고등학교</title>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+:root {
+  --primary: #4F46E5;
+  --primary-light: #818CF8;
+  --primary-dark: #3730A3;
+  --success: #10B981;
+  --warning: #F59E0B;
+  --danger: #EF4444;
+  --bg: #F8FAFC;
+  --card: #FFFFFF;
+  --text: #1E293B;
+  --text-light: #64748B;
+  --border: #E2E8F0;
+  --shadow: 0 1px 3px rgba(0,0,0,0.1), 0 1px 2px rgba(0,0,0,0.06);
+  --shadow-lg: 0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -2px rgba(0,0,0,0.05);
+  --radius: 12px;
+}
+
+* { margin:0; padding:0; box-sizing:border-box; }
+
+body {
+  font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+}
+
+/* Header */
+.header {
+  background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+  color: white;
+  padding: 20px 32px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  box-shadow: var(--shadow-lg);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+.header svg { width: 36px; height: 36px; }
+.header h1 { font-size: 22px; font-weight: 700; }
+.header p { font-size: 13px; opacity: 0.85; margin-top: 2px; }
+.header-right { margin-left: auto; display: flex; gap: 10px; }
+.header-btn {
+  background: rgba(255,255,255,0.15);
+  border: 1px solid rgba(255,255,255,0.3);
+  color: white;
+  padding: 8px 16px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 13px;
+  transition: all 0.2s;
+}
+.header-btn:hover { background: rgba(255,255,255,0.25); }
+
+/* Main Layout */
+.main { max-width: 1400px; margin: 0 auto; padding: 24px; }
+
+/* Upload Area */
+.upload-section {
+  background: var(--card);
+  border-radius: var(--radius);
+  padding: 40px;
+  text-align: center;
+  box-shadow: var(--shadow);
+  margin-bottom: 24px;
+}
+.upload-zone {
+  border: 2px dashed var(--border);
+  border-radius: var(--radius);
+  padding: 48px 24px;
+  cursor: pointer;
+  transition: all 0.3s;
+  background: #FAFBFF;
+}
+.upload-zone:hover, .upload-zone.drag-over {
+  border-color: var(--primary);
+  background: #EEF2FF;
+}
+.upload-zone svg { width: 56px; height: 56px; color: var(--primary-light); margin-bottom: 16px; }
+.upload-zone h3 { font-size: 18px; margin-bottom: 8px; }
+.upload-zone p { color: var(--text-light); font-size: 14px; }
+.upload-zone .formats { font-size: 12px; color: var(--text-light); margin-top: 12px; }
+.upload-zone input { display: none; }
+
+/* File List */
+.file-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 20px;
+  justify-content: center;
+}
+.file-chip {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: #EEF2FF;
+  padding: 10px 16px;
+  border-radius: 12px;
+  font-size: 13px;
+  color: var(--primary-dark);
+}
+.file-chip .file-name { flex: 1; font-weight: 500; }
+.file-chip .year-select {
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 12px;
+  background: white;
+  color: var(--text);
+  cursor: pointer;
+}
+.file-chip .year-input {
+  width: 80px;
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 12px;
+  text-align: center;
+  background: white;
+  color: var(--text);
+}
+.file-chip .remove {
+  cursor: pointer;
+  color: var(--danger);
+  font-weight: bold;
+  margin-left: 4px;
+  font-size: 16px;
+}
+.year-count-badge {
+  display: inline-block;
+  background: var(--primary);
+  color: white;
+  padding: 2px 10px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 600;
+  margin-left: 8px;
+}
+
+/* Compare Section Styles */
+.compare-year-cards {
+  display: grid;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+.compare-year-card {
+  background: var(--card);
+  border-radius: var(--radius);
+  padding: 20px;
+  box-shadow: var(--shadow);
+  border-left: 4px solid var(--primary);
+}
+.compare-year-card h4 {
+  font-size: 15px;
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.compare-year-card .stats-row {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.compare-year-card .mini-stat {
+  font-size: 12px;
+  color: var(--text-light);
+}
+.compare-year-card .mini-stat span {
+  font-weight: 700;
+  font-size: 16px;
+  color: var(--text);
+  display: block;
+}
+.compare-summary-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 13px;
+}
+.compare-summary-table th {
+  background: #F1F5F9;
+  padding: 10px 12px;
+  text-align: center;
+  font-weight: 600;
+  font-size: 12px;
+  border-bottom: 2px solid var(--border);
+}
+.compare-summary-table td {
+  padding: 10px 12px;
+  text-align: center;
+  border-bottom: 1px solid var(--border);
+}
+.compare-summary-table tr:hover td { background: #F8FAFC; }
+.year-color-dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  margin-right: 6px;
+}
+
+/* Analyze Button */
+.analyze-btn {
+  background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+  color: white;
+  border: none;
+  padding: 16px 48px;
+  font-size: 18px;
+  font-weight: 700;
+  border-radius: 50px;
+  cursor: pointer;
+  margin-top: 24px;
+  transition: all 0.3s;
+  box-shadow: 0 4px 15px rgba(79, 70, 229, 0.4);
+  display: none;
+}
+.analyze-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(79, 70, 229, 0.5);
+}
+.analyze-btn:active { transform: translateY(0); }
+.analyze-btn.show { display: inline-block; }
+
+/* Tabs */
+.tabs {
+  display: flex;
+  gap: 4px;
+  background: var(--card);
+  padding: 6px;
+  border-radius: 10px;
+  margin-bottom: 24px;
+  box-shadow: var(--shadow);
+}
+.tab {
+  flex: 1;
+  padding: 12px 20px;
+  text-align: center;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-light);
+  transition: all 0.2s;
+}
+.tab:hover { color: var(--text); background: #F1F5F9; }
+.tab.active { background: var(--primary); color: white; }
+
+/* Cards */
+.grid { display: grid; gap: 20px; }
+.grid-2 { grid-template-columns: 1fr 1fr; }
+.grid-3 { grid-template-columns: 1fr 1fr 1fr; }
+.grid-4 { grid-template-columns: repeat(4, 1fr); }
+
+.card {
+  background: var(--card);
+  border-radius: var(--radius);
+  padding: 24px;
+  box-shadow: var(--shadow);
+}
+.card-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.card-title .icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+}
+
+/* Stat Cards */
+.stat-card {
+  background: var(--card);
+  border-radius: var(--radius);
+  padding: 20px;
+  box-shadow: var(--shadow);
+  text-align: center;
+}
+.stat-value { font-size: 32px; font-weight: 800; color: var(--primary); }
+.stat-label { font-size: 13px; color: var(--text-light); margin-top: 4px; }
+.stat-change { font-size: 12px; margin-top: 8px; font-weight: 600; }
+.stat-change.up { color: var(--success); }
+.stat-change.down { color: var(--danger); }
+.stat-change.same { color: var(--text-light); }
+
+/* Table */
+.table-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 14px; }
+th { background: #F8FAFC; padding: 12px 16px; text-align: left; font-weight: 600; color: var(--text-light); border-bottom: 2px solid var(--border); }
+td { padding: 12px 16px; border-bottom: 1px solid var(--border); }
+tr:hover td { background: #FAFBFF; }
+
+/* Grade Badge */
+.grade-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  font-weight: 700;
+  font-size: 14px;
+  color: white;
+}
+.grade-1 { background: #10B981; }
+.grade-2 { background: #34D399; }
+.grade-3 { background: #60A5FA; }
+.grade-4 { background: #818CF8; }
+.grade-5 { background: #F59E0B; }
+.grade-6 { background: #FB923C; }
+.grade-7 { background: #F87171; }
+.grade-8 { background: #EF4444; }
+.grade-9 { background: #DC2626; }
+
+/* Strength/Weakness */
+.sw-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border-radius: 8px;
+  margin-bottom: 8px;
+}
+.sw-item.strength { background: #ECFDF5; }
+.sw-item.weakness { background: #FEF2F2; }
+.sw-rank { font-size: 20px; font-weight: 800; width: 36px; text-align: center; }
+.sw-item.strength .sw-rank { color: var(--success); }
+.sw-item.weakness .sw-rank { color: var(--danger); }
+.sw-info { flex: 1; }
+.sw-name { font-weight: 600; font-size: 14px; }
+.sw-detail { font-size: 12px; color: var(--text-light); margin-top: 2px; }
+
+/* Target Setting */
+.target-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+.target-row:last-child { border-bottom: none; }
+.target-subject { flex: 1; font-weight: 600; font-size: 14px; }
+.target-current { font-size: 13px; color: var(--text-light); }
+.target-input {
+  width: 60px;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  text-align: center;
+  font-size: 14px;
+}
+.target-gap { font-size: 13px; font-weight: 600; min-width: 70px; text-align: center; }
+
+/* Chart Container */
+.chart-container { position: relative; width: 100%; min-height: 280px; }
+.chart-container canvas { width: 100% !important; }
+
+/* Results Section */
+#results { display: none; }
+#results.show { display: block; }
+
+/* Loading */
+.loading-overlay {
+  display: none;
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.5);
+  z-index: 1000;
+  align-items: center;
+  justify-content: center;
+}
+.loading-overlay.show { display: flex; }
+.loading-box {
+  background: white;
+  padding: 40px 60px;
+  border-radius: 16px;
+  text-align: center;
+}
+.spinner {
+  width: 48px;
+  height: 48px;
+  border: 4px solid var(--border);
+  border-top-color: var(--primary);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  margin: 0 auto 16px;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* Template Section */
+.template-section {
+  display: flex;
+  gap: 12px;
+  margin-top: 16px;
+  justify-content: center;
+}
+.template-btn {
+  background: white;
+  border: 1px solid var(--border);
+  padding: 10px 20px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--text);
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.template-btn:hover { border-color: var(--primary); color: var(--primary); }
+
+/* Print */
+@media print {
+  .header { position: static; }
+  .upload-section, .tabs, .header-right, .analyze-btn { display: none !important; }
+  .card { break-inside: avoid; box-shadow: none; border: 1px solid #ddd; }
+}
+
+/* Responsive */
+@media (max-width: 1024px) {
+  .grid-4 { grid-template-columns: 1fr 1fr; }
+  .grid-3 { grid-template-columns: 1fr 1fr; }
+}
+@media (max-width: 768px) {
+  .grid-2, .grid-3, .grid-4 { grid-template-columns: 1fr; }
+  .main { padding: 16px; }
+  .upload-section { padding: 24px; }
+}
+
+/* Diagnosis */
+.diagnosis-item {
+  padding: 16px;
+  border-radius: 10px;
+  margin-bottom: 12px;
+  border-left: 4px solid;
+}
+.diagnosis-item.good { background: #ECFDF5; border-color: var(--success); }
+.diagnosis-item.warning { background: #FFFBEB; border-color: var(--warning); }
+.diagnosis-item.danger { background: #FEF2F2; border-color: var(--danger); }
+.diagnosis-title { font-weight: 700; font-size: 14px; margin-bottom: 4px; }
+.diagnosis-desc { font-size: 13px; color: var(--text-light); }
+
+/* Progress bar */
+.progress-bar {
+  width: 100%;
+  height: 8px;
+  background: #E2E8F0;
+  border-radius: 4px;
+  overflow: hidden;
+  margin-top: 8px;
+}
+.progress-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.5s;
+}
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<div class="header">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/><path d="M8 7h8M8 11h6"/></svg>
+  <div>
+    <h1>성적 분석 프로그램</h1>
+    <p>모의고사 / 내신 성적 종합 분석</p>
+  </div>
+  <div class="header-right">
+    <button class="header-btn" onclick="downloadSampleExcel('mock')" title="모의고사 양식 다운로드">모의고사 양식</button>
+    <button class="header-btn" onclick="downloadSampleExcel('school')" title="내신 양식 다운로드">내신 양식</button>
+    <button class="header-btn" onclick="exportReport()" id="exportBtn" style="display:none">결과 내보내기</button>
+  </div>
+</div>
+
+<!-- Loading -->
+<div class="loading-overlay" id="loading">
+  <div class="loading-box">
+    <div class="spinner"></div>
+    <div style="font-weight:600;font-size:16px;">분석 중...</div>
+    <div style="color:var(--text-light);font-size:13px;margin-top:4px;">데이터를 처리하고 있습니다</div>
+  </div>
+</div>
+
+<div class="main">
+  <!-- Upload -->
+  <div class="upload-section" id="uploadSection">
+    <div class="upload-zone" id="dropZone" onclick="document.getElementById('fileInput').click()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+      <h3>엑셀 파일을 여기에 드래그하세요</h3>
+      <p>또는 클릭하여 파일을 선택하세요</p>
+      <div class="formats">지원 형식: .xlsx, .xls, .csv</div>
+      <input type="file" id="fileInput" accept=".xlsx,.xls,.csv" multiple>
+    </div>
+    <div class="file-list" id="fileList"></div>
+    <button class="analyze-btn" id="analyzeBtn" onclick="startAnalysis()">분석 시작</button>
+    <div class="template-section">
+      <button class="template-btn" onclick="loadDemoData('mock')">
+        <span>📊</span> 모의고사 샘플 데이터로 체험
+      </button>
+      <button class="template-btn" onclick="loadDemoData('school')">
+        <span>📋</span> 내신 샘플 데이터로 체험
+      </button>
+    </div>
+  </div>
+
+  <!-- Results -->
+  <div id="results">
+    <!-- Tabs -->
+    <div class="tabs" id="tabsContainer"></div>
+
+    <!-- Tab Contents -->
+    <div id="tabContents"></div>
+  </div>
+</div>
+
+<script>
+// ==================== Global State ====================
+let uploadedFiles = []; // { file, yearLabel }
+let analysisData = { mock: null, school: null, yearly: {} }; // yearly: { '2024': { mock:[], school:[] }, ... }
+let charts = {};
+const MAX_YEARS = 5;
+const YEAR_COLORS = ['#4F46E5','#10B981','#F59E0B','#EF4444','#8B5CF6'];
+
+// ==================== File Upload ====================
+const dropZone = document.getElementById('dropZone');
+const fileInput = document.getElementById('fileInput');
+
+['dragenter','dragover'].forEach(e => {
+  dropZone.addEventListener(e, ev => { ev.preventDefault(); dropZone.classList.add('drag-over'); });
+});
+['dragleave','drop'].forEach(e => {
+  dropZone.addEventListener(e, ev => { ev.preventDefault(); dropZone.classList.remove('drag-over'); });
+});
+dropZone.addEventListener('drop', ev => {
+  const files = Array.from(ev.dataTransfer.files);
+  handleFiles(files);
+});
+fileInput.addEventListener('change', ev => {
+  handleFiles(Array.from(ev.target.files));
+  ev.target.value = '';
+});
+
+function handleFiles(files) {
+  const currentYear = new Date().getFullYear();
+  files.forEach(f => {
+    if (!uploadedFiles.find(u => u.file.name === f.name)) {
+      // Auto-detect year from filename
+      const yearMatch = f.name.match(/(20\d{2})/);
+      const yearLabel = yearMatch ? yearMatch[1] : String(currentYear);
+      uploadedFiles.push({ file: f, yearLabel });
+    }
+  });
+  // Check max years
+  const uniqueYears = [...new Set(uploadedFiles.map(u => u.yearLabel))];
+  if (uniqueYears.length > MAX_YEARS) {
+    alert(`최대 ${MAX_YEARS}개 년도까지 비교 가능합니다.`);
+    uploadedFiles.pop();
+    return;
+  }
+  renderFileList();
+}
+
+function renderFileList() {
+  const list = document.getElementById('fileList');
+  const currentYear = new Date().getFullYear();
+  list.innerHTML = uploadedFiles.map((u, i) => `
+    <div class="file-chip">
+      <span>📄</span>
+      <span class="file-name">${u.file.name}</span>
+      <input type="text" class="year-input" value="${u.yearLabel}" placeholder="년도"
+        onchange="updateYearLabel(${i}, this.value)" maxlength="10">
+      <span class="remove" onclick="removeFile(${i})">&times;</span>
+    </div>
+  `).join('');
+  // Show unique year count
+  const uniqueYears = [...new Set(uploadedFiles.map(u => u.yearLabel))];
+  if (uploadedFiles.length > 0) {
+    list.innerHTML += `<div style="text-align:center;font-size:12px;color:var(--text-light);margin-top:4px">
+      ${uniqueYears.length}개 년도 감지됨 (최대 ${MAX_YEARS}개) — 년도 라벨을 수정하여 비교 그룹을 지정하세요
+    </div>`;
+  }
+  document.getElementById('analyzeBtn').classList.toggle('show', uploadedFiles.length > 0);
+}
+
+function updateYearLabel(index, value) {
+  uploadedFiles[index].yearLabel = value.trim() || String(new Date().getFullYear());
+  const uniqueYears = [...new Set(uploadedFiles.map(u => u.yearLabel))];
+  if (uniqueYears.length > MAX_YEARS) {
+    alert(`최대 ${MAX_YEARS}개 년도까지 비교 가능합니다.`);
+    uploadedFiles[index].yearLabel = uploadedFiles[index].yearLabel;
+    renderFileList();
+    return;
+  }
+  renderFileList();
+}
+
+function removeFile(i) {
+  uploadedFiles.splice(i, 1);
+  renderFileList();
+}
+
+function getFileObj(u) { return u.file; }
+
+// ==================== Excel Parsing ====================
+function parseExcel(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = e => {
+      try {
+        const wb = XLSX.read(e.target.result, { type: 'array' });
+        const sheets = {};
+        wb.SheetNames.forEach(name => {
+          sheets[name] = XLSX.utils.sheet_to_json(wb.Sheets[name], { defval: '' });
+        });
+        resolve(sheets);
+      } catch(err) { reject(err); }
+    };
+    reader.onerror = reject;
+    reader.readAsArrayBuffer(file);
+  });
+}
+
+function detectDataType(rows) {
+  if (!rows || rows.length === 0) return 'unknown';
+  const cols = Object.keys(rows[0]).map(c => c.toLowerCase().replace(/\s/g,''));
+  const colStr = cols.join(',');
+
+  // 모의고사 키워드
+  const mockKeys = ['표준점수','백분위','원점수','등급','회차'];
+  const schoolKeys = ['석차등급','단위수','석차','수강자수','성취도'];
+
+  const hasMock = mockKeys.some(k => colStr.includes(k));
+  const hasSchool = schoolKeys.some(k => colStr.includes(k));
+
+  if (hasSchool) return 'school';
+  if (hasMock) return 'mock';
+  return 'unknown';
+}
+
+// ==================== Analysis ====================
+async function startAnalysis() {
+  const loading = document.getElementById('loading');
+  loading.classList.add('show');
+
+  try {
+    analysisData = { mock: null, school: null, yearly: {} };
+
+    for (const uploaded of uploadedFiles) {
+      const file = uploaded.file;
+      const yearLabel = uploaded.yearLabel;
+      const sheets = await parseExcel(file);
+      const firstSheet = Object.values(sheets)[0];
+      if (!firstSheet || firstSheet.length === 0) continue;
+
+      const type = detectDataType(firstSheet);
+
+      // Initialize yearly bucket
+      if (!analysisData.yearly[yearLabel]) {
+        analysisData.yearly[yearLabel] = { mock: [], school: [] };
+      }
+
+      if (type === 'mock') {
+        const parsed = normalizeMockData(firstSheet);
+        analysisData.mock = analysisData.mock || [];
+        analysisData.mock.push(...parsed);
+        analysisData.yearly[yearLabel].mock.push(...parsed);
+      } else if (type === 'school') {
+        const parsed = normalizeSchoolData(firstSheet);
+        analysisData.school = analysisData.school || [];
+        analysisData.school.push(...parsed);
+        analysisData.yearly[yearLabel].school.push(...parsed);
+      } else {
+        // Try all sheets
+        for (const [name, data] of Object.entries(sheets)) {
+          if (!data || data.length === 0) continue;
+          const t = detectDataType(data);
+          if (t === 'mock') {
+            const parsed = normalizeMockData(data);
+            analysisData.mock = analysisData.mock || [];
+            analysisData.mock.push(...parsed);
+            analysisData.yearly[yearLabel].mock.push(...parsed);
+          } else if (t === 'school') {
+            const parsed = normalizeSchoolData(data);
+            analysisData.school = analysisData.school || [];
+            analysisData.school.push(...parsed);
+            analysisData.yearly[yearLabel].school.push(...parsed);
+          }
+        }
+      }
+    }
+
+    if (!analysisData.mock && !analysisData.school) {
+      alert('인식 가능한 성적 데이터를 찾지 못했습니다.\n양식 다운로드 버튼을 클릭하여 올바른 형식을 확인해주세요.');
+      loading.classList.remove('show');
+      return;
+    }
+
+    renderResults();
+    document.getElementById('results').classList.add('show');
+    document.getElementById('exportBtn').style.display = '';
+    document.getElementById('results').scrollIntoView({ behavior: 'smooth' });
+  } catch(err) {
+    console.error(err);
+    alert('파일 분석 중 오류가 발생했습니다: ' + err.message);
+  }
+
+  loading.classList.remove('show');
+}
+
+function findCol(row, keywords) {
+  const keys = Object.keys(row);
+  for (const kw of keywords) {
+    const found = keys.find(k => k.replace(/\s/g,'').toLowerCase().includes(kw.toLowerCase()));
+    if (found) return found;
+  }
+  return null;
+}
+
+function normalizeMockData(rows) {
+  return rows.map(r => {
+    const sessionCol = findCol(r, ['회차','시험','월','차수']);
+    const subjectCol = findCol(r, ['과목','교과']);
+    const rawCol = findCol(r, ['원점수','점수']);
+    const stdCol = findCol(r, ['표준점수','표준']);
+    const pctCol = findCol(r, ['백분위']);
+    const gradeCol = findCol(r, ['등급']);
+
+    return {
+      session: sessionCol ? String(r[sessionCol]).replace(/[^0-9]/g,'') : '1',
+      subject: subjectCol ? String(r[subjectCol]).trim() : '',
+      rawScore: rawCol ? Number(r[rawCol]) || 0 : 0,
+      standardScore: stdCol ? Number(r[stdCol]) || 0 : 0,
+      percentile: pctCol ? Number(r[pctCol]) || 0 : 0,
+      grade: gradeCol ? Number(r[gradeCol]) || 0 : 0,
+    };
+  }).filter(d => d.subject);
+}
+// alias
+const normalizeModalData = normalizeMockData;
+
+function normalizeSchoolData(rows) {
+  return rows.map(r => {
+    const termCol = findCol(r, ['학기','학년학기','학년/학기','구분']);
+    const subjectCol = findCol(r, ['과목','교과']);
+    const unitCol = findCol(r, ['단위수','단위','이수단위']);
+    const rawCol = findCol(r, ['원점수','점수']);
+    const avgCol = findCol(r, ['과목평균','평균']);
+    const sdCol = findCol(r, ['표준편차']);
+    const gradeCol = findCol(r, ['석차등급','등급']);
+    const achvCol = findCol(r, ['성취도']);
+
+    return {
+      term: termCol ? String(r[termCol]).trim() : '',
+      subject: subjectCol ? String(r[subjectCol]).trim() : '',
+      units: unitCol ? Number(r[unitCol]) || 0 : 0,
+      rawScore: rawCol ? Number(r[rawCol]) || 0 : 0,
+      average: avgCol ? Number(r[avgCol]) || 0 : 0,
+      stdDev: sdCol ? Number(r[sdCol]) || 0 : 0,
+      grade: gradeCol ? Number(r[gradeCol]) || 0 : 0,
+      achievement: achvCol ? String(r[achvCol]).trim() : '',
+    };
+  }).filter(d => d.subject);
+}
+
+// ==================== Rendering ====================
+function renderResults() {
+  // Destroy old charts
+  Object.values(charts).forEach(c => { try { c.destroy(); } catch(e){} });
+  charts = {};
+
+  const tabs = [];
+  if (analysisData.mock) tabs.push({ id: 'mock', label: '모의고사 분석' });
+  if (analysisData.school) tabs.push({ id: 'school', label: '내신 분석' });
+  if (analysisData.mock && analysisData.school) tabs.push({ id: 'combined', label: '종합 분석' });
+
+  // Add compare tab if multiple years
+  const yearKeys = Object.keys(analysisData.yearly).filter(y => {
+    const yd = analysisData.yearly[y];
+    return yd.mock.length > 0 || yd.school.length > 0;
+  });
+  const hasMultiYear = yearKeys.length >= 2;
+  if (hasMultiYear) tabs.push({ id: 'compare', label: `비교 분석 (${yearKeys.length}개년)` });
+
+  // Render tabs
+  const tabsEl = document.getElementById('tabsContainer');
+  tabsEl.innerHTML = tabs.map((t, i) => `
+    <div class="tab ${i === 0 ? 'active' : ''}" onclick="switchTab('${t.id}')" data-tab="${t.id}">${t.label}</div>
+  `).join('');
+
+  // Render all tab contents
+  const contentsEl = document.getElementById('tabContents');
+  let html = '';
+  if (analysisData.mock) html += renderMockAnalysis();
+  if (analysisData.school) html += renderSchoolAnalysis();
+  if (analysisData.mock && analysisData.school) html += renderCombinedAnalysis();
+  if (hasMultiYear) html += renderCompareAnalysis(yearKeys);
+  contentsEl.innerHTML = html;
+
+  // Show first tab
+  switchTab(tabs[0].id);
+
+  // Render charts after DOM is ready
+  requestAnimationFrame(() => {
+    if (analysisData.mock) renderMockCharts();
+    if (analysisData.school) renderSchoolCharts();
+    if (analysisData.mock && analysisData.school) renderCombinedCharts();
+    if (hasMultiYear) renderCompareCharts(yearKeys);
+  });
+}
+
+function switchTab(tabId) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tabId));
+  document.querySelectorAll('.tab-content').forEach(t => t.style.display = t.id === `tab-${tabId}` ? 'block' : 'none');
+}
+
+// ==================== Mock Exam Analysis ====================
+function renderMockAnalysis() {
+  const data = analysisData.mock;
+  const subjects = [...new Set(data.map(d => d.subject))];
+  const sessions = [...new Set(data.map(d => d.session))].sort((a,b) => a-b);
+  const latestSession = sessions[sessions.length - 1];
+  const latestData = data.filter(d => d.session === latestSession);
+
+  // Stats
+  const avgGrade = latestData.length ? (latestData.reduce((s,d) => s+d.grade, 0) / latestData.length).toFixed(1) : '-';
+  const avgPercentile = latestData.length ? (latestData.reduce((s,d) => s+d.percentile, 0) / latestData.length).toFixed(1) : '-';
+  const bestSubject = latestData.length ? latestData.reduce((best, d) => d.grade < best.grade ? d : best) : null;
+  const worstSubject = latestData.length ? latestData.reduce((worst, d) => d.grade > worst.grade ? d : worst) : null;
+
+  // Trend (compare last 2 sessions)
+  let trendText = '';
+  if (sessions.length >= 2) {
+    const prevSession = sessions[sessions.length - 2];
+    const prevData = data.filter(d => d.session === prevSession);
+    const prevAvg = prevData.reduce((s,d) => s+d.grade, 0) / prevData.length;
+    const currAvg = latestData.reduce((s,d) => s+d.grade, 0) / latestData.length;
+    const diff = (prevAvg - currAvg).toFixed(1);
+    if (diff > 0.2) trendText = `<span class="stat-change up">▲ ${diff}등급 상승</span>`;
+    else if (diff < -0.2) trendText = `<span class="stat-change down">▼ ${Math.abs(diff)}등급 하락</span>`;
+    else trendText = `<span class="stat-change same">— 유지</span>`;
+  }
+
+  // Diagnosis
+  const diagnoses = [];
+  latestData.forEach(d => {
+    if (d.grade <= 2) diagnoses.push({ type: 'good', title: `${d.subject}: ${d.grade}등급`, desc: '우수한 성적을 유지하고 있습니다. 현재 학습 방법을 지속하세요.' });
+    else if (d.grade <= 4) diagnoses.push({ type: 'warning', title: `${d.subject}: ${d.grade}등급`, desc: '조금만 더 노력하면 상위 등급 진입이 가능합니다.' });
+    else if (d.grade >= 6) diagnoses.push({ type: 'danger', title: `${d.subject}: ${d.grade}등급`, desc: '집중적인 보완 학습이 필요한 영역입니다.' });
+  });
+
+  return `
+  <div class="tab-content" id="tab-mock">
+    <!-- Stats -->
+    <div class="grid grid-4" style="margin-bottom:20px">
+      <div class="stat-card">
+        <div class="stat-value">${avgGrade}</div>
+        <div class="stat-label">평균 등급 (${latestSession}회)</div>
+        ${trendText}
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">${avgPercentile}%</div>
+        <div class="stat-label">평균 백분위</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value" style="color:var(--success)">${bestSubject ? bestSubject.subject : '-'}</div>
+        <div class="stat-label">최고 과목</div>
+        <div style="font-size:13px;color:var(--success);font-weight:600">${bestSubject ? bestSubject.grade + '등급' : ''}</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value" style="color:var(--danger);font-size:24px">${worstSubject ? worstSubject.subject : '-'}</div>
+        <div class="stat-label">보완 필요 과목</div>
+        <div style="font-size:13px;color:var(--danger);font-weight:600">${worstSubject ? worstSubject.grade + '등급' : ''}</div>
+      </div>
+    </div>
+
+    <div class="grid grid-2" style="margin-bottom:20px">
+      <!-- Trend Chart -->
+      <div class="card">
+        <div class="card-title">📈 회차별 등급 추이</div>
+        <div class="chart-container"><canvas id="mockTrendChart"></canvas></div>
+      </div>
+      <!-- Radar Chart -->
+      <div class="card">
+        <div class="card-title">🎯 과목별 성적 비교 (최근 회차)</div>
+        <div class="chart-container"><canvas id="mockRadarChart"></canvas></div>
+      </div>
+    </div>
+
+    <div class="grid grid-2" style="margin-bottom:20px">
+      <!-- Percentile Chart -->
+      <div class="card">
+        <div class="card-title">📊 백분위 분포</div>
+        <div class="chart-container"><canvas id="mockPercentileChart"></canvas></div>
+      </div>
+      <!-- Strength/Weakness -->
+      <div class="card">
+        <div class="card-title">💪 강점 / 약점 분석</div>
+        ${renderStrengthWeakness(latestData)}
+      </div>
+    </div>
+
+    <!-- Diagnosis -->
+    <div class="card" style="margin-bottom:20px">
+      <div class="card-title">🔍 과목별 진단</div>
+      ${diagnoses.map(d => `
+        <div class="diagnosis-item ${d.type}">
+          <div class="diagnosis-title">${d.title}</div>
+          <div class="diagnosis-desc">${d.desc}</div>
+        </div>
+      `).join('')}
+    </div>
+
+    <!-- Detail Table -->
+    <div class="card">
+      <div class="card-title">📋 전체 성적 데이터</div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>회차</th><th>과목</th><th>원점수</th><th>표준점수</th><th>백분위</th><th>등급</th></tr></thead>
+          <tbody>
+            ${data.sort((a,b) => a.session - b.session || a.subject.localeCompare(b.subject))
+              .map(d => `<tr><td>${d.session}회</td><td>${d.subject}</td><td>${d.rawScore}</td><td>${d.standardScore}</td><td>${d.percentile}</td><td><span class="grade-badge grade-${d.grade}">${d.grade}</span></td></tr>`).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>`;
+}
+
+function renderMockCharts() {
+  const data = analysisData.mock;
+  const subjects = [...new Set(data.map(d => d.subject))];
+  const sessions = [...new Set(data.map(d => d.session))].sort((a,b) => a-b);
+  const colors = ['#4F46E5','#10B981','#F59E0B','#EF4444','#8B5CF6','#EC4899','#06B6D4','#84CC16'];
+
+  // Trend Chart - 등급 (reverse Y axis: 1 at top)
+  const trendCtx = document.getElementById('mockTrendChart');
+  if (trendCtx) {
+    charts.mockTrend = new Chart(trendCtx, {
+      type: 'line',
+      data: {
+        labels: sessions.map(s => s + '회'),
+        datasets: subjects.map((subj, i) => ({
+          label: subj,
+          data: sessions.map(sess => {
+            const d = data.find(x => x.session === sess && x.subject === subj);
+            return d ? d.grade : null;
+          }),
+          borderColor: colors[i % colors.length],
+          backgroundColor: colors[i % colors.length] + '20',
+          tension: 0.3,
+          pointRadius: 5,
+          pointHoverRadius: 7,
+        }))
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+          y: { reverse: true, min: 1, max: 9, title: { display: true, text: '등급' }, ticks: { stepSize: 1 } }
+        },
+        plugins: { legend: { position: 'bottom' } }
+      }
+    });
+  }
+
+  // Radar Chart
+  const latestSession = sessions[sessions.length - 1];
+  const latestData = data.filter(d => d.session === latestSession);
+  const radarCtx = document.getElementById('mockRadarChart');
+  if (radarCtx) {
+    charts.mockRadar = new Chart(radarCtx, {
+      type: 'radar',
+      data: {
+        labels: latestData.map(d => d.subject),
+        datasets: [{
+          label: latestSession + '회 백분위',
+          data: latestData.map(d => d.percentile),
+          borderColor: '#4F46E5',
+          backgroundColor: 'rgba(79,70,229,0.15)',
+          pointBackgroundColor: '#4F46E5',
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: { r: { min: 0, max: 100, ticks: { stepSize: 20 } } },
+        plugins: { legend: { position: 'bottom' } }
+      }
+    });
+  }
+
+  // Percentile Bar Chart
+  const pctCtx = document.getElementById('mockPercentileChart');
+  if (pctCtx) {
+    charts.mockPct = new Chart(pctCtx, {
+      type: 'bar',
+      data: {
+        labels: latestData.map(d => d.subject),
+        datasets: [{
+          label: '백분위',
+          data: latestData.map(d => d.percentile),
+          backgroundColor: latestData.map((d, i) => colors[i % colors.length] + 'CC'),
+          borderRadius: 6,
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: { y: { min: 0, max: 100, title: { display: true, text: '백분위 (%)' } } },
+        plugins: { legend: { display: false } }
+      }
+    });
+  }
+}
+
+// ==================== School Grade Analysis ====================
+function renderSchoolAnalysis() {
+  const data = analysisData.school;
+  const terms = [...new Set(data.map(d => d.term))];
+  const subjects = [...new Set(data.map(d => d.subject))];
+  const latestTerm = terms[terms.length - 1];
+  const latestData = data.filter(d => d.term === latestTerm);
+
+  // Weighted Average
+  const totalUnits = latestData.reduce((s, d) => s + d.units, 0);
+  const weightedGrade = totalUnits > 0
+    ? (latestData.reduce((s, d) => s + d.grade * d.units, 0) / totalUnits).toFixed(2)
+    : '-';
+
+  // All-term weighted
+  const allUnits = data.reduce((s, d) => s + d.units, 0);
+  const allWeighted = allUnits > 0
+    ? (data.reduce((s, d) => s + d.grade * d.units, 0) / allUnits).toFixed(2)
+    : '-';
+
+  // Subject categories
+  const mainSubjects = ['국어','영어','수학','과학','사회','한국사'];
+  const latestMain = latestData.filter(d => mainSubjects.some(m => d.subject.includes(m)));
+  const latestOther = latestData.filter(d => !mainSubjects.some(m => d.subject.includes(m)));
+  const mainAvg = latestMain.length ? (latestMain.reduce((s,d) => s+d.grade, 0) / latestMain.length).toFixed(1) : '-';
+  const otherAvg = latestOther.length ? (latestOther.reduce((s,d) => s+d.grade, 0) / latestOther.length).toFixed(1) : '-';
+
+  // Grade distribution
+  const gradeDist = Array(9).fill(0);
+  latestData.forEach(d => { if (d.grade >= 1 && d.grade <= 9) gradeDist[d.grade - 1]++; });
+
+  return `
+  <div class="tab-content" id="tab-school" style="display:none">
+    <!-- Stats -->
+    <div class="grid grid-4" style="margin-bottom:20px">
+      <div class="stat-card">
+        <div class="stat-value">${weightedGrade}</div>
+        <div class="stat-label">가중 평균 등급 (${latestTerm})</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">${allWeighted}</div>
+        <div class="stat-label">전체 가중 평균</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value" style="color:var(--primary)">${mainAvg}</div>
+        <div class="stat-label">주요 교과 평균</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value" style="color:var(--primary-light)">${otherAvg}</div>
+        <div class="stat-label">기타 교과 평균</div>
+      </div>
+    </div>
+
+    <div class="grid grid-2" style="margin-bottom:20px">
+      <!-- Term Trend -->
+      <div class="card">
+        <div class="card-title">📈 학기별 등급 추이</div>
+        <div class="chart-container"><canvas id="schoolTrendChart"></canvas></div>
+      </div>
+      <!-- Grade Distribution -->
+      <div class="card">
+        <div class="card-title">📊 등급 분포 (${latestTerm})</div>
+        <div class="chart-container"><canvas id="schoolDistChart"></canvas></div>
+      </div>
+    </div>
+
+    <div class="grid grid-2" style="margin-bottom:20px">
+      <!-- Subject Comparison -->
+      <div class="card">
+        <div class="card-title">🎯 과목별 등급 비교</div>
+        <div class="chart-container"><canvas id="schoolSubjectChart"></canvas></div>
+      </div>
+      <!-- Strength/Weakness -->
+      <div class="card">
+        <div class="card-title">💪 강점 / 약점 분석</div>
+        ${renderStrengthWeakness(latestData)}
+      </div>
+    </div>
+
+    <!-- Z-Score Analysis -->
+    <div class="card" style="margin-bottom:20px">
+      <div class="card-title">📐 원점수 vs 과목평균 분석</div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>과목</th><th>원점수</th><th>과목평균</th><th>차이</th><th>표준편차</th><th>Z점수</th><th>석차등급</th></tr></thead>
+          <tbody>
+            ${latestData.map(d => {
+              const diff = d.rawScore - d.average;
+              const z = d.stdDev ? ((d.rawScore - d.average) / d.stdDev).toFixed(2) : '-';
+              return `<tr>
+                <td>${d.subject}</td>
+                <td>${d.rawScore}</td>
+                <td>${d.average.toFixed(1)}</td>
+                <td style="color:${diff >= 0 ? 'var(--success)' : 'var(--danger)'}; font-weight:600">${diff >= 0 ? '+' : ''}${diff.toFixed(1)}</td>
+                <td>${d.stdDev.toFixed(1)}</td>
+                <td style="font-weight:600">${z}</td>
+                <td><span class="grade-badge grade-${d.grade}">${d.grade}</span></td>
+              </tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Full Data -->
+    <div class="card">
+      <div class="card-title">📋 전체 내신 데이터</div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>학기</th><th>과목</th><th>단위수</th><th>원점수</th><th>과목평균</th><th>표준편차</th><th>석차등급</th></tr></thead>
+          <tbody>
+            ${data.map(d => `<tr><td>${d.term}</td><td>${d.subject}</td><td>${d.units}</td><td>${d.rawScore}</td><td>${d.average.toFixed(1)}</td><td>${d.stdDev.toFixed(1)}</td><td><span class="grade-badge grade-${d.grade}">${d.grade}</span></td></tr>`).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>`;
+}
+
+function renderSchoolCharts() {
+  const data = analysisData.school;
+  const terms = [...new Set(data.map(d => d.term))];
+  const subjects = [...new Set(data.map(d => d.subject))];
+  const latestTerm = terms[terms.length - 1];
+  const latestData = data.filter(d => d.term === latestTerm);
+  const colors = ['#4F46E5','#10B981','#F59E0B','#EF4444','#8B5CF6','#EC4899','#06B6D4','#84CC16'];
+
+  // Term Trend
+  const trendCtx = document.getElementById('schoolTrendChart');
+  if (trendCtx) {
+    // Weighted average per term
+    const termAvgs = terms.map(term => {
+      const td = data.filter(d => d.term === term);
+      const totalU = td.reduce((s, d) => s + d.units, 0);
+      return totalU > 0 ? td.reduce((s, d) => s + d.grade * d.units, 0) / totalU : 0;
+    });
+
+    charts.schoolTrend = new Chart(trendCtx, {
+      type: 'line',
+      data: {
+        labels: terms,
+        datasets: [{
+          label: '가중 평균 등급',
+          data: termAvgs,
+          borderColor: '#4F46E5',
+          backgroundColor: 'rgba(79,70,229,0.1)',
+          fill: true,
+          tension: 0.3,
+          pointRadius: 6,
+          pointHoverRadius: 8,
+          pointBackgroundColor: '#4F46E5',
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: { y: { reverse: true, min: 1, max: 9, title: { display: true, text: '등급' }, ticks: { stepSize: 1 } } },
+        plugins: { legend: { display: false } }
+      }
+    });
+  }
+
+  // Grade Distribution
+  const distCtx = document.getElementById('schoolDistChart');
+  if (distCtx) {
+    const gradeDist = Array(9).fill(0);
+    latestData.forEach(d => { if (d.grade >= 1 && d.grade <= 9) gradeDist[d.grade - 1]++; });
+    const gradeColors = ['#10B981','#34D399','#60A5FA','#818CF8','#F59E0B','#FB923C','#F87171','#EF4444','#DC2626'];
+
+    charts.schoolDist = new Chart(distCtx, {
+      type: 'doughnut',
+      data: {
+        labels: ['1등급','2등급','3등급','4등급','5등급','6등급','7등급','8등급','9등급'],
+        datasets: [{
+          data: gradeDist,
+          backgroundColor: gradeColors,
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { position: 'right', labels: { font: { size: 12 } } }
+        }
+      }
+    });
+  }
+
+  // Subject Comparison
+  const subjCtx = document.getElementById('schoolSubjectChart');
+  if (subjCtx) {
+    charts.schoolSubj = new Chart(subjCtx, {
+      type: 'bar',
+      data: {
+        labels: latestData.map(d => d.subject),
+        datasets: [{
+          label: '석차등급',
+          data: latestData.map(d => d.grade),
+          backgroundColor: latestData.map((d) => {
+            if (d.grade <= 2) return '#10B981CC';
+            if (d.grade <= 4) return '#60A5FACC';
+            if (d.grade <= 6) return '#F59E0BCC';
+            return '#EF4444CC';
+          }),
+          borderRadius: 6,
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: { y: { reverse: true, min: 0, max: 9, title: { display: true, text: '등급' }, ticks: { stepSize: 1 } } },
+        plugins: { legend: { display: false } }
+      }
+    });
+  }
+}
+
+// ==================== Combined Analysis ====================
+function renderCombinedAnalysis() {
+  const mock = analysisData.mock;
+  const school = analysisData.school;
+
+  const mockSessions = [...new Set(mock.map(d => d.session))].sort((a,b) => a-b);
+  const latestMockSession = mockSessions[mockSessions.length - 1];
+  const latestMock = mock.filter(d => d.session === latestMockSession);
+  const mockAvgGrade = (latestMock.reduce((s,d) => s+d.grade, 0) / latestMock.length).toFixed(1);
+
+  const schoolTerms = [...new Set(school.map(d => d.term))];
+  const latestSchoolTerm = schoolTerms[schoolTerms.length - 1];
+  const latestSchool = school.filter(d => d.term === latestSchoolTerm);
+  const totalUnits = latestSchool.reduce((s, d) => s + d.units, 0);
+  const schoolAvgGrade = totalUnits > 0
+    ? (latestSchool.reduce((s, d) => s + d.grade * d.units, 0) / totalUnits).toFixed(1)
+    : '-';
+
+  const diff = (Number(mockAvgGrade) - Number(schoolAvgGrade)).toFixed(1);
+
+  return `
+  <div class="tab-content" id="tab-combined" style="display:none">
+    <div class="grid grid-3" style="margin-bottom:20px">
+      <div class="stat-card">
+        <div class="stat-value">${mockAvgGrade}</div>
+        <div class="stat-label">모의고사 평균 등급</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">${schoolAvgGrade}</div>
+        <div class="stat-label">내신 가중 평균 등급</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value" style="color:${Number(diff) > 0 ? 'var(--danger)' : 'var(--success)'}">${diff > 0 ? '+' : ''}${diff}</div>
+        <div class="stat-label">모의 - 내신 차이</div>
+        <div style="font-size:12px;color:var(--text-light);margin-top:4px">${Number(diff) > 0.5 ? '내신이 더 유리합니다' : Number(diff) < -0.5 ? '모의고사가 더 유리합니다' : '비교적 균형 잡혀 있습니다'}</div>
+      </div>
+    </div>
+
+    <div class="grid grid-2" style="margin-bottom:20px">
+      <div class="card">
+        <div class="card-title">📊 모의고사 vs 내신 비교</div>
+        <div class="chart-container"><canvas id="combinedCompareChart"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="card-title">🎯 종합 진단</div>
+        ${renderCombinedDiagnosis(latestMock, latestSchool, mockAvgGrade, schoolAvgGrade)}
+      </div>
+    </div>
+  </div>`;
+}
+
+function renderCombinedCharts() {
+  const mock = analysisData.mock;
+  const school = analysisData.school;
+
+  // Find common subjects
+  const mockSubjects = [...new Set(mock.map(d => d.subject))];
+  const schoolSubjects = [...new Set(school.map(d => d.subject))];
+  const allSubjects = [...new Set([...mockSubjects, ...schoolSubjects])];
+
+  const mockSessions = [...new Set(mock.map(d => d.session))].sort((a,b) => a-b);
+  const latestMock = mock.filter(d => d.session === mockSessions[mockSessions.length - 1]);
+
+  const schoolTerms = [...new Set(school.map(d => d.term))];
+  const latestSchool = school.filter(d => d.term === schoolTerms[schoolTerms.length - 1]);
+
+  const ctx = document.getElementById('combinedCompareChart');
+  if (ctx) {
+    charts.combined = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: allSubjects,
+        datasets: [
+          {
+            label: '모의고사 등급',
+            data: allSubjects.map(s => { const d = latestMock.find(x => x.subject === s); return d ? d.grade : null; }),
+            backgroundColor: '#4F46E5AA',
+            borderRadius: 4,
+          },
+          {
+            label: '내신 등급',
+            data: allSubjects.map(s => { const d = latestSchool.find(x => x.subject === s); return d ? d.grade : null; }),
+            backgroundColor: '#10B981AA',
+            borderRadius: 4,
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: { y: { reverse: true, min: 0, max: 9, title: { display: true, text: '등급' }, ticks: { stepSize: 1 } } },
+        plugins: { legend: { position: 'bottom' } }
+      }
+    });
+  }
+}
+
+function renderCombinedDiagnosis(mockData, schoolData, mockAvg, schoolAvg) {
+  const items = [];
+  const diff = Number(mockAvg) - Number(schoolAvg);
+
+  if (diff > 1) {
+    items.push({ type: 'warning', title: '내신 > 모의고사', desc: '내신 대비 모의고사 성적이 낮습니다. 수능형 학습 보완이 필요합니다.' });
+  } else if (diff < -1) {
+    items.push({ type: 'warning', title: '모의고사 > 내신', desc: '모의고사 대비 내신이 낮습니다. 학교 시험 대비를 강화하세요.' });
+  } else {
+    items.push({ type: 'good', title: '균형 잡힌 성적', desc: '모의고사와 내신이 비교적 균형을 이루고 있습니다.' });
+  }
+
+  if (Number(mockAvg) <= 3 && Number(schoolAvg) <= 3) {
+    items.push({ type: 'good', title: '상위권 유지', desc: '모의고사와 내신 모두 상위권입니다. 현재 학습을 유지하면서 취약점만 보완하세요.' });
+  }
+
+  if (Number(mockAvg) >= 5 || Number(schoolAvg) >= 5) {
+    items.push({ type: 'danger', title: '집중 학습 필요', desc: '기초 개념부터 재정립하고 취약 과목에 집중 투자하세요.' });
+  }
+
+  return items.map(d => `
+    <div class="diagnosis-item ${d.type}">
+      <div class="diagnosis-title">${d.title}</div>
+      <div class="diagnosis-desc">${d.desc}</div>
+    </div>
+  `).join('');
+}
+
+// ==================== Compare Analysis (Multi-Year) ====================
+function getYearStats(yearData) {
+  const stats = {};
+  // Mock stats
+  if (yearData.mock && yearData.mock.length > 0) {
+    const sessions = [...new Set(yearData.mock.map(d => d.session))].sort((a,b) => a-b);
+    const latestSession = sessions[sessions.length - 1];
+    const latestData = yearData.mock.filter(d => d.session === latestSession);
+    stats.mockAvgGrade = latestData.length ? (latestData.reduce((s,d) => s+d.grade, 0) / latestData.length) : null;
+    stats.mockAvgPercentile = latestData.length ? (latestData.reduce((s,d) => s+d.percentile, 0) / latestData.length) : null;
+    stats.mockBest = latestData.length ? latestData.reduce((best, d) => d.grade < best.grade ? d : best) : null;
+    stats.mockWorst = latestData.length ? latestData.reduce((worst, d) => d.grade > worst.grade ? d : worst) : null;
+    stats.mockSubjects = latestData;
+    stats.mockSessions = sessions.length;
+  }
+  // School stats
+  if (yearData.school && yearData.school.length > 0) {
+    const terms = [...new Set(yearData.school.map(d => d.term))];
+    const latestTerm = terms[terms.length - 1];
+    const latestData = yearData.school.filter(d => d.term === latestTerm);
+    const totalUnits = latestData.reduce((s, d) => s + d.units, 0);
+    stats.schoolAvgGrade = totalUnits > 0 ? (latestData.reduce((s, d) => s + d.grade * d.units, 0) / totalUnits) : null;
+    stats.schoolBest = latestData.length ? latestData.reduce((best, d) => d.grade < best.grade ? d : best) : null;
+    stats.schoolWorst = latestData.length ? latestData.reduce((worst, d) => d.grade > worst.grade ? d : worst) : null;
+    stats.schoolSubjects = latestData;
+    stats.schoolTerms = terms.length;
+  }
+  return stats;
+}
+
+function renderCompareAnalysis(yearKeys) {
+  const sortedYears = [...yearKeys].sort();
+  const yearStats = {};
+  sortedYears.forEach(y => { yearStats[y] = getYearStats(analysisData.yearly[y]); });
+
+  const hasMock = sortedYears.some(y => yearStats[y].mockAvgGrade != null);
+  const hasSchool = sortedYears.some(y => yearStats[y].schoolAvgGrade != null);
+
+  // Summary cards
+  let cardsHtml = sortedYears.map((y, i) => {
+    const s = yearStats[y];
+    const color = YEAR_COLORS[i % YEAR_COLORS.length];
+    return `
+    <div class="compare-year-card" style="border-left-color:${color}">
+      <h4><span class="year-color-dot" style="background:${color}"></span>${y}</h4>
+      <div class="stats-row">
+        ${s.mockAvgGrade != null ? `
+          <div class="mini-stat"><span>${s.mockAvgGrade.toFixed(1)}</span>모의 평균등급</div>
+          <div class="mini-stat"><span>${s.mockAvgPercentile.toFixed(1)}%</span>평균 백분위</div>
+          <div class="mini-stat"><span style="color:var(--success)">${s.mockBest?.subject || '-'}</span>최고 과목</div>
+          <div class="mini-stat"><span style="color:var(--danger)">${s.mockWorst?.subject || '-'}</span>보완 과목</div>
+        ` : ''}
+        ${s.schoolAvgGrade != null ? `
+          <div class="mini-stat"><span>${s.schoolAvgGrade.toFixed(2)}</span>내신 가중평균</div>
+          <div class="mini-stat"><span style="color:var(--success)">${s.schoolBest?.subject || '-'}</span>최고 과목</div>
+          <div class="mini-stat"><span style="color:var(--danger)">${s.schoolWorst?.subject || '-'}</span>보완 과목</div>
+        ` : ''}
+      </div>
+    </div>`;
+  }).join('');
+
+  // Summary table
+  let tableHtml = `<table class="compare-summary-table"><thead><tr><th>항목</th>`;
+  sortedYears.forEach((y, i) => {
+    tableHtml += `<th><span class="year-color-dot" style="background:${YEAR_COLORS[i % YEAR_COLORS.length]}"></span>${y}</th>`;
+  });
+  tableHtml += `<th>변화</th></tr></thead><tbody>`;
+
+  if (hasMock) {
+    // Mock avg grade row
+    tableHtml += `<tr><td style="font-weight:600">모의 평균등급</td>`;
+    const mockGrades = sortedYears.map(y => yearStats[y].mockAvgGrade);
+    sortedYears.forEach((y, i) => {
+      const val = mockGrades[i];
+      tableHtml += `<td>${val != null ? val.toFixed(1) : '-'}</td>`;
+    });
+    const validMockGrades = mockGrades.filter(v => v != null);
+    if (validMockGrades.length >= 2) {
+      const diff = validMockGrades[0] - validMockGrades[validMockGrades.length - 1];
+      tableHtml += `<td style="color:${diff > 0 ? 'var(--success)' : diff < 0 ? 'var(--danger)' : 'var(--text-light)'}; font-weight:700">${diff > 0 ? '▲' : diff < 0 ? '▼' : '—'} ${Math.abs(diff).toFixed(1)}</td>`;
+    } else tableHtml += '<td>-</td>';
+    tableHtml += '</tr>';
+
+    // Mock avg percentile row
+    tableHtml += `<tr><td style="font-weight:600">평균 백분위</td>`;
+    const mockPcts = sortedYears.map(y => yearStats[y].mockAvgPercentile);
+    sortedYears.forEach((y, i) => {
+      const val = mockPcts[i];
+      tableHtml += `<td>${val != null ? val.toFixed(1) + '%' : '-'}</td>`;
+    });
+    const validPcts = mockPcts.filter(v => v != null);
+    if (validPcts.length >= 2) {
+      const diff = validPcts[validPcts.length - 1] - validPcts[0];
+      tableHtml += `<td style="color:${diff > 0 ? 'var(--success)' : diff < 0 ? 'var(--danger)' : 'var(--text-light)'}; font-weight:700">${diff > 0 ? '▲' : diff < 0 ? '▼' : '—'} ${Math.abs(diff).toFixed(1)}%</td>`;
+    } else tableHtml += '<td>-</td>';
+    tableHtml += '</tr>';
+  }
+
+  if (hasSchool) {
+    tableHtml += `<tr><td style="font-weight:600">내신 가중평균</td>`;
+    const schoolGrades = sortedYears.map(y => yearStats[y].schoolAvgGrade);
+    sortedYears.forEach((y, i) => {
+      const val = schoolGrades[i];
+      tableHtml += `<td>${val != null ? val.toFixed(2) : '-'}</td>`;
+    });
+    const validSchool = schoolGrades.filter(v => v != null);
+    if (validSchool.length >= 2) {
+      const diff = validSchool[0] - validSchool[validSchool.length - 1];
+      tableHtml += `<td style="color:${diff > 0 ? 'var(--success)' : diff < 0 ? 'var(--danger)' : 'var(--text-light)'}; font-weight:700">${diff > 0 ? '▲' : diff < 0 ? '▼' : '—'} ${Math.abs(diff).toFixed(2)}</td>`;
+    } else tableHtml += '<td>-</td>';
+    tableHtml += '</tr>';
+  }
+
+  // Subject-by-subject rows
+  if (hasMock) {
+    const allSubjects = [...new Set(sortedYears.flatMap(y => (yearStats[y].mockSubjects || []).map(d => d.subject)))];
+    allSubjects.forEach(subj => {
+      tableHtml += `<tr><td>${subj} (모의)</td>`;
+      const grades = sortedYears.map(y => {
+        const d = (yearStats[y].mockSubjects || []).find(x => x.subject === subj);
+        return d ? d.grade : null;
+      });
+      sortedYears.forEach((y, i) => {
+        const val = grades[i];
+        tableHtml += `<td>${val != null ? `<span class="grade-badge grade-${val}">${val}</span>` : '-'}</td>`;
+      });
+      const valid = grades.filter(v => v != null);
+      if (valid.length >= 2) {
+        const diff = valid[0] - valid[valid.length - 1];
+        tableHtml += `<td style="color:${diff > 0 ? 'var(--success)' : diff < 0 ? 'var(--danger)' : 'var(--text-light)'}; font-weight:700">${diff > 0 ? '▲' : diff < 0 ? '▼' : '—'} ${Math.abs(diff)}</td>`;
+      } else tableHtml += '<td>-</td>';
+      tableHtml += '</tr>';
+    });
+  }
+
+  if (hasSchool) {
+    const allSubjects = [...new Set(sortedYears.flatMap(y => (yearStats[y].schoolSubjects || []).map(d => d.subject)))];
+    allSubjects.forEach(subj => {
+      tableHtml += `<tr><td>${subj} (내신)</td>`;
+      const grades = sortedYears.map(y => {
+        const d = (yearStats[y].schoolSubjects || []).find(x => x.subject === subj);
+        return d ? d.grade : null;
+      });
+      sortedYears.forEach((y, i) => {
+        const val = grades[i];
+        tableHtml += `<td>${val != null ? `<span class="grade-badge grade-${val}">${val}</span>` : '-'}</td>`;
+      });
+      const valid = grades.filter(v => v != null);
+      if (valid.length >= 2) {
+        const diff = valid[0] - valid[valid.length - 1];
+        tableHtml += `<td style="color:${diff > 0 ? 'var(--success)' : diff < 0 ? 'var(--danger)' : 'var(--text-light)'}; font-weight:700">${diff > 0 ? '▲' : diff < 0 ? '▼' : '—'} ${Math.abs(diff)}</td>`;
+      } else tableHtml += '<td>-</td>';
+      tableHtml += '</tr>';
+    });
+  }
+
+  tableHtml += '</tbody></table>';
+
+  return `
+  <div class="tab-content" id="tab-compare" style="display:none">
+    <div style="margin-bottom:20px; padding:16px; background:linear-gradient(135deg,#EEF2FF,#F0FDF4); border-radius:var(--radius);">
+      <div style="font-weight:700;font-size:16px;margin-bottom:4px">📊 ${sortedYears.length}개년 비교 분석</div>
+      <div style="font-size:13px;color:var(--text-light)">${sortedYears.join(' vs ')} — 년도별 성적 변화를 한눈에 비교합니다</div>
+    </div>
+
+    <div class="compare-year-cards" style="grid-template-columns:repeat(${Math.min(sortedYears.length, 3)}, 1fr)">
+      ${cardsHtml}
+    </div>
+
+    <div class="grid grid-2" style="margin-bottom:20px">
+      <div class="card">
+        <div class="card-title">📈 년도별 평균 등급 추이</div>
+        <div class="chart-container"><canvas id="compareAvgChart"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="card-title">🎯 과목별 년도 비교</div>
+        <div class="chart-container"><canvas id="compareSubjectChart"></canvas></div>
+      </div>
+    </div>
+
+    <div class="grid grid-2" style="margin-bottom:20px">
+      <div class="card">
+        <div class="card-title">📊 년도별 백분위 비교</div>
+        <div class="chart-container"><canvas id="comparePercentileChart"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="card-title">🕸️ 년도별 과목 레이더</div>
+        <div class="chart-container"><canvas id="compareRadarChart"></canvas></div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-bottom:20px">
+      <div class="card-title">📋 년도별 상세 비교표</div>
+      <div class="table-wrap">${tableHtml}</div>
+    </div>
+  </div>`;
+}
+
+function renderCompareCharts(yearKeys) {
+  const sortedYears = [...yearKeys].sort();
+  const yearStats = {};
+  sortedYears.forEach(y => { yearStats[y] = getYearStats(analysisData.yearly[y]); });
+
+  const hasMock = sortedYears.some(y => yearStats[y].mockAvgGrade != null);
+  const hasSchool = sortedYears.some(y => yearStats[y].schoolAvgGrade != null);
+
+  // 1. Average Grade Trend
+  const avgCtx = document.getElementById('compareAvgChart');
+  if (avgCtx) {
+    const datasets = [];
+    if (hasMock) {
+      datasets.push({
+        label: '모의 평균등급',
+        data: sortedYears.map(y => yearStats[y].mockAvgGrade ?? null),
+        borderColor: '#4F46E5',
+        backgroundColor: 'rgba(79,70,229,0.1)',
+        fill: true,
+        tension: 0.3,
+        pointRadius: 7,
+        pointHoverRadius: 9,
+        pointBackgroundColor: '#4F46E5',
+        borderWidth: 3,
+      });
+    }
+    if (hasSchool) {
+      datasets.push({
+        label: '내신 가중평균',
+        data: sortedYears.map(y => yearStats[y].schoolAvgGrade ?? null),
+        borderColor: '#10B981',
+        backgroundColor: 'rgba(16,185,129,0.1)',
+        fill: true,
+        tension: 0.3,
+        pointRadius: 7,
+        pointHoverRadius: 9,
+        pointBackgroundColor: '#10B981',
+        borderWidth: 3,
+      });
+    }
+    charts.compareAvg = new Chart(avgCtx, {
+      type: 'line',
+      data: { labels: sortedYears, datasets },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+          y: { reverse: true, min: 1, max: 9, title: { display: true, text: '등급 (낮을수록 좋음)' }, ticks: { stepSize: 1 } }
+        },
+        plugins: {
+          legend: { position: 'bottom' },
+          tooltip: {
+            callbacks: {
+              label: ctx => `${ctx.dataset.label}: ${ctx.parsed.y?.toFixed(1)}등급`
+            }
+          }
+        }
+      }
+    });
+  }
+
+  // 2. Subject Comparison (Grouped Bar)
+  const subjCtx = document.getElementById('compareSubjectChart');
+  if (subjCtx) {
+    let allSubjects;
+    if (hasMock) {
+      allSubjects = [...new Set(sortedYears.flatMap(y => (yearStats[y].mockSubjects || []).map(d => d.subject)))];
+    } else {
+      allSubjects = [...new Set(sortedYears.flatMap(y => (yearStats[y].schoolSubjects || []).map(d => d.subject)))];
+    }
+
+    const datasets = sortedYears.map((y, i) => ({
+      label: y,
+      data: allSubjects.map(subj => {
+        const src = hasMock ? yearStats[y].mockSubjects : yearStats[y].schoolSubjects;
+        const d = (src || []).find(x => x.subject === subj);
+        return d ? d.grade : null;
+      }),
+      backgroundColor: YEAR_COLORS[i % YEAR_COLORS.length] + 'BB',
+      borderRadius: 4,
+    }));
+
+    charts.compareSubject = new Chart(subjCtx, {
+      type: 'bar',
+      data: { labels: allSubjects, datasets },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+          y: { reverse: true, min: 0, max: 9, title: { display: true, text: '등급' }, ticks: { stepSize: 1 } }
+        },
+        plugins: { legend: { position: 'bottom' } }
+      }
+    });
+  }
+
+  // 3. Percentile Comparison
+  const pctCtx = document.getElementById('comparePercentileChart');
+  if (pctCtx && hasMock) {
+    const allSubjects = [...new Set(sortedYears.flatMap(y => (yearStats[y].mockSubjects || []).map(d => d.subject)))];
+
+    const datasets = sortedYears.map((y, i) => ({
+      label: y,
+      data: allSubjects.map(subj => {
+        const d = (yearStats[y].mockSubjects || []).find(x => x.subject === subj);
+        return d ? d.percentile : null;
+      }),
+      backgroundColor: YEAR_COLORS[i % YEAR_COLORS.length] + 'BB',
+      borderRadius: 4,
+    }));
+
+    charts.comparePercentile = new Chart(pctCtx, {
+      type: 'bar',
+      data: { labels: allSubjects, datasets },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: { y: { min: 0, max: 100, title: { display: true, text: '백분위 (%)' } } },
+        plugins: { legend: { position: 'bottom' } }
+      }
+    });
+  } else if (pctCtx && hasSchool) {
+    // For school data, show raw scores comparison
+    const allSubjects = [...new Set(sortedYears.flatMap(y => (yearStats[y].schoolSubjects || []).map(d => d.subject)))];
+    const datasets = sortedYears.map((y, i) => ({
+      label: y,
+      data: allSubjects.map(subj => {
+        const d = (yearStats[y].schoolSubjects || []).find(x => x.subject === subj);
+        return d ? d.rawScore : null;
+      }),
+      backgroundColor: YEAR_COLORS[i % YEAR_COLORS.length] + 'BB',
+      borderRadius: 4,
+    }));
+    charts.comparePercentile = new Chart(pctCtx, {
+      type: 'bar',
+      data: { labels: allSubjects, datasets },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: { y: { min: 0, max: 100, title: { display: true, text: '원점수' } } },
+        plugins: { legend: { position: 'bottom' } }
+      }
+    });
+  }
+
+  // 4. Radar Comparison
+  const radarCtx = document.getElementById('compareRadarChart');
+  if (radarCtx) {
+    let allSubjects;
+    if (hasMock) {
+      allSubjects = [...new Set(sortedYears.flatMap(y => (yearStats[y].mockSubjects || []).map(d => d.subject)))];
+    } else {
+      allSubjects = [...new Set(sortedYears.flatMap(y => (yearStats[y].schoolSubjects || []).map(d => d.subject)))];
+    }
+
+    const datasets = sortedYears.map((y, i) => {
+      const color = YEAR_COLORS[i % YEAR_COLORS.length];
+      return {
+        label: y,
+        data: allSubjects.map(subj => {
+          if (hasMock) {
+            const d = (yearStats[y].mockSubjects || []).find(x => x.subject === subj);
+            return d ? d.percentile : 0;
+          } else {
+            const d = (yearStats[y].schoolSubjects || []).find(x => x.subject === subj);
+            return d ? (10 - d.grade) * 11.1 : 0; // Convert grade to 0-100 scale (1=100, 9=0)
+          }
+        }),
+        borderColor: color,
+        backgroundColor: color + '20',
+        pointBackgroundColor: color,
+        pointRadius: 4,
+        borderWidth: 2,
+      };
+    });
+
+    charts.compareRadar = new Chart(radarCtx, {
+      type: 'radar',
+      data: { labels: allSubjects, datasets },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: { r: { min: 0, max: 100, ticks: { stepSize: 20 } } },
+        plugins: { legend: { position: 'bottom' } }
+      }
+    });
+  }
+}
+
+// ==================== Helpers ====================
+function renderStrengthWeakness(data) {
+  if (!data || data.length === 0) return '<p style="color:var(--text-light)">데이터 없음</p>';
+
+  const sorted = [...data].sort((a, b) => a.grade - b.grade);
+  const strengths = sorted.slice(0, 3);
+  const weaknesses = sorted.slice(-3).reverse();
+
+  let html = '<div style="margin-bottom:16px"><div style="font-weight:600;font-size:13px;color:var(--success);margin-bottom:8px">강점 과목</div>';
+  strengths.forEach((d, i) => {
+    html += `<div class="sw-item strength"><div class="sw-rank">${i + 1}</div><div class="sw-info"><div class="sw-name">${d.subject}</div><div class="sw-detail">${d.grade}등급${d.percentile ? ' | 백분위 ' + d.percentile + '%' : ''}</div></div></div>`;
+  });
+  html += '</div>';
+
+  html += '<div><div style="font-weight:600;font-size:13px;color:var(--danger);margin-bottom:8px">보완 필요 과목</div>';
+  weaknesses.forEach((d, i) => {
+    html += `<div class="sw-item weakness"><div class="sw-rank">${i + 1}</div><div class="sw-info"><div class="sw-name">${d.subject}</div><div class="sw-detail">${d.grade}등급${d.percentile ? ' | 백분위 ' + d.percentile + '%' : ''}</div></div></div>`;
+  });
+  html += '</div>';
+  return html;
+}
+
+// ==================== Demo Data ====================
+function loadDemoData(type) {
+  if (type === 'mock') {
+    const mockData = [
+      { session:'3', subject:'국어', rawScore:85, standardScore:128, percentile:89, grade:2 },
+      { session:'3', subject:'수학', rawScore:92, standardScore:135, percentile:95, grade:1 },
+      { session:'3', subject:'영어', rawScore:88, standardScore:0, percentile:92, grade:2 },
+      { session:'3', subject:'한국사', rawScore:45, standardScore:0, percentile:85, grade:2 },
+      { session:'3', subject:'탐구1', rawScore:42, standardScore:65, percentile:88, grade:2 },
+      { session:'3', subject:'탐구2', rawScore:38, standardScore:62, percentile:78, grade:3 },
+      { session:'6', subject:'국어', rawScore:78, standardScore:122, percentile:82, grade:3 },
+      { session:'6', subject:'수학', rawScore:88, standardScore:130, percentile:91, grade:2 },
+      { session:'6', subject:'영어', rawScore:92, standardScore:0, percentile:95, grade:1 },
+      { session:'6', subject:'한국사', rawScore:48, standardScore:0, percentile:90, grade:1 },
+      { session:'6', subject:'탐구1', rawScore:45, standardScore:68, percentile:92, grade:2 },
+      { session:'6', subject:'탐구2', rawScore:40, standardScore:63, percentile:80, grade:3 },
+      { session:'9', subject:'국어', rawScore:90, standardScore:132, percentile:93, grade:2 },
+      { session:'9', subject:'수학', rawScore:95, standardScore:140, percentile:97, grade:1 },
+      { session:'9', subject:'영어', rawScore:90, standardScore:0, percentile:93, grade:1 },
+      { session:'9', subject:'한국사', rawScore:47, standardScore:0, percentile:88, grade:2 },
+      { session:'9', subject:'탐구1', rawScore:48, standardScore:70, percentile:95, grade:1 },
+      { session:'9', subject:'탐구2', rawScore:44, standardScore:67, percentile:86, grade:2 },
+    ];
+    // Create 3 years of demo data for comparison
+    const mock2023 = mockData.map(d => ({...d, rawScore: d.rawScore - 5, percentile: Math.max(d.percentile - 8, 50), grade: Math.min(d.grade + 1, 9)}));
+    const mock2024 = mockData;
+    const mock2025 = mockData.map(d => ({...d, rawScore: Math.min(d.rawScore + 3, 100), percentile: Math.min(d.percentile + 3, 99), grade: Math.max(d.grade - (Math.random() > 0.5 ? 1 : 0), 1)}));
+    analysisData.mock = [...mock2023, ...mock2024, ...mock2025];
+    analysisData.school = null;
+    analysisData.yearly = {
+      '2023': { mock: mock2023, school: [] },
+      '2024': { mock: mock2024, school: [] },
+      '2025': { mock: mock2025, school: [] },
+    };
+  } else {
+    const schoolData = [
+      { term:'1-1', subject:'국어', units:4, rawScore:82, average:65.3, stdDev:14.2, grade:2, achievement:'A' },
+      { term:'1-1', subject:'수학', units:4, rawScore:90, average:58.7, stdDev:18.5, grade:1, achievement:'A' },
+      { term:'1-1', subject:'영어', units:4, rawScore:88, average:62.1, stdDev:15.8, grade:2, achievement:'A' },
+      { term:'1-1', subject:'한국사', units:3, rawScore:85, average:70.2, stdDev:12.1, grade:2, achievement:'A' },
+      { term:'1-1', subject:'통합과학', units:4, rawScore:78, average:55.8, stdDev:16.3, grade:2, achievement:'A' },
+      { term:'1-1', subject:'통합사회', units:3, rawScore:72, average:60.5, stdDev:13.7, grade:3, achievement:'B' },
+      { term:'1-2', subject:'국어', units:4, rawScore:85, average:63.8, stdDev:15.0, grade:2, achievement:'A' },
+      { term:'1-2', subject:'수학', units:4, rawScore:88, average:56.2, stdDev:19.1, grade:1, achievement:'A' },
+      { term:'1-2', subject:'영어', units:4, rawScore:90, average:61.5, stdDev:16.2, grade:1, achievement:'A' },
+      { term:'1-2', subject:'한국사', units:3, rawScore:80, average:68.7, stdDev:11.8, grade:2, achievement:'A' },
+      { term:'1-2', subject:'통합과학', units:4, rawScore:82, average:57.3, stdDev:15.9, grade:2, achievement:'A' },
+      { term:'1-2', subject:'통합사회', units:3, rawScore:78, average:62.1, stdDev:14.2, grade:2, achievement:'A' },
+      { term:'2-1', subject:'국어', units:4, rawScore:88, average:62.5, stdDev:14.8, grade:2, achievement:'A' },
+      { term:'2-1', subject:'수학', units:4, rawScore:92, average:54.3, stdDev:20.2, grade:1, achievement:'A' },
+      { term:'2-1', subject:'영어', units:4, rawScore:85, average:60.8, stdDev:15.5, grade:2, achievement:'A' },
+      { term:'2-1', subject:'물리학I', units:3, rawScore:80, average:52.6, stdDev:17.3, grade:2, achievement:'A' },
+      { term:'2-1', subject:'화학I', units:3, rawScore:75, average:50.8, stdDev:16.8, grade:3, achievement:'B' },
+      { term:'2-1', subject:'생명과학I', units:3, rawScore:85, average:58.2, stdDev:15.1, grade:2, achievement:'A' },
+    ];
+    const school2023 = schoolData.map(d => ({...d, rawScore: d.rawScore - 5, grade: Math.min(d.grade + 1, 9)}));
+    const school2024 = schoolData;
+    const school2025 = schoolData.map(d => ({...d, rawScore: Math.min(d.rawScore + 3, 100), grade: Math.max(d.grade - (Math.random() > 0.5 ? 1 : 0), 1)}));
+    analysisData.school = [...school2023, ...school2024, ...school2025];
+    analysisData.mock = null;
+    analysisData.yearly = {
+      '2023': { mock: [], school: school2023 },
+      '2024': { mock: [], school: school2024 },
+      '2025': { mock: [], school: school2025 },
+    };
+  }
+
+  renderResults();
+  document.getElementById('results').classList.add('show');
+  document.getElementById('exportBtn').style.display = '';
+  document.getElementById('results').scrollIntoView({ behavior: 'smooth' });
+}
+
+// ==================== Export ====================
+function exportReport() {
+  const wb = XLSX.utils.book_new();
+
+  if (analysisData.mock) {
+    const ws = XLSX.utils.json_to_sheet(analysisData.mock.map(d => ({
+      '회차': d.session + '회',
+      '과목': d.subject,
+      '원점수': d.rawScore,
+      '표준점수': d.standardScore,
+      '백분위': d.percentile,
+      '등급': d.grade,
+    })));
+    XLSX.utils.book_append_sheet(wb, ws, '모의고사 데이터');
+
+    // Summary
+    const sessions = [...new Set(analysisData.mock.map(d => d.session))].sort((a,b) => a-b);
+    const summary = sessions.map(sess => {
+      const sd = analysisData.mock.filter(d => d.session === sess);
+      return {
+        '회차': sess + '회',
+        '평균등급': (sd.reduce((s,d) => s+d.grade, 0) / sd.length).toFixed(1),
+        '평균백분위': (sd.reduce((s,d) => s+d.percentile, 0) / sd.length).toFixed(1),
+        '최고과목': sd.reduce((best, d) => d.grade < best.grade ? d : best).subject,
+        '취약과목': sd.reduce((worst, d) => d.grade > worst.grade ? d : worst).subject,
+      };
+    });
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(summary), '모의고사 요약');
+  }
+
+  if (analysisData.school) {
+    const ws = XLSX.utils.json_to_sheet(analysisData.school.map(d => ({
+      '학기': d.term,
+      '과목': d.subject,
+      '단위수': d.units,
+      '원점수': d.rawScore,
+      '과목평균': d.average,
+      '표준편차': d.stdDev,
+      '석차등급': d.grade,
+    })));
+    XLSX.utils.book_append_sheet(wb, ws, '내신 데이터');
+
+    // Summary
+    const terms = [...new Set(analysisData.school.map(d => d.term))];
+    const summary = terms.map(term => {
+      const td = analysisData.school.filter(d => d.term === term);
+      const totalU = td.reduce((s, d) => s + d.units, 0);
+      const wAvg = totalU > 0 ? (td.reduce((s, d) => s + d.grade * d.units, 0) / totalU).toFixed(2) : '-';
+      return { '학기': term, '가중평균등급': wAvg, '과목수': td.length, '총단위수': totalU };
+    });
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(summary), '내신 요약');
+  }
+
+  XLSX.writeFile(wb, '성적분석_결과_' + new Date().toISOString().slice(0,10) + '.xlsx');
+}
+
+// ==================== Sample Excel Download ====================
+function downloadSampleExcel(type) {
+  const wb = XLSX.utils.book_new();
+
+  if (type === 'mock') {
+    const data = [
+      { '회차': '3월', '과목': '국어', '원점수': 85, '표준점수': 128, '백분위': 89, '등급': 2 },
+      { '회차': '3월', '과목': '수학', '원점수': 92, '표준점수': 135, '백분위': 95, '등급': 1 },
+      { '회차': '3월', '과목': '영어', '원점수': 88, '표준점수': '', '백분위': 92, '등급': 2 },
+      { '회차': '3월', '과목': '한국사', '원점수': 45, '표준점수': '', '백분위': 85, '등급': 2 },
+      { '회차': '3월', '과목': '탐구1', '원점수': 42, '표준점수': 65, '백분위': 88, '등급': 2 },
+      { '회차': '3월', '과목': '탐구2', '원점수': 38, '표준점수': 62, '백분위': 78, '등급': 3 },
+    ];
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(data), '모의고사');
+    XLSX.writeFile(wb, '모의고사_양식.xlsx');
+  } else {
+    const data = [
+      { '학기': '1-1', '과목': '국어', '단위수': 4, '원점수': 82, '과목평균': 65.3, '표준편차': 14.2, '석차등급': 2 },
+      { '학기': '1-1', '과목': '수학', '단위수': 4, '원점수': 90, '과목평균': 58.7, '표준편차': 18.5, '석차등급': 1 },
+      { '학기': '1-1', '과목': '영어', '단위수': 4, '원점수': 88, '과목평균': 62.1, '표준편차': 15.8, '석차등급': 2 },
+      { '학기': '1-1', '과목': '한국사', '단위수': 3, '원점수': 85, '과목평균': 70.2, '표준편차': 12.1, '석차등급': 2 },
+      { '학기': '1-1', '과목': '통합과학', '단위수': 4, '원점수': 78, '과목평균': 55.8, '표준편차': 16.3, '석차등급': 2 },
+    ];
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(data), '내신');
+    XLSX.writeFile(wb, '내신_양식.xlsx');
+  }
+}
+</script>
+</body>
+</html>

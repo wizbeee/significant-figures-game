@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=1280, initial-scale=1.0">
+<title>데스크탑 학생 명단 목업</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+:root { --primary: #2563eb; --primary-light: #dbeafe; --success: #16a34a; --warning: #f59e0b; --danger: #dc2626; --bg: #f1f5f9; --surface: #ffffff; --text: #1e293b; --text-muted: #64748b; --border: #e2e8f0; --shadow: 0 1px 3px rgba(0,0,0,0.08); --sidebar-w: 230px; }
+body { font-family: 'Pretendard', -apple-system, 'Noto Sans KR', sans-serif; background: var(--bg); color: var(--text); width: 1280px; margin: 0 auto; min-height: 900px; display: flex; }
+.sidebar { width: var(--sidebar-w); background: var(--surface); border-right: 1px solid var(--border); display: flex; flex-direction: column; position: fixed; top: 0; left: 50%; margin-left: -640px; height: 100vh; z-index: 50; }
+.sidebar-header { padding: 24px 20px 20px; border-bottom: 1px solid var(--border); }
+.sidebar-logo { font-size: 24px; margin-bottom: 6px; }
+.sidebar-title { font-size: 15px; font-weight: 800; }
+.sidebar-subtitle { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+.sidebar-nav { flex: 1; padding: 12px 0; }
+.sidebar-section { padding: 10px 20px 6px; font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px; }
+.sidebar-item { display: flex; align-items: center; gap: 12px; padding: 12px 20px; font-size: 14px; font-weight: 600; color: var(--text-muted); border: none; background: none; width: 100%; text-align: left; border-left: 3px solid transparent; }
+.sidebar-item.active { background: var(--primary-light); color: var(--primary); border-left-color: var(--primary); font-weight: 700; }
+.sidebar-item .icon { font-size: 18px; width: 24px; text-align: center; }
+.sidebar-divider { height: 1px; background: var(--border); margin: 8px 16px; }
+.sidebar-footer { padding: 16px 20px; border-top: 1px solid var(--border); }
+.sidebar-footer-item { display: flex; align-items: center; justify-content: space-between; padding: 10px 0; font-size: 13px; font-weight: 600; color: var(--text-muted); }
+.toggle { width: 40px; height: 22px; background: #cbd5e1; border-radius: 11px; position: relative; }
+.toggle::after { content:''; position: absolute; top: 2px; left: 2px; width: 18px; height: 18px; background: white; border-radius: 50%; box-shadow: 0 1px 3px rgba(0,0,0,0.2); }
+.main { flex: 1; margin-left: var(--sidebar-w); }
+.main-header { padding: 24px 32px 0; display: flex; justify-content: space-between; align-items: center; }
+.main-title { font-size: 22px; font-weight: 800; }
+.header-actions { display: flex; gap: 8px; }
+.h-btn { padding: 8px 14px; border: 1.5px solid var(--border); border-radius: 8px; background: var(--surface); font-size: 12px; font-weight: 600; color: var(--text-muted); }
+.filter-bar { background: var(--surface); margin: 16px 32px 0; border-radius: 14px; padding: 16px 20px; box-shadow: var(--shadow); }
+.filter-row { display: flex; gap: 10px; align-items: center; }
+.f-label { font-size: 13px; font-weight: 700; color: var(--text-muted); min-width: 45px; }
+.f-quick { padding: 7px 14px; border: 1.5px solid var(--border); border-radius: 8px; background: var(--surface); font-size: 12px; font-weight: 600; color: var(--text-muted); }
+.f-quick.active { background: var(--primary); color: white; border-color: var(--primary); }
+.f-select { padding: 9px 14px; border: 1.5px solid var(--border); border-radius: 8px; font-size: 13px; background: var(--bg); min-width: 120px; color: var(--text); }
+.f-input { flex: 1; padding: 9px 14px; border: 1.5px solid var(--border); border-radius: 8px; font-size: 13px; background: var(--bg); }
+.f-btn { padding: 9px 24px; background: var(--primary); color: white; border: none; border-radius: 8px; font-size: 13px; font-weight: 700; }
+.stats-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; padding: 16px 32px; }
+.stat-card { background: var(--surface); border-radius: 12px; padding: 16px; text-align: center; box-shadow: var(--shadow); }
+.stat-num { font-size: 28px; font-weight: 800; color: var(--primary); }
+.stat-label { font-size: 13px; color: var(--text-muted); font-weight: 600; }
+.group-header { padding: 14px 32px 8px; display: flex; align-items: center; gap: 10px; }
+.group-title { font-size: 16px; font-weight: 700; }
+.group-badge { background: var(--primary-light); color: var(--primary); padding: 3px 10px; border-radius: 10px; font-size: 12px; font-weight: 700; }
+.teams-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; padding: 0 32px 16px; }
+.team-card { background: var(--surface); border-radius: 14px; overflow: hidden; box-shadow: var(--shadow); }
+.team-header { padding: 14px 18px; background: #f8fafc; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; }
+.team-title { font-size: 14px; font-weight: 700; }
+.team-experiment { font-size: 12px; color: var(--primary); font-weight: 600; margin-top: 2px; }
+.team-time { font-size: 13px; color: var(--text-muted); font-weight: 600; }
+.student-row { padding: 10px 18px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #f1f5f9; }
+.student-row:last-child { border-bottom: none; }
+.student-info { display: flex; align-items: center; gap: 10px; }
+.avatar { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; color: white; }
+.avatar-leader { background: var(--primary); }
+.avatar-member { background: #94a3b8; }
+.student-name { font-size: 13px; font-weight: 600; }
+.student-id { font-size: 11px; color: var(--text-muted); }
+.role-badge { padding: 2px 8px; border-radius: 8px; font-size: 11px; font-weight: 700; }
+.role-leader { background: #dbeafe; color: #1e40af; }
+.role-member { background: #f1f5f9; color: #64748b; }
+.att { width: 22px; height: 22px; border: 2px solid var(--border); border-radius: 5px; display: flex; align-items: center; justify-content: center; font-size: 13px; }
+.att.checked { background: var(--success); border-color: var(--success); color: white; }
+</style>
+</head>
+<body>
+<aside class="sidebar">
+  <div class="sidebar-header"><div class="sidebar-logo">🔬</div><div class="sidebar-title">과학 실험·실습실</div><div class="sidebar-subtitle">관리 시스템 v3.2</div></div>
+  <nav class="sidebar-nav">
+    <div class="sidebar-section">메뉴</div>
+    <button class="sidebar-item"><span class="icon">📊</span> 대시보드</button>
+    <button class="sidebar-item"><span class="icon">📦</span> 시약 목록</button>
+    <button class="sidebar-item active"><span class="icon">👥</span> 학생 명단</button>
+    <button class="sidebar-item"><span class="icon">🧑‍🏫</span> 임장 일정</button>
+    <div class="sidebar-divider"></div>
+    <div class="sidebar-section">관리</div>
+    <button class="sidebar-item"><span class="icon">📝</span> 지도일지</button>
+    <button class="sidebar-item"><span class="icon">📊</span> 지도 통계</button>
+    <button class="sidebar-item"><span class="icon">🚫</span> 신청 제한</button>
+  </nav>
+  <div class="sidebar-footer">
+    <div class="sidebar-footer-item"><span>🌙 다크모드</span><div class="toggle"></div></div>
+    <div class="sidebar-footer-item" style="color:var(--danger);">🚪 로그아웃</div>
+  </div>
+</aside>
+<main class="main">
+  <div class="main-header">
+    <div class="main-title">👥 학생 명단</div>
+    <div class="header-actions"><button class="h-btn">🖨️ 인쇄</button><button class="h-btn">📥 엑셀</button></div>
+  </div>
+  <div class="filter-bar">
+    <div class="filter-row">
+      <button class="f-quick active">오늘</button><button class="f-quick">이번 주</button><button class="f-quick">이번 달</button>
+      <select class="f-select"><option>실험실 전체</option></select>
+      <select class="f-select"><option>날짜별 보기</option></select>
+      <select class="f-select"><option>팀별 카드 보기</option></select>
+      <input class="f-input" placeholder="🔍 학생 검색 (학번/이름)">
+      <button class="f-btn">조회</button>
+    </div>
+  </div>
+  <div class="stats-grid">
+    <div class="stat-card"><div class="stat-num">5</div><div class="stat-label">팀 수</div></div>
+    <div class="stat-card"><div class="stat-num">14</div><div class="stat-label">총 학생</div></div>
+    <div class="stat-card"><div class="stat-num">04-08</div><div class="stat-label">오늘</div></div>
+  </div>
+  <div class="group-header">
+    <div class="group-title">📅 2026-04-08 (화)</div>
+    <span class="group-badge">3팀 · 8명</span>
+  </div>
+  <div class="teams-grid">
+    <div class="team-card">
+      <div class="team-header"><div><div class="team-title">🧪 화학실험실 · ET</div><div class="team-experiment">NaOH 중화반응 실험</div></div><span class="team-time">방과후</span></div>
+      <div class="student-row"><div class="student-info"><div class="avatar avatar-leader">김</div><div><div class="student-name">김민준</div><div class="student-id">30412</div></div></div><div style="display:flex;gap:8px;align-items:center;"><span class="role-badge role-leader">대표</span><div class="att checked">✓</div></div></div>
+      <div class="student-row"><div class="student-info"><div class="avatar avatar-member">박</div><div><div class="student-name">박서연</div><div class="student-id">20315</div></div></div><div style="display:flex;gap:8px;align-items:center;"><span class="role-badge role-member">동반</span><div class="att checked">✓</div></div></div>
+      <div class="student-row"><div class="student-info"><div class="avatar avatar-member">최</div><div><div class="student-name">최지우</div><div class="student-id">10208</div></div></div><div style="display:flex;gap:8px;align-items:center;"><span class="role-badge role-member">동반</span><div class="att"></div></div></div>
+    </div>
+    <div class="team-card">
+      <div class="team-header"><div><div class="team-title">🧬 생물실험실 · EP1</div><div class="team-experiment">현미경 세포 관찰</div></div><span class="team-time">EP1</span></div>
+      <div class="student-row"><div class="student-info"><div class="avatar avatar-leader">이</div><div><div class="student-name">이하은</div><div class="student-id">20501</div></div></div><div style="display:flex;gap:8px;align-items:center;"><span class="role-badge role-leader">대표</span><div class="att"></div></div></div>
+      <div class="student-row"><div class="student-info"><div class="avatar avatar-member">장</div><div><div class="student-name">장도윤</div><div class="student-id">20118</div></div></div><div style="display:flex;gap:8px;align-items:center;"><span class="role-badge role-member">동반</span><div class="att"></div></div></div>
+    </div>
+    <div class="team-card">
+      <div class="team-header"><div><div class="team-title">⚡ 물리실험실 · 7교시</div><div class="team-experiment">자유낙하 운동 실험</div></div><span class="team-time">7교시</span></div>
+      <div class="student-row"><div class="student-info"><div class="avatar avatar-leader">정</div><div><div class="student-name">정우진</div><div class="student-id">30108</div></div></div><div style="display:flex;gap:8px;align-items:center;"><span class="role-badge role-leader">대표</span><div class="att checked">✓</div></div></div>
+      <div class="student-row"><div class="student-info"><div class="avatar avatar-member">한</div><div><div class="student-name">한소희</div><div class="student-id">10322</div></div></div><div style="display:flex;gap:8px;align-items:center;"><span class="role-badge role-member">동반</span><div class="att checked">✓</div></div></div>
+      <div class="student-row"><div class="student-info"><div class="avatar avatar-member">송</div><div><div class="student-name">송민서</div><div class="student-id">10415</div></div></div><div style="display:flex;gap:8px;align-items:center;"><span class="role-badge role-member">동반</span><div class="att"></div></div></div>
+    </div>
+  </div>
+</main>
+</body>
+</html>

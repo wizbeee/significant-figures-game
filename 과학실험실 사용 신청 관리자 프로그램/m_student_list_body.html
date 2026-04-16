@@ -1,0 +1,73 @@
+<!-- ===== 학생 명단 — 데스크탑 기능 완전 반영 ===== -->
+
+<div class="filter-bar">
+  <div class="quick-row" style="margin-bottom:10px;">
+    <button class="quick-btn active" onclick="msQuick('today',this)">오늘</button>
+    <button class="quick-btn" onclick="msQuick('week',this)">이번 주</button>
+    <button class="quick-btn" onclick="msQuick('month',this)">이번 달</button>
+  </div>
+  <div class="filter-row" style="margin-bottom:8px;">
+    <select class="filter-select" id="ms-approvalFilter" onchange="msProcessAndRender()" style="flex:1;">
+      <option value="approved">승인됨</option>
+      <option value="">전체 상태</option>
+      <option value="최종승인">최종승인</option>
+      <option value="1차승인">1차승인</option>
+      <option value="대기">대기</option>
+      <option value="반려">반려</option>
+    </select>
+    <select class="filter-select" id="ms-labFilter" onchange="msApplyFilter()" style="flex:1;">
+      <option value="">실험실 전체</option>
+    </select>
+  </div>
+  <div class="filter-row" style="margin-bottom:8px;">
+    <select class="filter-select" id="ms-timeFilter" onchange="msApplyFilter()" style="flex:1;">
+      <option value="">시간 전체</option>
+      <option value="ET">ET</option>
+      <option value="EP1">EP1</option>
+      <option value="7교시">7교시</option>
+    </select>
+    <select class="filter-select" id="ms-roleFilter" onchange="msApplyFilter()" style="flex:1;">
+      <option value="">역할 전체</option>
+      <option value="대표">대표자만</option>
+      <option value="동반">동반자만</option>
+    </select>
+    <input class="search-input" type="text" id="ms-search" placeholder="🔍 학번/이름" oninput="msApplyFilter()" style="flex:1;">
+  </div>
+  <div class="filter-row">
+    <select class="filter-select" id="ms-groupBy" onchange="msApplyFilter()" style="flex:1;">
+      <option value="date">날짜별</option>
+      <option value="lab">실험실별</option>
+      <option value="time">시간별</option>
+      <option value="student">학생별</option>
+      <option value="none">전체통합</option>
+    </select>
+    <select class="filter-select" id="ms-displayMode" onchange="msApplyFilter()" style="flex:1;">
+      <option value="team">팀별 카드</option>
+      <option value="individual">개별 학생</option>
+    </select>
+    <select class="filter-select" id="ms-sortBy" onchange="msApplyFilter()" style="flex:1;">
+      <option value="date-desc">날짜↓</option>
+      <option value="date-asc">날짜↑</option>
+      <option value="lab">실험실순</option>
+      <option value="time">시간순</option>
+      <option value="name">이름순</option>
+      <option value="id">학번순</option>
+    </select>
+  </div>
+  <div class="filter-row" style="margin-top:6px;">
+    <div class="switch-row">
+      <span class="switch-label">출석체크란</span>
+      <button class="mini-switch on" id="ms-attendanceSwitch" onclick="msToggleAttendance()"></button>
+    </div>
+  </div>
+</div>
+
+<div class="stats-bar">
+  <div class="mini-stat"><div class="mini-stat-num" id="ms-stat-teams">-</div><div class="mini-stat-label">팀 수</div></div>
+  <div class="mini-stat"><div class="mini-stat-num" id="ms-stat-students">-</div><div class="mini-stat-label">총 학생</div></div>
+  <div class="mini-stat"><div class="mini-stat-num" style="color:var(--text);" id="ms-stat-date">-</div><div class="mini-stat-label">조회 기간</div></div>
+</div>
+
+<div id="ms-card-list" style="padding:0 16px 120px;">
+  <div class="m-loading"><div class="m-loading-spinner"></div><span>데이터를 불러오는 중...</span></div>
+</div>

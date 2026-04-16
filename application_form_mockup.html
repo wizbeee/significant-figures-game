@@ -1,0 +1,1013 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>과학실험실 신청서 UI 목업</title>
+<style>
+  :root {
+    --primary: #4361ee;
+    --primary-light: #eef2ff;
+    --primary-dark: #3730a3;
+    --success: #10b981;
+    --success-light: #ecfdf5;
+    --warning: #f59e0b;
+    --warning-light: #fffbeb;
+    --danger: #ef4444;
+    --danger-light: #fef2f2;
+    --bg: #f8fafc;
+    --card: #ffffff;
+    --border: #e2e8f0;
+    --text: #1e293b;
+    --text-muted: #64748b;
+    --text-light: #94a3b8;
+    --shadow: 0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.06);
+    --shadow-lg: 0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -4px rgba(0,0,0,0.1);
+    --radius: 12px;
+    --radius-sm: 8px;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; }
+
+  /* ===== Header ===== */
+  .header {
+    background: var(--card); border-bottom: 1px solid var(--border);
+    padding: 16px 0; position: sticky; top: 0; z-index: 100;
+    box-shadow: var(--shadow);
+  }
+  .header-inner {
+    max-width: 900px; margin: 0 auto; padding: 0 24px;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .header-logo {
+    display: flex; align-items: center; gap: 12px;
+    font-size: 18px; font-weight: 700; color: var(--primary);
+  }
+  .header-logo .icon { font-size: 28px; }
+  .header-actions { display: flex; gap: 8px; }
+  .header-btn {
+    padding: 8px 16px; border-radius: var(--radius-sm); border: 1px solid var(--border);
+    background: var(--card); color: var(--text-muted); font-size: 13px; font-weight: 600;
+    cursor: pointer; display: flex; align-items: center; gap: 6px;
+    transition: all 0.15s;
+  }
+  .header-btn:hover { border-color: var(--primary); color: var(--primary); }
+  .header-btn.primary { background: var(--primary); color: white; border-color: var(--primary); }
+
+  /* ===== Progress Bar ===== */
+  .progress-section {
+    background: var(--card); border-bottom: 1px solid var(--border); padding: 20px 0;
+  }
+  .progress-inner { max-width: 900px; margin: 0 auto; padding: 0 24px; }
+  .progress-steps {
+    display: flex; align-items: center; justify-content: space-between; position: relative;
+  }
+  .progress-steps::before {
+    content: ''; position: absolute; top: 20px; left: 40px; right: 40px;
+    height: 3px; background: var(--border); z-index: 0;
+  }
+  .progress-steps::after {
+    content: ''; position: absolute; top: 20px; left: 40px;
+    height: 3px; background: var(--primary); z-index: 1;
+    transition: width 0.3s;
+  }
+  .progress-steps.step-1::after { width: 0%; }
+  .progress-steps.step-2::after { width: 25%; }
+  .progress-steps.step-3::after { width: 50%; }
+  .progress-steps.step-4::after { width: 75%; }
+  .progress-steps.step-5::after { width: calc(100% - 80px); }
+
+  .step-item {
+    display: flex; flex-direction: column; align-items: center; gap: 8px;
+    z-index: 2; position: relative;
+  }
+  .step-circle {
+    width: 40px; height: 40px; border-radius: 50%; display: flex;
+    align-items: center; justify-content: center; font-weight: 700; font-size: 14px;
+    background: var(--card); border: 3px solid var(--border); color: var(--text-muted);
+    transition: all 0.2s;
+  }
+  .step-item.active .step-circle { background: var(--primary); border-color: var(--primary); color: white; }
+  .step-item.done .step-circle { background: var(--success); border-color: var(--success); color: white; }
+  .step-label { font-size: 12px; font-weight: 600; color: var(--text-muted); white-space: nowrap; }
+  .step-item.active .step-label { color: var(--primary); }
+  .step-item.done .step-label { color: var(--success); }
+
+  /* ===== Main Content ===== */
+  .main { max-width: 900px; margin: 0 auto; padding: 32px 24px 120px; }
+
+  .form-card {
+    background: var(--card); border-radius: var(--radius); border: 1px solid var(--border);
+    padding: 32px; margin-bottom: 24px; box-shadow: var(--shadow);
+  }
+  .form-card-title {
+    font-size: 18px; font-weight: 700; color: var(--text); margin-bottom: 4px;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .form-card-desc { font-size: 13px; color: var(--text-muted); margin-bottom: 24px; }
+
+  .form-group { margin-bottom: 20px; }
+  .form-label {
+    display: block; font-size: 13px; font-weight: 600; color: var(--text);
+    margin-bottom: 6px;
+  }
+  .form-label .required { color: var(--danger); margin-left: 2px; }
+  .form-label .hint { font-weight: 400; color: var(--text-muted); margin-left: 8px; font-size: 12px; }
+
+  .form-input, .form-select, .form-textarea {
+    width: 100%; padding: 10px 14px; border: 1.5px solid var(--border); border-radius: var(--radius-sm);
+    font-size: 14px; color: var(--text); background: var(--card);
+    transition: border-color 0.15s, box-shadow 0.15s;
+    outline: none;
+  }
+  .form-input:focus, .form-select:focus, .form-textarea:focus {
+    border-color: var(--primary); box-shadow: 0 0 0 3px rgba(67,97,238,0.1);
+  }
+  .form-input::placeholder { color: var(--text-light); }
+  .form-textarea { min-height: 100px; resize: vertical; }
+  .form-select { cursor: pointer; }
+
+  .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .form-row-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
+
+  /* Info box */
+  .info-box {
+    background: var(--primary-light); border: 1px solid #c7d2fe; border-radius: var(--radius-sm);
+    padding: 12px 16px; font-size: 13px; color: var(--primary-dark); margin-bottom: 20px;
+    display: flex; align-items: flex-start; gap: 10px; line-height: 1.5;
+  }
+  .info-box .icon { font-size: 16px; flex-shrink: 0; margin-top: 1px; }
+  .info-box.warning { background: var(--warning-light); border-color: #fde68a; color: #92400e; }
+  .info-box.success { background: var(--success-light); border-color: #a7f3d0; color: #065f46; }
+
+  /* Checkbox & Radio */
+  .check-group { display: flex; flex-wrap: wrap; gap: 12px; }
+  .check-item {
+    display: flex; align-items: center; gap: 8px; padding: 10px 16px;
+    border: 1.5px solid var(--border); border-radius: var(--radius-sm);
+    cursor: pointer; transition: all 0.15s; font-size: 14px; font-weight: 500;
+    background: var(--card); min-width: 100px; justify-content: center;
+  }
+  .check-item:hover { border-color: var(--primary); background: var(--primary-light); }
+  .check-item.selected { border-color: var(--primary); background: var(--primary-light); color: var(--primary); font-weight: 600; }
+  .check-item input { display: none; }
+
+  /* Time slot cards */
+  .time-slots { display: flex; gap: 12px; flex-wrap: wrap; }
+  .time-slot {
+    flex: 1; min-width: 140px; padding: 16px; border: 2px solid var(--border);
+    border-radius: var(--radius); cursor: pointer; text-align: center;
+    transition: all 0.15s; background: var(--card);
+  }
+  .time-slot:hover { border-color: var(--primary); }
+  .time-slot.selected { border-color: var(--primary); background: var(--primary-light); }
+  .time-slot.disabled { opacity: 0.4; cursor: not-allowed; background: #f1f5f9; }
+  .time-slot .time-name { font-size: 16px; font-weight: 700; }
+  .time-slot .time-desc { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
+  .time-slot .time-status { font-size: 11px; margin-top: 8px; padding: 3px 8px; border-radius: 12px; display: inline-block; }
+  .time-slot .time-status.available { background: var(--success-light); color: #065f46; }
+  .time-slot .time-status.full { background: var(--danger-light); color: #991b1b; }
+
+  /* Lab cards */
+  .lab-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 12px; }
+  .lab-card {
+    padding: 16px; border: 2px solid var(--border); border-radius: var(--radius);
+    cursor: pointer; text-align: center; transition: all 0.15s; background: var(--card);
+  }
+  .lab-card:hover { border-color: var(--primary); transform: translateY(-1px); }
+  .lab-card.selected { border-color: var(--primary); background: var(--primary-light); }
+  .lab-card.unavailable { opacity: 0.35; cursor: not-allowed; }
+  .lab-card .lab-icon { font-size: 28px; margin-bottom: 6px; }
+  .lab-card .lab-name { font-size: 13px; font-weight: 600; }
+  .lab-card .lab-status { font-size: 11px; color: var(--text-muted); margin-top: 4px; }
+
+  /* Chemical search */
+  .chem-search-box {
+    display: flex; gap: 8px; margin-bottom: 16px;
+  }
+  .chem-search-box .form-input { flex: 1; }
+  .chem-search-btn {
+    padding: 10px 20px; background: var(--primary); color: white; border: none;
+    border-radius: var(--radius-sm); font-weight: 600; cursor: pointer; white-space: nowrap;
+  }
+
+  /* Chemical autocomplete */
+  .chem-autocomplete {
+    border: 1px solid var(--border); border-radius: var(--radius-sm);
+    max-height: 200px; overflow-y: auto; margin-bottom: 16px; background: var(--card);
+  }
+  .chem-ac-item {
+    padding: 10px 14px; display: flex; justify-content: space-between; align-items: center;
+    border-bottom: 1px solid var(--border); cursor: pointer; font-size: 13px;
+    transition: background 0.1s;
+  }
+  .chem-ac-item:last-child { border-bottom: none; }
+  .chem-ac-item:hover { background: var(--primary-light); }
+  .chem-ac-item .chem-ac-name { font-weight: 600; }
+  .chem-ac-item .chem-ac-formula { color: var(--text-muted); font-size: 12px; }
+  .chem-ac-item .chem-ac-state { font-size: 11px; padding: 2px 8px; border-radius: 10px; background: #f1f5f9; color: var(--text-muted); }
+  .chem-ac-item .chem-ac-add { color: var(--primary); font-weight: 700; font-size: 18px; }
+
+  /* Chemical table */
+  .chem-table-wrap { overflow-x: auto; margin-top: 16px; }
+  .chem-table {
+    width: 100%; border-collapse: collapse; font-size: 13px;
+  }
+  .chem-table th {
+    background: #f8fafc; padding: 10px 12px; text-align: left; font-weight: 600;
+    border-bottom: 2px solid var(--border); color: var(--text-muted); font-size: 12px;
+    white-space: nowrap;
+  }
+  .chem-table td {
+    padding: 10px 12px; border-bottom: 1px solid var(--border); vertical-align: middle;
+  }
+  .chem-table .chem-name-cell { font-weight: 600; }
+  .chem-table .chem-formula { color: var(--text-muted); font-size: 12px; }
+  .chem-table .badge-need { background: #fef3c7; color: #92400e; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; }
+  .chem-table .badge-noneed { background: #d1fae5; color: #065f46; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; }
+  .chem-table input, .chem-table select {
+    padding: 6px 10px; border: 1px solid var(--border); border-radius: 6px; font-size: 13px;
+    width: 100%; outline: none;
+  }
+  .chem-table input:focus, .chem-table select:focus { border-color: var(--primary); }
+  .btn-remove {
+    background: none; border: none; color: var(--danger); cursor: pointer; font-size: 16px;
+    padding: 4px 8px; border-radius: 6px;
+  }
+  .btn-remove:hover { background: var(--danger-light); }
+
+  .chem-validate-bar {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 12px 16px; background: #f8fafc; border-radius: var(--radius-sm);
+    margin-top: 16px; border: 1px solid var(--border);
+  }
+  .validate-btn {
+    padding: 8px 16px; background: var(--primary); color: white; border: none;
+    border-radius: var(--radius-sm); font-weight: 600; cursor: pointer; font-size: 13px;
+  }
+  .validate-status { font-size: 13px; font-weight: 600; }
+  .validate-status.ok { color: var(--success); }
+  .validate-status.pending { color: var(--warning); }
+
+  /* Safety equipment */
+  .safety-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 10px; }
+  .safety-item {
+    display: flex; align-items: center; gap: 8px; padding: 12px 16px;
+    border: 1.5px solid var(--border); border-radius: var(--radius-sm);
+    cursor: pointer; transition: all 0.15s; font-size: 13px; font-weight: 500;
+  }
+  .safety-item:hover { border-color: var(--primary); }
+  .safety-item.selected { border-color: var(--primary); background: var(--primary-light); }
+  .safety-item .safety-icon { font-size: 20px; }
+
+  /* Review card */
+  .review-section {
+    margin-bottom: 20px; padding: 20px; background: #f8fafc;
+    border-radius: var(--radius-sm); border: 1px solid var(--border);
+  }
+  .review-section-title {
+    font-size: 14px; font-weight: 700; color: var(--primary); margin-bottom: 12px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .review-row {
+    display: flex; padding: 6px 0; font-size: 13px;
+  }
+  .review-label { width: 120px; color: var(--text-muted); font-weight: 500; flex-shrink: 0; }
+  .review-value { color: var(--text); font-weight: 500; flex: 1; }
+
+  /* Bottom nav */
+  .bottom-nav {
+    position: fixed; bottom: 0; left: 0; right: 0;
+    background: var(--card); border-top: 1px solid var(--border);
+    padding: 16px 24px; display: flex; justify-content: center; gap: 12px;
+    box-shadow: 0 -4px 6px -1px rgba(0,0,0,0.05); z-index: 100;
+  }
+  .bottom-nav-inner { max-width: 900px; width: 100%; display: flex; justify-content: space-between; align-items: center; }
+  .nav-btn {
+    padding: 12px 32px; border-radius: var(--radius-sm); font-size: 14px; font-weight: 600;
+    cursor: pointer; border: none; transition: all 0.15s;
+  }
+  .nav-btn.prev { background: #f1f5f9; color: var(--text-muted); }
+  .nav-btn.prev:hover { background: #e2e8f0; }
+  .nav-btn.next { background: var(--primary); color: white; }
+  .nav-btn.next:hover { background: var(--primary-dark); }
+  .nav-btn.submit { background: var(--success); color: white; font-size: 15px; padding: 14px 48px; }
+  .nav-btn.submit:hover { background: #059669; }
+  .nav-btn.draft { background: #f1f5f9; color: var(--text-muted); }
+  .step-indicator { font-size: 13px; color: var(--text-muted); font-weight: 500; }
+
+  /* Calendar mini */
+  .calendar-mini {
+    border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden;
+  }
+  .cal-header {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 12px 16px; background: var(--primary); color: white;
+  }
+  .cal-header button { background: none; border: none; color: white; font-size: 16px; cursor: pointer; padding: 4px 8px; }
+  .cal-header .cal-month { font-weight: 700; font-size: 15px; }
+  .cal-weekdays {
+    display: grid; grid-template-columns: repeat(7, 1fr); text-align: center;
+    background: #f8fafc; border-bottom: 1px solid var(--border);
+  }
+  .cal-weekdays span { padding: 8px 0; font-size: 12px; font-weight: 600; color: var(--text-muted); }
+  .cal-days { display: grid; grid-template-columns: repeat(7, 1fr); }
+  .cal-day {
+    padding: 10px 4px; text-align: center; font-size: 13px; cursor: pointer;
+    border: 1px solid transparent; transition: all 0.1s; position: relative;
+  }
+  .cal-day:hover { background: var(--primary-light); }
+  .cal-day.today { font-weight: 700; color: var(--primary); }
+  .cal-day.selected { background: var(--primary); color: white; border-radius: 8px; font-weight: 700; }
+  .cal-day.disabled { color: var(--text-light); cursor: not-allowed; }
+  .cal-day.disabled:hover { background: transparent; }
+  .cal-day .dot { width: 4px; height: 4px; border-radius: 50%; background: var(--danger); margin: 2px auto 0; }
+  .cal-day.other { color: var(--text-light); }
+
+  /* Purpose cards */
+  .purpose-cards { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+  .purpose-card {
+    padding: 20px; border: 2px solid var(--border); border-radius: var(--radius);
+    cursor: pointer; transition: all 0.15s; display: flex; align-items: center; gap: 14px;
+  }
+  .purpose-card:hover { border-color: var(--primary); }
+  .purpose-card.selected { border-color: var(--primary); background: var(--primary-light); }
+  .purpose-card .purpose-icon { font-size: 28px; }
+  .purpose-card .purpose-name { font-size: 14px; font-weight: 600; }
+  .purpose-card .purpose-desc { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+
+  /* Agreement */
+  .agreement-box {
+    background: #f8fafc; border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 20px; max-height: 200px; overflow-y: auto; font-size: 13px; line-height: 1.8;
+    margin-bottom: 16px; color: var(--text-muted);
+  }
+  .agreement-check {
+    display: flex; align-items: center; gap: 10px; padding: 14px 16px;
+    border: 2px solid var(--border); border-radius: var(--radius-sm);
+    cursor: pointer; font-size: 14px; font-weight: 600;
+  }
+  .agreement-check.checked { border-color: var(--success); background: var(--success-light); color: #065f46; }
+  .agreement-check .check-icon { font-size: 20px; }
+
+  /* View controls */
+  .view-controls {
+    position: fixed; top: 80px; right: 24px; z-index: 200;
+    display: flex; flex-direction: column; gap: 8px;
+  }
+  .view-btn-ctrl {
+    padding: 10px 16px; border: 1px solid var(--border); border-radius: var(--radius-sm);
+    background: var(--card); cursor: pointer; font-size: 12px; font-weight: 600;
+    box-shadow: var(--shadow); transition: all 0.15s;
+  }
+  .view-btn-ctrl:hover { border-color: var(--primary); }
+  .view-btn-ctrl.active { background: var(--primary); color: white; border-color: var(--primary); }
+
+  /* Step visibility */
+  .step-view { display: none; }
+  .step-view.active { display: block; }
+
+  /* Teacher select card */
+  .teacher-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; }
+  .teacher-card {
+    display: flex; align-items: center; gap: 12px; padding: 14px 16px;
+    border: 1.5px solid var(--border); border-radius: var(--radius-sm);
+    cursor: pointer; transition: all 0.15s;
+  }
+  .teacher-card:hover { border-color: var(--primary); }
+  .teacher-card.selected { border-color: var(--primary); background: var(--primary-light); }
+  .teacher-avatar {
+    width: 36px; height: 36px; border-radius: 50%; background: var(--primary-light);
+    display: flex; align-items: center; justify-content: center; font-size: 16px;
+    color: var(--primary); font-weight: 700;
+  }
+  .teacher-info .teacher-name { font-size: 14px; font-weight: 600; }
+  .teacher-info .teacher-subject { font-size: 12px; color: var(--text-muted); }
+
+  /* Tablet responsive */
+  @media (max-width: 900px) {
+    .main { padding: 24px 16px 120px; }
+    .form-card { padding: 24px; }
+    .form-row { grid-template-columns: 1fr; }
+    .form-row-3 { grid-template-columns: 1fr 1fr; }
+    .purpose-cards { grid-template-columns: 1fr; }
+    .lab-cards { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); }
+    .time-slots { flex-direction: column; }
+    .time-slot { min-width: auto; }
+    .header-inner { padding: 0 16px; }
+    .progress-inner { padding: 0 16px; }
+    .teacher-cards { grid-template-columns: 1fr 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<!-- View Toggle Controls -->
+<div class="view-controls" id="viewControls">
+  <button class="view-btn-ctrl active" onclick="goStep(1)">Step 1</button>
+  <button class="view-btn-ctrl" onclick="goStep(2)">Step 2</button>
+  <button class="view-btn-ctrl" onclick="goStep(3)">Step 3</button>
+  <button class="view-btn-ctrl" onclick="goStep(4)">Step 4</button>
+  <button class="view-btn-ctrl" onclick="goStep(5)">Step 5</button>
+</div>
+
+<!-- Header -->
+<div class="header">
+  <div class="header-inner">
+    <div class="header-logo">
+      <span class="icon">🔬</span>
+      <span>과학 실험실 사용 신청</span>
+    </div>
+    <div class="header-actions">
+      <button class="header-btn" onclick="alert('불러오기')">📂 불러오기</button>
+      <button class="header-btn" onclick="alert('임시저장')">💾 임시저장</button>
+    </div>
+  </div>
+</div>
+
+<!-- Progress -->
+<div class="progress-section">
+  <div class="progress-inner">
+    <div class="progress-steps step-1" id="progressSteps">
+      <div class="step-item active" id="si1">
+        <div class="step-circle">1</div>
+        <div class="step-label">기본 정보</div>
+      </div>
+      <div class="step-item" id="si2">
+        <div class="step-circle">2</div>
+        <div class="step-label">일정 선택</div>
+      </div>
+      <div class="step-item" id="si3">
+        <div class="step-circle">3</div>
+        <div class="step-label">실험 내용</div>
+      </div>
+      <div class="step-item" id="si4">
+        <div class="step-circle">4</div>
+        <div class="step-label">안전 계획</div>
+      </div>
+      <div class="step-item" id="si5">
+        <div class="step-circle">5</div>
+        <div class="step-label">확인/제출</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== STEP 1: Basic Info ==================== -->
+<div class="main">
+<div class="step-view active" id="step1">
+  <div class="form-card">
+    <div class="form-card-title">📋 대표자 정보</div>
+    <div class="form-card-desc">실험을 신청하는 대표 학생의 정보를 입력하세요.</div>
+
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">학번 <span class="required">*</span></label>
+        <input class="form-input" type="text" placeholder="5자리 학번 입력 (예: 30412)" value="30412" maxlength="5">
+      </div>
+      <div class="form-group">
+        <label class="form-label">이름 <span class="required">*</span></label>
+        <input class="form-input" type="text" placeholder="이름 입력" value="김민준">
+      </div>
+    </div>
+  </div>
+
+  <div class="form-card">
+    <div class="form-card-title">👥 동반자 정보</div>
+    <div class="form-card-desc">함께 실험에 참여하는 학생들의 정보를 입력하세요.</div>
+
+    <div class="info-box">
+      <span class="icon">ℹ️</span>
+      <span>학번 5자리와 이름을 함께 입력하세요. 여러 명은 쉼표 또는 줄바꿈으로 구분합니다.<br>예: 30415 이서연, 30423 박지호</span>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">동반자 명단 <span class="hint">대표자 포함하지 않음</span></label>
+      <textarea class="form-textarea" placeholder="30415 이서연&#10;30423 박지호&#10;30428 최윤서" style="min-height: 80px;">30415 이서연
+30423 박지호
+30428 최윤서</textarea>
+    </div>
+
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">총 참여 인원 <span class="required">*</span> <span class="hint">대표자 포함</span></label>
+        <input class="form-input" type="number" value="4" min="1" max="40">
+      </div>
+      <div></div>
+    </div>
+  </div>
+
+  <div class="form-card">
+    <div class="form-card-title">🎯 사용 목적</div>
+    <div class="form-card-desc">실험실 사용 목적을 선택하세요.</div>
+
+    <div class="purpose-cards">
+      <div class="purpose-card" onclick="selectPurpose(this)">
+        <div class="purpose-icon">📚</div>
+        <div>
+          <div class="purpose-name">과제연구</div>
+          <div class="purpose-desc">과제연구 과목 관련 실험</div>
+        </div>
+      </div>
+      <div class="purpose-card selected" onclick="selectPurpose(this)">
+        <div class="purpose-icon">🏫</div>
+        <div>
+          <div class="purpose-name">학급활동</div>
+          <div class="purpose-desc">교과 수업 관련 실험</div>
+        </div>
+      </div>
+      <div class="purpose-card" onclick="selectPurpose(this)">
+        <div class="purpose-icon">🎪</div>
+        <div>
+          <div class="purpose-name">동아리 활동</div>
+          <div class="purpose-desc">동아리 실험 활동</div>
+        </div>
+      </div>
+      <div class="purpose-card" onclick="selectPurpose(this)">
+        <div class="purpose-icon">🔍</div>
+        <div>
+          <div class="purpose-name">기타</div>
+          <div class="purpose-desc">개인/소그룹 탐구 등</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== STEP 2: Schedule ==================== -->
+<div class="step-view" id="step2">
+  <div class="form-card">
+    <div class="form-card-title">📅 실험 날짜 선택</div>
+    <div class="form-card-desc">실험을 진행할 날짜를 선택하세요. 빨간 점은 이미 예약이 있는 날짜입니다.</div>
+
+    <div class="info-box warning">
+      <span class="icon">⚠️</span>
+      <span>오늘 이후 날짜만 선택 가능합니다. 주말과 공휴일에는 실험실 사용이 불가합니다.</span>
+    </div>
+
+    <div class="calendar-mini">
+      <div class="cal-header">
+        <button>◀</button>
+        <span class="cal-month">2026년 4월</span>
+        <button>▶</button>
+      </div>
+      <div class="cal-weekdays">
+        <span style="color:#ef4444">일</span><span>월</span><span>화</span><span>수</span><span>목</span><span>금</span><span style="color:#3b82f6">토</span>
+      </div>
+      <div class="cal-days">
+        <div class="cal-day other disabled">29</div><div class="cal-day other disabled">30</div><div class="cal-day other disabled">31</div>
+        <div class="cal-day disabled">1</div><div class="cal-day disabled">2</div><div class="cal-day disabled">3</div><div class="cal-day disabled">4</div>
+        <div class="cal-day disabled">5</div><div class="cal-day disabled">6</div><div class="cal-day disabled">7</div><div class="cal-day disabled" style="font-weight:700;color:var(--primary)">8</div>
+        <div class="cal-day" onclick="selectDay(this)">9</div><div class="cal-day" onclick="selectDay(this)">10<div class="dot"></div></div><div class="cal-day disabled">11</div>
+        <div class="cal-day disabled">12</div><div class="cal-day" onclick="selectDay(this)">13</div><div class="cal-day selected" onclick="selectDay(this)">14</div>
+        <div class="cal-day" onclick="selectDay(this)">15<div class="dot"></div></div><div class="cal-day" onclick="selectDay(this)">16</div><div class="cal-day" onclick="selectDay(this)">17</div><div class="cal-day disabled">18</div>
+        <div class="cal-day disabled">19</div><div class="cal-day" onclick="selectDay(this)">20</div><div class="cal-day" onclick="selectDay(this)">21</div>
+        <div class="cal-day" onclick="selectDay(this)">22</div><div class="cal-day" onclick="selectDay(this)">23</div><div class="cal-day" onclick="selectDay(this)">24<div class="dot"></div></div><div class="cal-day disabled">25</div>
+        <div class="cal-day disabled">26</div><div class="cal-day" onclick="selectDay(this)">27</div><div class="cal-day" onclick="selectDay(this)">28</div>
+        <div class="cal-day" onclick="selectDay(this)">29</div><div class="cal-day" onclick="selectDay(this)">30</div><div class="cal-day other disabled">1</div><div class="cal-day other disabled">2</div>
+      </div>
+    </div>
+    <div style="margin-top:12px; font-size:14px; font-weight:600; color:var(--primary);">선택: 2026년 4월 14일 (화)</div>
+  </div>
+
+  <div class="form-card">
+    <div class="form-card-title">🕐 시간대 선택</div>
+    <div class="form-card-desc">실험 시간대를 선택하세요. 복수 선택이 가능합니다.</div>
+
+    <div class="time-slots">
+      <div class="time-slot selected" onclick="toggleTime(this)">
+        <div class="time-name">ET</div>
+        <div class="time-desc">아침 자율학습 시간</div>
+        <div class="time-status available">✅ 사용 가능</div>
+      </div>
+      <div class="time-slot" onclick="toggleTime(this)">
+        <div class="time-name">EP1</div>
+        <div class="time-desc">점심시간 활동</div>
+        <div class="time-status available">✅ 사용 가능</div>
+      </div>
+      <div class="time-slot disabled">
+        <div class="time-name">7교시</div>
+        <div class="time-desc">화요일 동아리만 가능</div>
+        <div class="time-status full">🔒 조건부 사용</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="form-card">
+    <div class="form-card-title">🏠 실험실 선택</div>
+    <div class="form-card-desc">사용할 실험실을 선택하세요. 선택한 날짜/시간에 이미 예약된 실험실은 비활성화됩니다.</div>
+
+    <div class="lab-cards">
+      <div class="lab-card selected" onclick="selectLab(this)">
+        <div class="lab-icon">🧪</div>
+        <div class="lab-name">화학실험실</div>
+        <div class="lab-status">사용 가능</div>
+      </div>
+      <div class="lab-card" onclick="selectLab(this)">
+        <div class="lab-icon">🧬</div>
+        <div class="lab-name">생물실험실</div>
+        <div class="lab-status">사용 가능</div>
+      </div>
+      <div class="lab-card unavailable">
+        <div class="lab-icon">🔬</div>
+        <div class="lab-name">프로젝트실험실</div>
+        <div class="lab-status" style="color:var(--danger)">예약됨</div>
+      </div>
+      <div class="lab-card" onclick="selectLab(this)">
+        <div class="lab-icon">🔧</div>
+        <div class="lab-name">첨단기기실험실</div>
+        <div class="lab-status">사용 가능</div>
+      </div>
+      <div class="lab-card" onclick="selectLab(this)">
+        <div class="lab-icon">🏠</div>
+        <div class="lab-name">오픈랩</div>
+        <div class="lab-status">사용 가능</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== STEP 3: Experiment Content ==================== -->
+<div class="step-view" id="step3">
+  <div class="form-card">
+    <div class="form-card-title">📝 실험 정보</div>
+    <div class="form-card-desc">실험의 기본 정보를 입력하세요.</div>
+
+    <div class="form-group">
+      <label class="form-label">실험 제목 <span class="required">*</span></label>
+      <input class="form-input" type="text" placeholder="실험 제목을 입력하세요" value="NaOH 표준용액을 이용한 산-염기 적정">
+    </div>
+
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">첨단기기실 이용 <span class="hint">별도 장비 사용 시</span></label>
+        <select class="form-select">
+          <option>아니오</option>
+          <option>예</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">후드 사용</label>
+        <select class="form-select">
+          <option>아니오</option>
+          <option selected>예</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">실험 준비물 <span class="hint">시약 제외 기자재</span></label>
+      <textarea class="form-textarea" placeholder="뷰렛, 삼각플라스크, 스탠드, 페놀프탈레인 지시약..." style="min-height:70px">뷰렛, 삼각플라스크 250mL x 3, 스탠드, 비커 100mL x 5, 전자저울, 세척병</textarea>
+    </div>
+  </div>
+
+  <div class="form-card">
+    <div class="form-card-title">🧪 시약 정보</div>
+    <div class="form-card-desc">사용할 시약을 검색하여 추가하고, 농도와 사용량을 입력하세요.</div>
+
+    <div class="info-box">
+      <span class="icon">ℹ️</span>
+      <span>시약명을 입력하면 데이터베이스에서 자동으로 검색됩니다. 목록에서 선택하여 추가하세요.</span>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">시약 검색</label>
+      <div class="chem-search-box">
+        <input class="form-input" type="text" placeholder="시약명 또는 화학식 검색 (예: NaOH, 염산...)" value="NaOH">
+        <button class="chem-search-btn">🔍 검색</button>
+      </div>
+    </div>
+
+    <!-- Autocomplete results -->
+    <div class="chem-autocomplete">
+      <div class="chem-ac-item" onclick="this.style.display='none'">
+        <div>
+          <span class="chem-ac-name">수산화나트륨</span>
+          <span class="chem-ac-formula">NaOH</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:12px;">
+          <span class="chem-ac-state">고체</span>
+          <span class="chem-ac-add">+</span>
+        </div>
+      </div>
+      <div class="chem-ac-item">
+        <div>
+          <span class="chem-ac-name">수산화나트륨 수용액</span>
+          <span class="chem-ac-formula">NaOH(aq)</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:12px;">
+          <span class="chem-ac-state">액체</span>
+          <span class="chem-ac-add">+</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Chemical table -->
+    <div class="chem-table-wrap">
+      <table class="chem-table">
+        <thead>
+          <tr>
+            <th style="width:16%">시약명</th>
+            <th style="width:10%">화학식</th>
+            <th style="width:8%">상태</th>
+            <th style="width:14%">농도</th>
+            <th style="width:14%">사용량</th>
+            <th style="width:12%">폐기방법</th>
+            <th style="width:10%">임장여부</th>
+            <th style="width:4%"></th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="chem-name-cell">NaOH<div class="chem-formula">수산화나트륨</div></td>
+            <td>NaOH</td>
+            <td>고체</td>
+            <td><input type="text" placeholder="농도" value="0.1 M" style="width:100%"></td>
+            <td><input type="text" placeholder="사용량" value="500 mL" style="width:100%"></td>
+            <td><select style="width:100%"><option>염기</option><option>산</option><option>유기</option><option>무기</option></select></td>
+            <td><span class="badge-need">⚠️ 필요</span></td>
+            <td><button class="btn-remove">✕</button></td>
+          </tr>
+          <tr>
+            <td class="chem-name-cell">HCl<div class="chem-formula">염산</div></td>
+            <td>HCl</td>
+            <td>액체</td>
+            <td><input type="text" placeholder="농도" value="0.1 M" style="width:100%"></td>
+            <td><input type="text" placeholder="사용량" value="250 mL" style="width:100%"></td>
+            <td><select style="width:100%"><option>산</option><option>염기</option><option>유기</option><option>무기</option></select></td>
+            <td><span class="badge-need">⚠️ 필요</span></td>
+            <td><button class="btn-remove">✕</button></td>
+          </tr>
+          <tr>
+            <td class="chem-name-cell">페놀프탈레인<div class="chem-formula">C₂₀H₁₄O₄</div></td>
+            <td>C₂₀H₁₄O₄</td>
+            <td>지시약</td>
+            <td><input type="text" placeholder="농도" value="" disabled style="width:100%;background:#f1f5f9"></td>
+            <td><input type="text" placeholder="사용량" value="5 mL" style="width:100%"></td>
+            <td><select style="width:100%"><option>유기</option><option>산</option><option>염기</option><option>무기</option></select></td>
+            <td><span class="badge-noneed">✅ 불필요</span></td>
+            <td><button class="btn-remove">✕</button></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="chem-validate-bar">
+      <div>
+        <span style="font-size:13px;color:var(--text-muted);">시약 3종 추가됨</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:12px;">
+        <span class="validate-status ok">✅ 검증 완료</span>
+        <button class="validate-btn">시약 정보 검증</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== STEP 4: Safety Plan ==================== -->
+<div class="step-view" id="step4">
+  <div class="form-card">
+    <div class="form-card-title">📝 실험 과정</div>
+    <div class="form-card-desc">실험의 단계별 과정을 작성하세요.</div>
+
+    <div class="form-group">
+      <label class="form-label">실험 과정 <span class="required">*</span></label>
+      <textarea class="form-textarea" style="min-height:120px" placeholder="1. NaOH 고체를 전자저울로 정량한다.&#10;2. 증류수에 용해하여 0.1M 표준용액을 제조한다.&#10;3. ...">1. NaOH 고체 0.4g을 전자저울로 정량한다.
+2. 100mL 부피플라스크에 증류수와 함께 용해하여 0.1M NaOH 표준용액을 제조한다.
+3. 뷰렛에 NaOH 표준용액을 채운다.
+4. 삼각플라스크에 0.1M HCl 25mL를 넣고 페놀프탈레인 지시약 2~3방울을 떨어뜨린다.
+5. 뷰렛의 NaOH를 천천히 적가하며 변색점을 관찰한다.
+6. 3회 반복 실험하여 평균값을 구한다.</textarea>
+    </div>
+  </div>
+
+  <div class="form-card">
+    <div class="form-card-title">🧹 실험 뒷정리</div>
+    <div class="form-card-desc">실험 종료 후 정리 방법을 작성하세요.</div>
+
+    <div class="form-group">
+      <label class="form-label">뒷정리 방법 <span class="required">*</span></label>
+      <textarea class="form-textarea" style="min-height:80px">1. 사용한 NaOH, HCl 용액은 중화 후 폐수통(염기)에 버린다.
+2. 유리 기구는 증류수로 3회 세척 후 건조대에 놓는다.
+3. 실험대를 닦고, 가스밸브·수도꼭지를 확인한다.</textarea>
+    </div>
+  </div>
+
+  <div class="form-card">
+    <div class="form-card-title">⚠️ 실험시 주의사항</div>
+    <div class="form-card-desc">실험 중 주의해야 할 안전 사항을 작성하세요.</div>
+
+    <div class="form-group">
+      <label class="form-label">주의사항 <span class="required">*</span></label>
+      <textarea class="form-textarea" style="min-height:80px">1. NaOH는 강염기이므로 피부 접촉 시 즉시 물로 씻는다.
+2. HCl 사용 시 후드 안에서 작업한다.
+3. 보안경과 실험복, 라텍스 장갑을 반드시 착용한다.</textarea>
+    </div>
+  </div>
+
+  <div class="form-card">
+    <div class="form-card-title">🦺 안전장구 선택</div>
+    <div class="form-card-desc">실험에 필요한 안전장구를 모두 선택하세요.</div>
+
+    <div class="safety-grid">
+      <div class="safety-item selected" onclick="toggleSafety(this)">
+        <span class="safety-icon">🥼</span> 실험복
+      </div>
+      <div class="safety-item selected" onclick="toggleSafety(this)">
+        <span class="safety-icon">🥽</span> 보안경
+      </div>
+      <div class="safety-item" onclick="toggleSafety(this)">
+        <span class="safety-icon">👟</span> 덮개신발
+      </div>
+      <div class="safety-item selected" onclick="toggleSafety(this)">
+        <span class="safety-icon">🧤</span> 라텍스 장갑
+      </div>
+      <div class="safety-item" onclick="toggleSafety(this)">
+        <span class="safety-icon">🧤</span> 내열장갑
+      </div>
+      <div class="safety-item" onclick="toggleSafety(this)">
+        <span class="safety-icon">🧤</span> 산 방호장갑
+      </div>
+      <div class="safety-item" onclick="toggleSafety(this)">
+        <span class="safety-icon">📦</span> 기타
+      </div>
+    </div>
+  </div>
+
+  <div class="form-card">
+    <div class="form-card-title">👨‍🏫 지도교사 선택</div>
+    <div class="form-card-desc">실험을 지도할 교사를 선택하세요.</div>
+
+    <div class="info-box warning">
+      <span class="icon">⚠️</span>
+      <span>시약 중 <strong>교사 임장이 필요한 시약</strong>이 포함되어 있습니다. 반드시 지도교사를 선택해 주세요.</span>
+    </div>
+
+    <div class="teacher-cards">
+      <div class="teacher-card selected" onclick="selectTeacher(this)">
+        <div class="teacher-avatar">홍</div>
+        <div class="teacher-info">
+          <div class="teacher-name">홍길동</div>
+          <div class="teacher-subject">화학</div>
+        </div>
+      </div>
+      <div class="teacher-card" onclick="selectTeacher(this)">
+        <div class="teacher-avatar">김</div>
+        <div class="teacher-info">
+          <div class="teacher-name">김영희</div>
+          <div class="teacher-subject">화학</div>
+        </div>
+      </div>
+      <div class="teacher-card" onclick="selectTeacher(this)">
+        <div class="teacher-avatar">이</div>
+        <div class="teacher-info">
+          <div class="teacher-name">이철수</div>
+          <div class="teacher-subject">생물</div>
+        </div>
+      </div>
+      <div class="teacher-card" onclick="selectTeacher(this)">
+        <div class="teacher-avatar">박</div>
+        <div class="teacher-info">
+          <div class="teacher-name">박민수</div>
+          <div class="teacher-subject">물리</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== STEP 5: Review & Submit ==================== -->
+<div class="step-view" id="step5">
+  <div class="form-card">
+    <div class="form-card-title">✅ 신청 내용 최종 확인</div>
+    <div class="form-card-desc">아래 내용을 확인한 후 제출하세요. 수정이 필요하면 해당 단계로 돌아가세요.</div>
+
+    <div class="review-section">
+      <div class="review-section-title">📋 기본 정보</div>
+      <div class="review-row"><div class="review-label">대표자</div><div class="review-value">30412 김민준</div></div>
+      <div class="review-row"><div class="review-label">동반자</div><div class="review-value">30415 이서연, 30423 박지호, 30428 최윤서</div></div>
+      <div class="review-row"><div class="review-label">총 인원</div><div class="review-value">4명</div></div>
+      <div class="review-row"><div class="review-label">목적</div><div class="review-value">학급활동</div></div>
+    </div>
+
+    <div class="review-section">
+      <div class="review-section-title">📅 일정</div>
+      <div class="review-row"><div class="review-label">날짜</div><div class="review-value">2026년 4월 14일 (화)</div></div>
+      <div class="review-row"><div class="review-label">시간</div><div class="review-value">ET</div></div>
+      <div class="review-row"><div class="review-label">실험실</div><div class="review-value">🧪 화학실험실</div></div>
+    </div>
+
+    <div class="review-section">
+      <div class="review-section-title">🧪 실험 내용</div>
+      <div class="review-row"><div class="review-label">제목</div><div class="review-value">NaOH 표준용액을 이용한 산-염기 적정</div></div>
+      <div class="review-row"><div class="review-label">후드 사용</div><div class="review-value">예</div></div>
+      <div class="review-row"><div class="review-label">시약</div>
+        <div class="review-value">
+          <div style="margin-bottom:4px;">NaOH (0.1 M, 500 mL) — <span style="color:#92400e;font-weight:600;">⚠️ 임장필요</span></div>
+          <div style="margin-bottom:4px;">HCl (0.1 M, 250 mL) — <span style="color:#92400e;font-weight:600;">⚠️ 임장필요</span></div>
+          <div>페놀프탈레인 (5 mL) — <span style="color:#065f46;">✅ 불필요</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="review-section">
+      <div class="review-section-title">🦺 안전 계획</div>
+      <div class="review-row"><div class="review-label">안전장구</div><div class="review-value">실험복, 보안경, 라텍스 장갑</div></div>
+      <div class="review-row"><div class="review-label">지도교사</div><div class="review-value">홍길동 (화학)</div></div>
+    </div>
+  </div>
+
+  <div class="form-card">
+    <div class="form-card-title">📜 실험실 사용 규정 동의</div>
+    <div class="form-card-desc">실험실 사용 규정을 읽고 동의해 주세요.</div>
+
+    <div class="agreement-box">
+      <p><strong>과학 실험·실습실 사용 규정</strong></p>
+      <p>1. 실험실은 반드시 신청된 시간에만 사용합니다.</p>
+      <p>2. 실험 시작 전 안전장구를 착용하고, 실험 후 정리정돈을 합니다.</p>
+      <p>3. 시약은 지정된 양만 사용하고, 남은 시약은 정해진 방법으로 처리합니다.</p>
+      <p>4. 교사 임장이 필요한 시약 사용 시, 지도교사 입회 없이 실험을 진행하지 않습니다.</p>
+      <p>5. 실험실 내 음식물 반입 및 장난을 금합니다.</p>
+      <p>6. 비상 상황 시 즉시 지도교사에게 보고합니다.</p>
+      <p>7. 위 규정을 위반할 경우 실험실 사용 제한 조치가 있을 수 있습니다.</p>
+    </div>
+
+    <div class="agreement-check checked" onclick="toggleAgreement(this)">
+      <span class="check-icon">☑️</span>
+      <span>위 실험실 사용 규정을 모두 읽었으며, 이에 동의합니다.</span>
+    </div>
+  </div>
+</div>
+
+</div><!-- /main -->
+
+<!-- Bottom Navigation -->
+<div class="bottom-nav">
+  <div class="bottom-nav-inner">
+    <button class="nav-btn draft" id="btnDraft" onclick="alert('임시저장 완료!')">💾 임시저장</button>
+    <div class="step-indicator" id="stepIndicator">Step 1 / 5</div>
+    <div style="display:flex;gap:8px;">
+      <button class="nav-btn prev" id="btnPrev" onclick="prevStep()" style="display:none">← 이전</button>
+      <button class="nav-btn next" id="btnNext" onclick="nextStep()">다음 →</button>
+      <button class="nav-btn submit" id="btnSubmit" onclick="alert('신청서가 제출되었습니다!')" style="display:none">🚀 제출하기</button>
+    </div>
+  </div>
+</div>
+
+<script>
+var currentStep = 1;
+
+function goStep(n) {
+  currentStep = n;
+  for (var i = 1; i <= 5; i++) {
+    document.getElementById('step' + i).classList.toggle('active', i === n);
+    var si = document.getElementById('si' + i);
+    si.classList.remove('active', 'done');
+    if (i < n) si.classList.add('done');
+    else if (i === n) si.classList.add('active');
+  }
+  document.getElementById('progressSteps').className = 'progress-steps step-' + n;
+
+  // View controls
+  document.querySelectorAll('.view-btn-ctrl').forEach(function(b, i) {
+    b.classList.toggle('active', i === n - 1);
+  });
+
+  // Bottom nav
+  document.getElementById('btnPrev').style.display = n > 1 ? '' : 'none';
+  document.getElementById('btnNext').style.display = n < 5 ? '' : 'none';
+  document.getElementById('btnSubmit').style.display = n === 5 ? '' : 'none';
+  document.getElementById('stepIndicator').textContent = 'Step ' + n + ' / 5';
+
+  window.scrollTo(0, 0);
+}
+
+function nextStep() { if (currentStep < 5) goStep(currentStep + 1); }
+function prevStep() { if (currentStep > 1) goStep(currentStep - 1); }
+
+function selectPurpose(el) {
+  document.querySelectorAll('.purpose-card').forEach(function(c) { c.classList.remove('selected'); });
+  el.classList.add('selected');
+}
+function selectDay(el) {
+  document.querySelectorAll('.cal-day').forEach(function(c) { c.classList.remove('selected'); });
+  el.classList.add('selected');
+}
+function toggleTime(el) {
+  if (!el.classList.contains('disabled')) el.classList.toggle('selected');
+}
+function selectLab(el) {
+  document.querySelectorAll('.lab-card').forEach(function(c) { c.classList.remove('selected'); });
+  el.classList.add('selected');
+}
+function toggleSafety(el) { el.classList.toggle('selected'); }
+function selectTeacher(el) {
+  document.querySelectorAll('.teacher-card').forEach(function(c) { c.classList.remove('selected'); });
+  el.classList.add('selected');
+}
+function toggleAgreement(el) { el.classList.toggle('checked'); }
+</script>
+
+</body>
+</html>

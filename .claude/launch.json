@@ -1,0 +1,65 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "game",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["server.js"],
+      "port": 3000
+    },
+    {
+      "name": "mockup-server",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["-y", "http-server", "mockups", "-p", "8090", "--cors", "-c-1"],
+      "port": 8090
+    },
+    {
+      "name": "grade-analyzer",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["-y", "http-server", "grade-analyzer", "-p", "8091", "--cors", "-c-1"],
+      "port": 8091
+    },
+    {
+      "name": "admission-dev",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["--prefix", "admission-manager", "run", "dev:react"],
+      "port": 3000
+    },
+    {
+      "name": "goip-admin",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["-y", "http-server", "고입전형관리", "-p", "5504", "--cors", "-c-1"],
+      "port": 5504
+    },
+    {
+      "name": "sign-app",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["-y", "http-server", "입학전형위원_전자서명", "-p", "8092", "--cors", "-c-1"],
+      "port": 8092
+    },
+    {
+      "name": "sigfig-game",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["significant-figures-game/server.js"],
+      "port": 8093
+    },
+    {
+      "name": "personal-color",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["personal-color-analyzer/server.js"],
+      "port": 5000,
+      "env": { "NODE_TLS_REJECT_UNAUTHORIZED": "0" }
+    },
+    {
+      "name": "presentation-dev",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["node_modules/react-scripts/bin/react-scripts.js", "start"],
+      "port": 3002,
+      "cwd": "smart-presentation",
+      "env": {
+        "PORT": "3002",
+        "BROWSER": "none"
+      }
+    }
+  ]
+}

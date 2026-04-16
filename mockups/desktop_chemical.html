@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=1280, initial-scale=1.0">
+<title>데스크탑 시약 목록 목업</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+:root { --primary: #2563eb; --primary-light: #dbeafe; --success: #16a34a; --warning: #f59e0b; --danger: #dc2626; --bg: #f1f5f9; --surface: #ffffff; --text: #1e293b; --text-muted: #64748b; --border: #e2e8f0; --shadow: 0 1px 3px rgba(0,0,0,0.08); --sidebar-w: 230px; }
+body { font-family: 'Pretendard', -apple-system, 'Noto Sans KR', sans-serif; background: var(--bg); color: var(--text); width: 1280px; margin: 0 auto; min-height: 900px; display: flex; }
+.sidebar { width: var(--sidebar-w); background: var(--surface); border-right: 1px solid var(--border); display: flex; flex-direction: column; position: fixed; top: 0; left: 50%; margin-left: -640px; height: 100vh; z-index: 50; }
+.sidebar-header { padding: 24px 20px 20px; border-bottom: 1px solid var(--border); }
+.sidebar-logo { font-size: 24px; margin-bottom: 6px; }
+.sidebar-title { font-size: 15px; font-weight: 800; }
+.sidebar-subtitle { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+.sidebar-nav { flex: 1; padding: 12px 0; }
+.sidebar-section { padding: 10px 20px 6px; font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px; }
+.sidebar-item { display: flex; align-items: center; gap: 12px; padding: 12px 20px; font-size: 14px; font-weight: 600; color: var(--text-muted); border: none; background: none; width: 100%; text-align: left; border-left: 3px solid transparent; }
+.sidebar-item.active { background: var(--primary-light); color: var(--primary); border-left-color: var(--primary); font-weight: 700; }
+.sidebar-item .icon { font-size: 18px; width: 24px; text-align: center; }
+.sidebar-divider { height: 1px; background: var(--border); margin: 8px 16px; }
+.sidebar-footer { padding: 16px 20px; border-top: 1px solid var(--border); }
+.sidebar-footer-item { display: flex; align-items: center; justify-content: space-between; padding: 10px 0; font-size: 13px; font-weight: 600; color: var(--text-muted); }
+.toggle { width: 40px; height: 22px; background: #cbd5e1; border-radius: 11px; position: relative; }
+.toggle::after { content:''; position: absolute; top: 2px; left: 2px; width: 18px; height: 18px; background: white; border-radius: 50%; box-shadow: 0 1px 3px rgba(0,0,0,0.2); }
+.main { flex: 1; margin-left: var(--sidebar-w); padding: 0; }
+.main-header { padding: 24px 32px 0; display: flex; justify-content: space-between; align-items: center; }
+.main-title { font-size: 22px; font-weight: 800; }
+.header-actions { display: flex; gap: 8px; }
+.h-btn { padding: 8px 14px; border: 1.5px solid var(--border); border-radius: 8px; background: var(--surface); font-size: 12px; font-weight: 600; color: var(--text-muted); cursor: pointer; }
+.filter-bar { background: var(--surface); margin: 16px 32px 0; border-radius: 14px; padding: 16px 20px; box-shadow: var(--shadow); }
+.filter-row { display: flex; gap: 10px; align-items: center; margin-bottom: 10px; }
+.filter-row:last-child { margin-bottom: 0; }
+.f-label { font-size: 13px; font-weight: 700; color: var(--text-muted); min-width: 45px; }
+.f-input { padding: 9px 14px; border: 1.5px solid var(--border); border-radius: 8px; font-size: 13px; background: var(--bg); width: 130px; text-align: center; color: var(--text); }
+.f-sep { color: var(--text-muted); }
+.f-quick { padding: 7px 14px; border: 1.5px solid var(--border); border-radius: 8px; background: var(--surface); font-size: 12px; font-weight: 600; color: var(--text-muted); }
+.f-quick.active { background: var(--primary); color: white; border-color: var(--primary); }
+.f-select { padding: 9px 14px; border: 1.5px solid var(--border); border-radius: 8px; font-size: 13px; background: var(--bg); min-width: 120px; color: var(--text); }
+.f-btn { padding: 9px 24px; background: var(--primary); color: white; border: none; border-radius: 8px; font-size: 13px; font-weight: 700; }
+.stats-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; padding: 16px 32px; }
+.stat-card { background: var(--surface); border-radius: 12px; padding: 16px; text-align: center; box-shadow: var(--shadow); }
+.stat-num { font-size: 28px; font-weight: 800; color: var(--primary); }
+.stat-label { font-size: 13px; color: var(--text-muted); font-weight: 600; }
+.table-section { margin: 0 32px 16px; background: var(--surface); border-radius: 14px; overflow: hidden; box-shadow: var(--shadow); }
+.group-header { padding: 14px 20px; background: #f8fafc; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 15px; }
+.group-badge { background: var(--primary-light); color: var(--primary); padding: 3px 10px; border-radius: 10px; font-size: 12px; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th { padding: 10px 14px; text-align: left; font-weight: 700; color: var(--text-muted); font-size: 12px; border-bottom: 2px solid var(--border); background: #fafbfc; cursor: pointer; }
+th:hover { background: #eef2f7; }
+td { padding: 10px 14px; border-bottom: 1px solid #f1f5f9; }
+tbody tr:hover { background: #f8fafc; }
+.badge { padding: 3px 8px; border-radius: 10px; font-size: 11px; font-weight: 700; }
+.badge-liquid { background: #dbeafe; color: #1e3a8a; }
+.badge-solid { background: #fef3c7; color: #92400e; }
+.status-badge { padding: 3px 8px; border-radius: 10px; font-size: 11px; font-weight: 700; }
+.s-pending { background: #fef3c7; color: #92400e; }
+.s-approved { background: #d1fae5; color: #065f46; }
+</style>
+</head>
+<body>
+<aside class="sidebar">
+  <div class="sidebar-header"><div class="sidebar-logo">🔬</div><div class="sidebar-title">과학 실험·실습실</div><div class="sidebar-subtitle">관리 시스템 v3.2</div></div>
+  <nav class="sidebar-nav">
+    <div class="sidebar-section">메뉴</div>
+    <button class="sidebar-item"><span class="icon">📊</span> 대시보드</button>
+    <button class="sidebar-item active"><span class="icon">📦</span> 시약 목록</button>
+    <button class="sidebar-item"><span class="icon">👥</span> 학생 명단</button>
+    <button class="sidebar-item"><span class="icon">🧑‍🏫</span> 임장 일정</button>
+    <div class="sidebar-divider"></div>
+    <div class="sidebar-section">관리</div>
+    <button class="sidebar-item"><span class="icon">📝</span> 지도일지 작성</button>
+    <button class="sidebar-item"><span class="icon">📊</span> 지도 통계</button>
+    <button class="sidebar-item"><span class="icon">🚫</span> 신청 제한 관리</button>
+  </nav>
+  <div class="sidebar-footer">
+    <div class="sidebar-footer-item"><span>🌙 다크모드</span><div class="toggle"></div></div>
+    <div class="sidebar-footer-item" style="color:var(--danger);">🚪 로그아웃</div>
+  </div>
+</aside>
+<main class="main">
+  <div class="main-header">
+    <div class="main-title">📦 시약 목록</div>
+    <div class="header-actions"><button class="h-btn">🖨️ 인쇄</button><button class="h-btn">📥 엑셀 내보내기</button></div>
+  </div>
+  <div class="filter-bar">
+    <div class="filter-row">
+      <span class="f-label">기간</span>
+      <input class="f-input" value="2026-04-01" readonly><span class="f-sep">~</span><input class="f-input" value="2026-04-08" readonly>
+      <button class="f-quick active">오늘</button><button class="f-quick">이번 주</button><button class="f-quick">이번 달</button>
+      <button class="f-btn">조회</button>
+    </div>
+    <div class="filter-row">
+      <span class="f-label">필터</span>
+      <select class="f-select"><option>승인상태 전체</option></select>
+      <select class="f-select"><option>실험실 전체</option></select>
+      <select class="f-select"><option>시간 전체</option></select>
+      <select class="f-select"><option>정렬: 시약명 오름차순</option></select>
+      <select class="f-select"><option>그룹화: 실험실별</option></select>
+    </div>
+  </div>
+  <div class="stats-grid">
+    <div class="stat-card"><div class="stat-num">15</div><div class="stat-label">시약 종류</div></div>
+    <div class="stat-card"><div class="stat-num">28</div><div class="stat-label">총 신청건</div></div>
+    <div class="stat-card"><div class="stat-num">04.01~08</div><div class="stat-label">조회 기간</div></div>
+  </div>
+  <div class="table-section">
+    <div class="group-header">🧪 화학실험실 <span class="group-badge">6건</span></div>
+    <table><thead><tr><th>시약명 ↕</th><th>용량</th><th>단위</th><th>상태</th><th>폐기방법</th><th>날짜 ↕</th><th>시간</th><th>신청자</th><th>승인상태</th></tr></thead>
+    <tbody>
+      <tr><td><strong>NaOH (수산화나트륨)</strong></td><td>50</td><td>mL</td><td><span class="badge badge-liquid">액체</span></td><td>중화처리</td><td>04-08</td><td>ET</td><td>김민준(30412)</td><td><span class="status-badge s-pending">⏳ 대기</span></td></tr>
+      <tr><td><strong>HCl (염산)</strong></td><td>30</td><td>mL</td><td><span class="badge badge-liquid">액체</span></td><td>중화처리</td><td>04-08</td><td>ET</td><td>김민준(30412)</td><td><span class="status-badge s-pending">⏳ 대기</span></td></tr>
+      <tr><td><strong>페놀프탈레인</strong></td><td>5</td><td>mL</td><td><span class="badge badge-liquid">액체</span></td><td>유기폐액</td><td>04-08</td><td>ET</td><td>김민준(30412)</td><td><span class="status-badge s-pending">⏳ 대기</span></td></tr>
+      <tr><td><strong>CuSO₄ (황산구리)</strong></td><td>20</td><td>g</td><td><span class="badge badge-solid">고체</span></td><td>중금속폐액</td><td>04-09</td><td>EP1</td><td>정우진(30108)</td><td><span class="status-badge s-pending">⏳ 대기</span></td></tr>
+    </tbody></table>
+  </div>
+  <div class="table-section">
+    <div class="group-header">🧬 생물실험실 <span class="group-badge">3건</span></div>
+    <table><thead><tr><th>시약명 ↕</th><th>용량</th><th>단위</th><th>상태</th><th>폐기방법</th><th>날짜 ↕</th><th>시간</th><th>신청자</th><th>승인상태</th></tr></thead>
+    <tbody>
+      <tr><td><strong>메틸렌블루</strong></td><td>10</td><td>mL</td><td><span class="badge badge-liquid">액체</span></td><td>유기폐액</td><td>04-07</td><td>EP1</td><td>박서연(20315)</td><td><span class="status-badge s-approved">✅ 1차승인</span></td></tr>
+      <tr><td><strong>아세트산카민</strong></td><td>5</td><td>mL</td><td><span class="badge badge-liquid">액체</span></td><td>유기폐액</td><td>04-07</td><td>EP1</td><td>박서연(20315)</td><td><span class="status-badge s-approved">✅ 1차승인</span></td></tr>
+    </tbody></table>
+  </div>
+</main>
+</body>
+</html>

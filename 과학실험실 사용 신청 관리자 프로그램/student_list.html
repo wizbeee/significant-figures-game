@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>학생 명단</title>
+  <base target="_top">
+  <?!= include('common_styles'); ?>
+</head>
+<body>
+  <!-- 서버에서 웹앱 URL 전달 -->
+  <script>
+    var APP_BASE_URL = '<?= ScriptApp.getService().getUrl() ?>';
+  </script>
+  
+  <?!= include('desktop_sidebar'); ?>
+  <?!= include('student_list_body'); ?>
+  <?!= include('student_list_scripts'); ?>
+</body>
+</html>

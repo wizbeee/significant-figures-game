@@ -1,0 +1,76 @@
+<!-- ===== 시약 목록 — 데스크탑 기능 완전 반영 ===== -->
+
+<!-- 날짜 선택 -->
+<div class="date-bar">
+  <div class="date-row">
+    <input class="date-input" type="date" id="mc-dateFrom">
+    <span class="date-sep">~</span>
+    <input class="date-input" type="date" id="mc-dateTo">
+    <button class="filter-search-btn" onclick="mcLoadData()" style="min-width:52px;">조회</button>
+  </div>
+  <div class="quick-row">
+    <button class="quick-btn" onclick="mcQuick('today',this)">오늘</button>
+    <button class="quick-btn active" onclick="mcQuick('week',this)">이번 주</button>
+    <button class="quick-btn" onclick="mcQuick('month',this)">이번 달</button>
+    <button class="quick-btn" onclick="mcQuick('all',this)">전체</button>
+  </div>
+</div>
+
+<!-- 필터 컨트롤 -->
+<div class="filter-controls">
+  <div class="filter-row" style="display:flex;gap:6px;">
+    <select class="filter-select-sm" id="mc-approvalFilter" onchange="mcProcessAndRender()">
+      <option value="approved">승인된 신청만</option>
+      <option value="">전체 상태</option>
+      <option value="pending">대기중</option>
+    </select>
+    <select class="filter-select-sm" id="mc-labFilter" onchange="mcProcessAndRender()">
+      <option value="">실험실 전체</option>
+    </select>
+    <select class="filter-select-sm" id="mc-timeFilter" onchange="mcProcessAndRender()">
+      <option value="">시간 전체</option>
+      <option value="ET">ET</option>
+      <option value="EP1">EP1</option>
+      <option value="7교시">7교시</option>
+    </select>
+  </div>
+  <div class="filter-row" style="display:flex;gap:6px;">
+    <select class="filter-select-sm" id="mc-groupBy" onchange="mcRender()">
+      <option value="lab">실험실별</option>
+      <option value="time">시간별</option>
+      <option value="state">상태별</option>
+      <option value="date">날짜별</option>
+      <option value="none">그룹없음</option>
+    </select>
+    <select class="filter-select-sm" id="mc-sortBy" onchange="mcSortAndRender()">
+      <option value="name">시약명순</option>
+      <option value="lab">실험실순</option>
+      <option value="time">시간순</option>
+      <option value="state">상태순</option>
+      <option value="date">날짜순</option>
+      <option value="count-desc">신청건수↓</option>
+      <option value="count-asc">신청건수↑</option>
+    </select>
+  </div>
+</div>
+
+<!-- 통계 -->
+<div class="stats-bar">
+  <div class="mini-stat">
+    <div class="mini-stat-num" id="mc-stat-kinds">-</div>
+    <div class="mini-stat-label">시약 종류</div>
+  </div>
+  <div class="mini-stat">
+    <div class="mini-stat-num" id="mc-stat-total">-</div>
+    <div class="mini-stat-label">총 신청건</div>
+  </div>
+  <div class="mini-stat">
+    <div class="mini-stat-num" style="color:var(--text);" id="mc-stat-period">-</div>
+    <div class="mini-stat-label">조회 기간</div>
+  </div>
+</div>
+
+<!-- 시약 카드 목록 -->
+<div id="mc-card-list" style="padding:0 16px 120px;">
+  <div class="m-loading"><div class="m-loading-spinner"></div><span>데이터를 불러오는 중...</span></div>
+</div>

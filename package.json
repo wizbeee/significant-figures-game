@@ -1,0 +1,15 @@
+{
+  "name": "sigfig-game",
+  "version": "2.0.0",
+  "description": "유효숫자 마스터 - 네트워크 멀티플레이 게임",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "ws": "^8.20.0"
+  },
+  "devDependencies": {
+    "pptxgenjs": "^4.0.1"
+  }
+}

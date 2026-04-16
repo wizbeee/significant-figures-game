@@ -1,0 +1,364 @@
+<!-- teacher_schedule_body.html -->
+<div class="container">
+  <script>setActiveDesktopNav('teacher_schedule');</script>
+  <!-- 페이지 헤더 -->
+  <div class="page-header no-print">
+    <div>
+      <h1>🧑‍🏫 임장 일정</h1>
+      <p>지도교사별 임장 지도 일정을 조회하고 관리합니다</p>
+    </div>
+    <div class="header-actions">
+    </div>
+  </div>
+
+  <!-- 인쇄용 헤더 -->
+  <div id="printHeader" style="display:none;">
+    <h2 style="text-align:center;margin:0 0 8px;">임장 지도 일정</h2>
+    <p style="text-align:center;font-size:12px;color:#666;" id="printInfo"></p>
+  </div>
+
+  <!-- 조회 조건 -->
+  <div class="controls no-print">
+    <div class="control-row">
+      <div class="control-group">
+        <label>지도교사</label>
+        <div class="teacher-dropdown" id="teacherDropdown">
+          <button type="button" class="dropdown-toggle" onclick="toggleTeacherDropdown()">
+            <span id="teacherDropdownLabel">전체</span>
+            <span style="margin-left:8px;">▼</span>
+          </button>
+          <div class="dropdown-menu" id="teacherDropdownMenu" style="display:none;">
+            <label class="dropdown-item">
+              <input type="checkbox" id="teacherAll" checked onchange="toggleAllTeachers()"> 전체
+            </label>
+            <div class="dropdown-divider"></div>
+            <div id="teacherCheckboxes">
+              <!-- 교사 목록이 여기에 동적으로 추가됨 -->
+            </div>
+          </div>
+        </div>
+        <div style="font-size:11px;color:var(--text-muted);margin-top:4px;">여러 명 선택 시 비교 가능</div>
+      </div>
+      <div class="control-group">
+        <label>시작일</label>
+        <input type="date" id="dateFrom">
+      </div>
+      <div class="control-group">
+        <label>종료일</label>
+        <input type="date" id="dateTo">
+      </div>
+      <div class="control-group">
+        <label>빠른 선택</label>
+        <div style="display:flex;gap:8px;">
+          <button class="btn btn-sm btn-secondary" onclick="setQuickDate('today')">오늘</button>
+          <button class="btn btn-sm btn-secondary" onclick="setQuickDate('week')">이번 주</button>
+          <button class="btn btn-sm btn-secondary" onclick="setQuickDate('month')">이번 달</button>
+        </div>
+      </div>
+      <button class="btn btn-primary" onclick="loadData()">🔍 조회</button>
+    </div>
+
+    <!-- 필터 -->
+    <div class="control-row" style="border-top:1px solid var(--border-color);padding-top:16px;margin-top:8px;">
+      <div class="control-group">
+        <label>임장 필요 여부</label>
+        <select id="presenceFilter">
+          <option value="">전체 (함께 조회)</option>
+          <option value="need">임장 필요만</option>
+          <option value="noneed">임장 불필요만</option>
+        </select>
+      </div>
+      <div class="control-group">
+        <label>실험·실습실</label>
+        <select id="labFilter">
+          <option value="">전체</option>
+        </select>
+      </div>
+      <div class="control-group">
+        <label>시간대</label>
+        <select id="timeFilter">
+          <option value="">전체</option>
+          <option value="ET">ET</option>
+          <option value="EP1">EP1</option>
+          <option value="7교시">7교시</option>
+        </select>
+      </div>
+      <div class="control-group">
+        <label>승인 상태</label>
+        <select id="approvalFilter">
+          <option value="approved">승인된 신청만</option>
+          <option value="all">전체</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- 정렬 및 보기 모드 -->
+    <div class="control-row" style="border-top:1px solid var(--border-color);padding-top:16px;margin-top:8px;">
+      <div class="control-group">
+        <label>정렬</label>
+        <select id="sortKey">
+          <option value="날짜">날짜순</option>
+          <option value="시간">시간순</option>
+          <option value="실험실">실험실순</option>
+          <option value="대표학생">대표학생순</option>
+        </select>
+      </div>
+      <div class="control-group">
+        <label>방향</label>
+        <select id="sortDir">
+          <option value="asc">오름차순</option>
+          <option value="desc">내림차순</option>
+        </select>
+      </div>
+      <div class="control-group">
+        <label>보기 방식</label>
+        <div class="view-toggle">
+          <button class="btn btn-sm active" id="viewTableBtn" onclick="setViewMode('table')">📋 표</button>
+          <button class="btn btn-sm" id="viewCalendarBtn" onclick="setViewMode('calendar')">📅 달력</button>
+        </div>
+      </div>
+      <div style="margin-left:auto;display:flex;gap:8px;">
+        <button class="btn btn-success" onclick="printSchedule()">🖨️ 인쇄</button>
+        <button class="btn btn-info" onclick="exportCSV()">📊 엑셀</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 통계 요약 -->
+  <div class="card no-print" id="summaryCard" style="display:none;">
+    <div style="display:flex;gap:24px;flex-wrap:wrap;">
+      <div><strong>조회 기간:</strong> <span id="summaryPeriod">-</span></div>
+      <div><strong>지도교사:</strong> <span id="summaryTeacher">전체</span></div>
+      <div><strong>총 일정:</strong> <span id="summaryTotal">0</span>건</div>
+      <div><strong>임장 필요:</strong> <span id="summaryNeed" style="color:var(--warning);">0</span>건</div>
+      <div><strong>임장 불필요:</strong> <span id="summaryNoNeed" style="color:var(--success);">0</span>건</div>
+    </div>
+  </div>
+
+  <!-- 결과 영역 -->
+  <div id="resultContainer">
+    <!-- 표 보기 -->
+    <div class="table-container" id="tableView">
+      <div class="table-scroll" id="tableContainer">
+        <div class="loading">
+          <div class="loading-spinner"></div>
+          <span>데이터를 불러오는 중...</span>
+        </div>
+      </div>
+    </div>
+    <!-- 달력 보기 -->
+    <div id="calendarContainer" style="display:none;"></div>
+  </div>
+</div>
+
+<!-- 수정 모달 -->
+<div id="editModal" class="modal">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h2>📝 일정 수정</h2>
+      <button class="modal-close" onclick="hideModal('editModal')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="editAppId">
+      <div class="form-group">
+        <label>대표 학생 (읽기 전용)</label>
+        <input type="text" id="editStudent" readonly style="background:var(--bg-tertiary);">
+      </div>
+      <div class="form-group">
+        <label>실험 제목 (읽기 전용)</label>
+        <input type="text" id="editTitle" readonly style="background:var(--bg-tertiary);">
+      </div>
+      <div class="form-group">
+        <label>지도교사 *</label>
+        <input type="text" id="editTeacher" list="teacherList" required>
+      </div>
+      <div class="form-group">
+        <label>신청 실험실 *</label>
+        <select id="editLab" required></select>
+      </div>
+      <div class="form-group">
+        <label>실험할 날짜 *</label>
+        <input type="date" id="editDate" required>
+      </div>
+      <div class="form-group">
+        <label>신청 시간 *</label>
+        <select id="editTime" required>
+          <option value="ET">ET</option>
+          <option value="EP1">EP1</option>
+          <option value="7교시">7교시</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>임장지도 시작시간</label>
+        <input type="time" id="editStartTime">
+      </div>
+      <div class="form-group">
+        <label>임장지도 종료시간</label>
+        <input type="time" id="editEndTime">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="hideModal('editModal')">취소</button>
+      <button class="btn btn-primary" id="saveBtn" onclick="saveEdit()">저장</button>
+    </div>
+  </div>
+</div>
+
+<!-- ✅ 날짜별 일정 팝업 (달력에서 +N개 더 클릭 시) -->
+<div id="daySchedulePopup" class="day-schedule-popup" style="display:none;">
+  <div class="day-schedule-popup-content">
+    <div class="day-schedule-popup-header">
+      <h3 id="dayScheduleTitle">2025-01-27 일정</h3>
+      <button class="day-schedule-close" onclick="closeDaySchedulePopup()">&times;</button>
+    </div>
+    <div class="day-schedule-popup-body" id="dayScheduleBody">
+      <!-- 일정 목록이 여기에 표시됨 -->
+    </div>
+  </div>
+</div>
+
+<style>
+/* 날짜별 일정 팝업 스타일 */
+.day-schedule-popup {
+  position: fixed;
+  z-index: 1000;
+  background: rgba(0,0,0,0.3);
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.day-schedule-popup-content {
+  background: var(--bg-primary, #fff);
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+  min-width: 320px;
+  max-width: 480px;
+  max-height: 80vh;
+  overflow: hidden;
+  animation: popupFadeIn 0.2s ease;
+}
+
+@keyframes popupFadeIn {
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.day-schedule-popup-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border-color, #e0e0e0);
+  background: var(--bg-secondary, #f5f5f5);
+}
+
+.day-schedule-popup-header h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary, #333);
+}
+
+.day-schedule-close {
+  background: none;
+  border: none;
+  font-size: 24px;
+  cursor: pointer;
+  color: var(--text-muted, #666);
+  padding: 0;
+  line-height: 1;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: background 0.2s;
+}
+
+.day-schedule-close:hover {
+  background: var(--bg-tertiary, #e0e0e0);
+  color: var(--text-primary, #333);
+}
+
+.day-schedule-popup-body {
+  padding: 16px 20px;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+.day-schedule-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px;
+  margin-bottom: 8px;
+  border-radius: 8px;
+  background: var(--bg-secondary, #f9f9f9);
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.day-schedule-item:hover {
+  background: var(--bg-tertiary, #f0f0f0);
+}
+
+.day-schedule-item:last-child {
+  margin-bottom: 0;
+}
+
+.day-schedule-item.need-presence {
+  border-left: 4px solid var(--warning, #f0ad4e);
+}
+
+.day-schedule-item.no-presence {
+  border-left: 4px solid var(--success, #5cb85c);
+}
+
+.day-schedule-time {
+  font-weight: 600;
+  color: var(--primary, #007bff);
+  min-width: 50px;
+}
+
+.day-schedule-info {
+  flex: 1;
+}
+
+.day-schedule-student {
+  font-weight: 500;
+  color: var(--text-primary, #333);
+  margin-bottom: 4px;
+}
+
+.day-schedule-detail {
+  font-size: 13px;
+  color: var(--text-muted, #666);
+}
+
+.day-schedule-teacher {
+  font-size: 12px;
+  color: var(--text-muted, #888);
+  margin-top: 4px;
+}
+
+/* 더보기 링크 스타일 개선 */
+.calendar-more-link {
+  color: var(--primary, #007bff);
+  cursor: pointer;
+  font-size: 12px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  transition: background 0.2s;
+}
+
+.calendar-more-link:hover {
+  background: var(--bg-tertiary, #e8f4ff);
+  text-decoration: underline;
+}
+</style>

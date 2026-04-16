@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=1280, initial-scale=1.0">
+<title>데스크탑 대시보드 목업</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+:root {
+  --primary: #2563eb; --primary-light: #dbeafe; --success: #16a34a;
+  --warning: #f59e0b; --danger: #dc2626; --info: #0ea5e9;
+  --bg: #f1f5f9; --surface: #ffffff; --text: #1e293b;
+  --text-muted: #64748b; --border: #e2e8f0;
+  --shadow: 0 1px 3px rgba(0,0,0,0.08); --shadow-md: 0 4px 12px rgba(0,0,0,0.08);
+  --sidebar-w: 230px;
+}
+body { font-family: 'Pretendard', -apple-system, 'Noto Sans KR', sans-serif; background: var(--bg); color: var(--text); width: 1280px; margin: 0 auto; min-height: 900px; display: flex; }
+
+/* ── 사이드바 ── */
+.sidebar {
+  width: var(--sidebar-w); background: var(--surface); border-right: 1px solid var(--border);
+  display: flex; flex-direction: column; position: fixed; top: 0; left: 50%;
+  margin-left: -640px; height: 100vh; z-index: 50;
+}
+.sidebar-header { padding: 24px 20px 20px; border-bottom: 1px solid var(--border); }
+.sidebar-logo { font-size: 24px; margin-bottom: 6px; }
+.sidebar-title { font-size: 15px; font-weight: 800; color: var(--text); letter-spacing: -0.3px; }
+.sidebar-subtitle { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+
+.sidebar-nav { flex: 1; padding: 12px 0; }
+.sidebar-section { padding: 10px 20px 6px; font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px; }
+.sidebar-item {
+  display: flex; align-items: center; gap: 12px; padding: 12px 20px;
+  font-size: 14px; font-weight: 600; color: var(--text-muted); cursor: pointer;
+  border: none; background: none; width: 100%; text-align: left;
+  transition: all 0.15s; border-left: 3px solid transparent;
+}
+.sidebar-item:hover { background: #f8fafc; color: var(--text); }
+.sidebar-item.active { background: var(--primary-light); color: var(--primary); border-left-color: var(--primary); font-weight: 700; }
+.sidebar-item .icon { font-size: 18px; width: 24px; text-align: center; }
+.sidebar-item .badge { margin-left: auto; background: var(--danger); color: white; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 700; }
+
+.sidebar-divider { height: 1px; background: var(--border); margin: 8px 16px; }
+
+.sidebar-footer { padding: 16px 20px; border-top: 1px solid var(--border); }
+.sidebar-footer-item {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 0; font-size: 13px; font-weight: 600; color: var(--text-muted);
+  cursor: pointer; border: none; background: none; width: 100%; text-align: left;
+}
+.sidebar-footer-item .icon { margin-right: 10px; }
+.toggle { width: 40px; height: 22px; background: #cbd5e1; border-radius: 11px; position: relative; cursor: pointer; }
+.toggle::after { content: ''; position: absolute; top: 2px; left: 2px; width: 18px; height: 18px; background: white; border-radius: 50%; box-shadow: 0 1px 3px rgba(0,0,0,0.2); }
+
+/* ── 메인 콘텐츠 ── */
+.main { flex: 1; margin-left: var(--sidebar-w); padding: 0; }
+
+.main-header { padding: 24px 32px 0; }
+.main-title { font-size: 22px; font-weight: 800; }
+.main-subtitle { font-size: 13px; color: var(--text-muted); margin-top: 4px; }
+
+/* 통계 카드 */
+.stats-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 14px; padding: 20px 32px 16px; }
+.stat-card { background: var(--surface); border-radius: 14px; padding: 20px; text-align: center; box-shadow: var(--shadow); border: 2px solid transparent; cursor: pointer; transition: all 0.15s; }
+.stat-card:hover { box-shadow: var(--shadow-md); transform: translateY(-2px); }
+.stat-card.active { border-color: var(--primary); background: var(--primary-light); }
+.stat-number { font-size: 36px; font-weight: 800; line-height: 1.1; }
+.stat-label { font-size: 13px; font-weight: 600; color: var(--text-muted); margin-top: 4px; }
+.stat-sublabel { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+.stat-card.active .stat-number { color: var(--primary); }
+.stat-card[data-s="pending"] .stat-number { color: #b45309; }
+.stat-card[data-s="first"] .stat-number { color: #15803d; }
+.stat-card[data-s="final"] .stat-number { color: #1d4ed8; }
+.stat-card[data-s="rejected"] .stat-number { color: #dc2626; }
+
+/* 필터 바 */
+.filter-bar { background: var(--surface); margin: 0 32px; border-radius: 14px; padding: 18px 20px; box-shadow: var(--shadow); }
+.filter-row { display: flex; gap: 10px; align-items: center; margin-bottom: 10px; }
+.filter-row:last-child { margin-bottom: 0; }
+.f-label { font-size: 13px; font-weight: 700; color: var(--text-muted); min-width: 45px; }
+.f-input, .f-select { padding: 9px 14px; border: 1.5px solid var(--border); border-radius: 8px; font-size: 13px; background: var(--bg); color: var(--text); }
+.f-select { min-width: 130px; }
+.f-input { flex: 1; }
+.f-date { width: 130px; text-align: center; }
+.f-sep { color: var(--text-muted); }
+.f-quick { padding: 7px 14px; border: 1.5px solid var(--border); border-radius: 8px; background: var(--surface); font-size: 12px; font-weight: 600; color: var(--text-muted); cursor: pointer; }
+.f-quick.active { background: var(--primary); color: white; border-color: var(--primary); }
+.f-search-btn { padding: 9px 24px; background: var(--primary); color: white; border: none; border-radius: 8px; font-size: 13px; font-weight: 700; cursor: pointer; }
+.f-reset { padding: 9px 14px; border: 1.5px solid var(--border); border-radius: 8px; background: var(--surface); font-size: 12px; font-weight: 600; color: var(--text-muted); cursor: pointer; }
+.f-advanced { font-size: 12px; color: var(--primary); background: none; border: none; cursor: pointer; font-weight: 600; margin-left: auto; }
+
+/* 도구 바 */
+.tool-bar { padding: 12px 32px; display: flex; align-items: center; justify-content: space-between; }
+.result-text { font-size: 13px; color: var(--text-muted); }
+.result-text strong { color: var(--text); }
+.chips { display: flex; gap: 6px; margin-left: 12px; }
+.chip { padding: 4px 12px; background: var(--primary-light); color: var(--primary); border-radius: 16px; font-size: 11px; font-weight: 700; display: flex; align-items: center; gap: 4px; }
+.chip-x { cursor: pointer; opacity: 0.6; }
+.tool-btns { display: flex; gap: 8px; }
+.t-btn { padding: 8px 14px; border: 1.5px solid var(--border); border-radius: 8px; background: var(--surface); font-size: 12px; font-weight: 600; color: var(--text-muted); cursor: pointer; }
+
+/* 테이블 */
+.table-wrap { margin: 0 32px 20px; background: var(--surface); border-radius: 14px; overflow: hidden; box-shadow: var(--shadow); }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+thead { background: #f8fafc; }
+th { padding: 12px 12px; text-align: center; font-weight: 700; color: var(--text-muted); font-size: 12px; border-bottom: 2px solid var(--border); cursor: pointer; white-space: nowrap; }
+th:hover { background: #eef2f7; }
+td { padding: 11px 12px; text-align: center; border-bottom: 1px solid #f1f5f9; }
+tbody tr:hover { background: #f8fafc; }
+.col-chk { width: 40px; }
+input[type="checkbox"] { width: 17px; height: 17px; accent-color: var(--primary); }
+.td-left { text-align: left !important; }
+.s-name { font-weight: 600; font-size: 13px; }
+.s-id { font-size: 11px; color: var(--text-muted); }
+.td-title { text-align: left !important; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.badge { padding: 4px 10px; border-radius: 14px; font-size: 11px; font-weight: 700; }
+.b-pend { background: #fef3c7; color: #92400e; }
+.b-1st { background: #d1fae5; color: #065f46; }
+.b-fin { background: #dbeafe; color: #1e3a8a; }
+.b-rej { background: #fee2e2; color: #991b1b; }
+.a-btn { padding: 5px 10px; border-radius: 6px; font-size: 11px; font-weight: 700; border: none; cursor: pointer; margin: 0 2px; }
+.a-detail { background: var(--bg); color: var(--text); border: 1px solid var(--border); }
+.a-edit { background: #fef3c7; color: #92400e; }
+
+/* 페이지네이션 */
+.paging { padding: 14px 32px; display: flex; align-items: center; justify-content: center; gap: 4px; }
+.p-btn { min-width: 34px; height: 34px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); font-size: 13px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; color: var(--text-muted); }
+.p-btn.active { background: var(--primary); color: white; border-color: var(--primary); }
+.p-size { margin-left: 16px; font-size: 12px; color: var(--text-muted); }
+.p-size select { padding: 4px 8px; border: 1px solid var(--border); border-radius: 6px; }
+</style>
+</head>
+<body>
+
+<!-- 사이드바 -->
+<aside class="sidebar">
+  <div class="sidebar-header">
+    <div class="sidebar-logo">🔬</div>
+    <div class="sidebar-title">과학 실험·실습실</div>
+    <div class="sidebar-subtitle">관리 시스템 v3.2</div>
+  </div>
+  <nav class="sidebar-nav">
+    <div class="sidebar-section">메뉴</div>
+    <button class="sidebar-item active"><span class="icon">📊</span> 대시보드 <span class="badge">12</span></button>
+    <button class="sidebar-item"><span class="icon">📦</span> 시약 목록</button>
+    <button class="sidebar-item"><span class="icon">👥</span> 학생 명단</button>
+    <button class="sidebar-item"><span class="icon">🧑‍🏫</span> 임장 일정</button>
+    <div class="sidebar-divider"></div>
+    <div class="sidebar-section">관리</div>
+    <button class="sidebar-item"><span class="icon">📝</span> 지도일지 작성</button>
+    <button class="sidebar-item"><span class="icon">📊</span> 지도 통계</button>
+    <button class="sidebar-item"><span class="icon">🚫</span> 신청 제한 관리</button>
+  </nav>
+  <div class="sidebar-footer">
+    <div class="sidebar-footer-item"><span><span class="icon">🌙</span> 다크모드</span><div class="toggle"></div></div>
+    <div class="sidebar-footer-item" style="color:var(--danger);"><span><span class="icon">🚪</span> 로그아웃</span></div>
+  </div>
+</aside>
+
+<!-- 메인 -->
+<main class="main">
+  <div class="main-header">
+    <div class="main-title">📊 대시보드</div>
+    <div class="main-subtitle">실험·실습실 사용 신청 현황 및 관리</div>
+  </div>
+
+  <div class="stats-grid">
+    <div class="stat-card active"><div class="stat-number">42</div><div class="stat-label">전체 신청</div><div class="stat-sublabel">이번 주</div></div>
+    <div class="stat-card" data-s="pending"><div class="stat-number">12</div><div class="stat-label">대기중</div><div class="stat-sublabel">처리 필요</div></div>
+    <div class="stat-card" data-s="first"><div class="stat-number">8</div><div class="stat-label">1차승인</div><div class="stat-sublabel">최종승인 대기</div></div>
+    <div class="stat-card" data-s="final"><div class="stat-number">18</div><div class="stat-label">최종승인</div><div class="stat-sublabel">완료</div></div>
+    <div class="stat-card" data-s="rejected"><div class="stat-number">4</div><div class="stat-label">반려</div><div class="stat-sublabel">사유 확인</div></div>
+  </div>
+
+  <div class="filter-bar">
+    <div class="filter-row">
+      <span class="f-label">기간</span>
+      <input class="f-input f-date" type="text" value="2026-04-01" readonly>
+      <span class="f-sep">~</span>
+      <input class="f-input f-date" type="text" value="2026-04-08" readonly>
+      <button class="f-quick active">오늘</button>
+      <button class="f-quick">이번 주</button>
+      <button class="f-quick">이번 달</button>
+      <button class="f-quick">최근 7일</button>
+      <button class="f-search-btn">조회</button>
+      <button class="f-reset">초기화</button>
+    </div>
+    <div class="filter-row">
+      <span class="f-label">필터</span>
+      <select class="f-select"><option>실험실 전체</option><option>화학실험실</option><option>생물실험실</option><option>물리실험실</option></select>
+      <select class="f-select"><option>상태 전체</option><option>대기</option><option>1차승인</option><option>최종승인</option><option>반려</option></select>
+      <input class="f-input" type="text" placeholder="🔍 학번, 이름, 지도교사, 실험제목 검색">
+      <button class="f-advanced">▼ 고급 옵션 (정렬, 편집모드)</button>
+    </div>
+  </div>
+
+  <div class="tool-bar">
+    <div style="display:flex; align-items:center;">
+      <span class="result-text">총 <strong>42건</strong> 중 <strong>12건</strong> 표시</span>
+      <div class="chips">
+        <span class="chip">오늘 <span class="chip-x">×</span></span>
+        <span class="chip">대기 <span class="chip-x">×</span></span>
+      </div>
+    </div>
+    <div class="tool-btns">
+      <button class="t-btn">✏️ 편집모드</button>
+      <button class="t-btn">📥 엑셀 내보내기</button>
+      <button class="t-btn">🖨️ 인쇄</button>
+    </div>
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th class="col-chk"><input type="checkbox"></th>
+          <th>제출일시 ↕</th><th>대표자</th><th>실험실</th>
+          <th>실험날짜 ↕</th><th>시간</th><th>실험제목</th>
+          <th>상태</th><th>지도교사</th><th>관리</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><input type="checkbox"></td>
+          <td style="font-size:11px;color:var(--text-muted)">04-05 14:23</td>
+          <td class="td-left"><span class="s-name">김민준</span><br><span class="s-id">30412 · 3학년</span></td>
+          <td>화학실험실</td><td>04-08</td><td>ET</td>
+          <td class="td-title">NaOH 중화반응 실험 — 산·염기 적정</td>
+          <td><span class="badge b-pend">⏳ 대기</span></td><td>이승현</td>
+          <td><button class="a-btn a-detail">상세</button><button class="a-btn a-edit">편집</button></td>
+        </tr>
+        <tr>
+          <td><input type="checkbox"></td>
+          <td style="font-size:11px;color:var(--text-muted)">04-04 09:11</td>
+          <td class="td-left"><span class="s-name">박서연</span><br><span class="s-id">20315 · 2학년</span></td>
+          <td>생물실험실</td><td>04-07</td><td>EP1</td>
+          <td class="td-title">현미경을 이용한 세포 관찰 실험</td>
+          <td><span class="badge b-1st">✅ 1차승인</span></td><td>김영호</td>
+          <td><button class="a-btn a-detail">상세</button><button class="a-btn a-edit">편집</button></td>
+        </tr>
+        <tr>
+          <td><input type="checkbox"></td>
+          <td style="font-size:11px;color:var(--text-muted)">04-03 16:42</td>
+          <td class="td-left"><span class="s-name">최지우</span><br><span class="s-id">10208 · 1학년</span></td>
+          <td>물리실험실</td><td>04-07</td><td>7교시</td>
+          <td class="td-title">자유낙하 운동 실험 — 중력가속도 측정</td>
+          <td><span class="badge b-fin">✅ 최종승인</span></td><td>박준호</td>
+          <td><button class="a-btn a-detail">상세</button><button class="a-btn a-edit">편집</button></td>
+        </tr>
+        <tr>
+          <td><input type="checkbox"></td>
+          <td style="font-size:11px;color:var(--text-muted)">04-03 11:05</td>
+          <td class="td-left"><span class="s-name">이하은</span><br><span class="s-id">20501 · 2학년</span></td>
+          <td>프로젝트실</td><td>04-06</td><td>ET</td>
+          <td class="td-title">아두이노 센서 회로 구성 실습</td>
+          <td><span class="badge b-rej">❌ 반려</span></td><td>이승현</td>
+          <td><button class="a-btn a-detail">상세</button><button class="a-btn a-edit">편집</button></td>
+        </tr>
+        <tr>
+          <td><input type="checkbox"></td>
+          <td style="font-size:11px;color:var(--text-muted)">04-05 08:30</td>
+          <td class="td-left"><span class="s-name">정우진</span><br><span class="s-id">30108 · 3학년</span></td>
+          <td>화학실험실</td><td>04-09</td><td>EP1</td>
+          <td class="td-title">용액의 농도에 따른 삼투압 변화 관찰</td>
+          <td><span class="badge b-pend">⏳ 대기</span></td><td>김영호</td>
+          <td><button class="a-btn a-detail">상세</button><button class="a-btn a-edit">편집</button></td>
+        </tr>
+        <tr>
+          <td><input type="checkbox"></td>
+          <td style="font-size:11px;color:var(--text-muted)">04-06 13:15</td>
+          <td class="td-left"><span class="s-name">한소희</span><br><span class="s-id">10322 · 1학년</span></td>
+          <td>생물실험실</td><td>04-10</td><td>ET</td>
+          <td class="td-title">DNA 추출 실험</td>
+          <td><span class="badge b-pend">⏳ 대기</span></td><td>김영호</td>
+          <td><button class="a-btn a-detail">상세</button><button class="a-btn a-edit">편집</button></td>
+        </tr>
+        <tr>
+          <td><input type="checkbox"></td>
+          <td style="font-size:11px;color:var(--text-muted)">04-07 10:05</td>
+          <td class="td-left"><span class="s-name">송민서</span><br><span class="s-id">10415 · 1학년</span></td>
+          <td>물리실험실</td><td>04-11</td><td>7교시</td>
+          <td class="td-title">빛의 굴절과 전반사 실험</td>
+          <td><span class="badge b-1st">✅ 1차승인</span></td><td>박준호</td>
+          <td><button class="a-btn a-detail">상세</button><button class="a-btn a-edit">편집</button></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="paging">
+    <button class="p-btn">◀</button>
+    <button class="p-btn active">1</button>
+    <button class="p-btn">2</button>
+    <button class="p-btn">3</button>
+    <button class="p-btn">4</button>
+    <button class="p-btn">5</button>
+    <button class="p-btn">▶</button>
+    <span class="p-size">페이지당 <select><option>25건</option><option selected>50건</option><option>100건</option></select></span>
+  </div>
+</main>
+</body>
+</html>

@@ -1,0 +1,2665 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <base target="_top">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>과학 실험·실습실 사용 신청서(S동 1층 실험·실습실)</title>
+  <style>
+    /* ===== Design System Variables ===== */
+    :root {
+      --primary: #4361ee;
+      --primary-light: #eef2ff;
+      --primary-dark: #3730a3;
+      --success: #10b981;
+      --success-light: #ecfdf5;
+      --warning: #f59e0b;
+      --warning-light: #fffbeb;
+      --danger: #ef4444;
+      --danger-light: #fef2f2;
+      --bg: #f8fafc;
+      --card: #ffffff;
+      --border: #e2e8f0;
+      --text: #1e293b;
+      --text-muted: #64748b;
+      --text-light: #94a3b8;
+      --shadow: 0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.06);
+      --shadow-lg: 0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -4px rgba(0,0,0,0.1);
+      --radius: 12px;
+      --radius-sm: 8px;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: var(--bg); color: var(--text); line-height: 1.6;
+    }
+
+    /* ===== Header ===== */
+    .header {
+      background: var(--card); border-bottom: 1px solid var(--border);
+      padding: 16px 0; position: sticky; top: 0; z-index: 100;
+      box-shadow: var(--shadow);
+    }
+    .header-inner {
+      max-width: 900px; margin: 0 auto; padding: 0 24px;
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .header-logo {
+      display: flex; align-items: center; gap: 12px;
+      font-size: 18px; font-weight: 700; color: var(--primary);
+    }
+    .header-logo .icon { font-size: 28px; }
+    .header-actions { display: flex; gap: 8px; }
+    .header-btn {
+      padding: 8px 16px; border-radius: var(--radius-sm); border: 1px solid var(--border);
+      background: var(--card); color: var(--text-muted); font-size: 13px; font-weight: 600;
+      cursor: pointer; display: flex; align-items: center; gap: 6px;
+      transition: all 0.15s;
+    }
+    .header-btn:hover { border-color: var(--primary); color: var(--primary); }
+
+    /* ===== Progress Bar ===== */
+    .progress-section {
+      background: var(--card); border-bottom: 1px solid var(--border); padding: 20px 0;
+    }
+    .progress-inner { max-width: 900px; margin: 0 auto; padding: 0 24px; }
+    .progress-steps {
+      display: flex; align-items: center; justify-content: space-between; position: relative;
+    }
+    .progress-steps::before {
+      content: ''; position: absolute; top: 20px; left: 40px; right: 40px;
+      height: 3px; background: var(--border); z-index: 0;
+    }
+    .progress-steps::after {
+      content: ''; position: absolute; top: 20px; left: 40px;
+      height: 3px; background: var(--primary); z-index: 1;
+      transition: width 0.3s;
+    }
+    .progress-steps.step-1::after { width: 0%; }
+    .progress-steps.step-2::after { width: 25%; }
+    .progress-steps.step-3::after { width: 50%; }
+    .progress-steps.step-4::after { width: 75%; }
+    .progress-steps.step-5::after { width: calc(100% - 80px); }
+
+    .step-item {
+      display: flex; flex-direction: column; align-items: center; gap: 8px;
+      z-index: 2; position: relative;
+    }
+    .step-circle {
+      width: 40px; height: 40px; border-radius: 50%; display: flex;
+      align-items: center; justify-content: center; font-weight: 700; font-size: 14px;
+      background: var(--card); border: 3px solid var(--border); color: var(--text-muted);
+      transition: all 0.2s;
+    }
+    .step-item.active .step-circle { background: var(--primary); border-color: var(--primary); color: white; }
+    .step-item.done .step-circle { background: var(--success); border-color: var(--success); color: white; }
+    .step-label { font-size: 12px; font-weight: 600; color: var(--text-muted); white-space: nowrap; }
+    .step-item.active .step-label { color: var(--primary); }
+    .step-item.done .step-label { color: var(--success); }
+
+    /* ===== Main Content ===== */
+    .main { max-width: 900px; margin: 0 auto; padding: 32px 24px 120px; }
+
+    .form-card {
+      background: var(--card); border-radius: var(--radius); border: 1px solid var(--border);
+      padding: 32px; margin-bottom: 24px; box-shadow: var(--shadow);
+    }
+    .form-card-title {
+      font-size: 18px; font-weight: 700; color: var(--text); margin-bottom: 4px;
+      display: flex; align-items: center; gap: 10px;
+    }
+    .form-card-desc { font-size: 13px; color: var(--text-muted); margin-bottom: 24px; }
+
+    .form-group { margin-bottom: 20px; }
+    .form-label {
+      display: block; font-size: 13px; font-weight: 600; color: var(--text);
+      margin-bottom: 6px;
+    }
+    .form-label .required { color: var(--danger); margin-left: 2px; }
+    .form-label .hint { font-weight: 400; color: var(--text-muted); margin-left: 8px; font-size: 12px; }
+
+    input, select, textarea, button, label { font-size: 14px; }
+    .form-input, .form-select, .form-textarea,
+    input[type="text"], input[type="number"], input[type="date"], select, textarea {
+      width: 100%; padding: 10px 14px; border: 1.5px solid var(--border); border-radius: var(--radius-sm);
+      font-size: 14px; color: var(--text); background: var(--card);
+      transition: border-color 0.15s, box-shadow 0.15s;
+      outline: none; box-sizing: border-box;
+    }
+    input[type="text"]:focus, input[type="number"]:focus, input[type="date"]:focus, select:focus, textarea:focus,
+    .form-input:focus, .form-select:focus, .form-textarea:focus {
+      border-color: var(--primary); box-shadow: 0 0 0 3px rgba(67,97,238,0.1);
+    }
+    input::placeholder, textarea::placeholder { color: var(--text-light); }
+    textarea { min-height: 100px; resize: vertical; }
+    select { cursor: pointer; }
+    button { padding: 8px 16px; cursor: pointer; }
+
+    .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+
+    /* ===== Step Visibility ===== */
+    .step-view { display: none; }
+    .step-view.active { display: block; }
+
+    /* ===== Info box ===== */
+    .info-box {
+      background: var(--primary-light); border: 1px solid #c7d2fe; border-radius: var(--radius-sm);
+      padding: 12px 16px; font-size: 13px; color: var(--primary-dark); margin-bottom: 20px;
+      display: flex; align-items: flex-start; gap: 10px; line-height: 1.5;
+    }
+    .info-box .icon { font-size: 16px; flex-shrink: 0; margin-top: 1px; }
+    .info-box.warning { background: var(--warning-light); border-color: #fde68a; color: #92400e; }
+    .info-box.success { background: var(--success-light); border-color: #a7f3d0; color: #065f46; }
+    .info-box.danger { background: var(--danger-light); border-color: #fecaca; color: #991b1b; }
+
+    /* ===== Checkbox & Radio ===== */
+    input[type="checkbox"], input[type="radio"] {
+      width: 20px !important; height: 20px; min-width: 20px;
+      padding: 0 !important; margin: 0 !important; margin-right: 6px !important;
+      flex-shrink: 0; cursor: pointer;
+    }
+    .safety-row {
+      display: flex; gap: 12px; flex-wrap: wrap; align-items: center;
+    }
+    .safety-item {
+      display: flex; align-items: center; gap: 8px; padding: 12px 16px;
+      border: 1.5px solid var(--border); border-radius: var(--radius-sm);
+      cursor: pointer; transition: all 0.15s; font-size: 13px; font-weight: 500;
+    }
+    .safety-item:hover { border-color: var(--primary); }
+    .safety-item input[type="text"] { flex: 1; margin-left: 8px; box-sizing: border-box; }
+    .radio-row {
+      display: flex; gap: 16px; align-items: center;
+    }
+    .radio-item {
+      display: flex; align-items: center; gap: 6px; padding: 10px 16px;
+      border: 1.5px solid var(--border); border-radius: var(--radius-sm);
+      cursor: pointer; transition: all 0.15s; font-size: 14px; font-weight: 500;
+    }
+    .radio-item:hover { border-color: var(--primary); }
+
+    /* ===== Tables ===== */
+    table { width: 100%; border-collapse: collapse; margin: 10px 0; }
+    th, td { border: 1px solid var(--border); padding: 8px; text-align: center; word-break: keep-all; }
+    th { background: #f8fafc; font-weight: 600; font-size: 12px; color: var(--text-muted); }
+
+    .chem-table { table-layout: fixed; }
+    #chemicalList input[type="text"], #chemicalList input[type="number"], #chemicalList select {
+      width: 100%; box-sizing: border-box; padding: 6px 8px; font-size: 13px;
+    }
+    .btn-del {
+      display: inline-block; width: 100%; max-width: 56px; padding: 4px 6px;
+      font-size: 12px; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      background: none; border: 1px solid var(--danger); color: var(--danger); border-radius: 6px; cursor: pointer;
+    }
+    .btn-del:hover { background: var(--danger-light); }
+    #chemicalSearchGroup { display: flex; gap: 8px; margin-bottom: 8px; }
+    #chemicalSearchGroup input { flex: 1; }
+    #chemicalSearchGroup button {
+      padding: 10px 20px; background: var(--primary); color: white; border: none;
+      border-radius: var(--radius-sm); font-weight: 600; cursor: pointer; white-space: nowrap;
+    }
+
+    .guidance-required { color: #d32f2f !important; font-weight: bold; }
+
+    /* ===== Status badges ===== */
+    .pill { display: inline-block; padding: 4px 10px; border-radius: 999px; background: var(--primary-light); color: var(--primary-dark); font-size: 12px; font-weight: 600; }
+    .badge-ok { color: #065f46; background: var(--success-light); border: 1px solid #a7f3d0; }
+    .badge-err { color: #991b1b; background: var(--danger-light); border: 1px solid #fecaca; }
+    .note { background: var(--warning-light); color: #9a3412; border: 1px solid #fed7aa; padding: 10px 14px; border-radius: var(--radius-sm); font-size: 13px; }
+    .danger { background: var(--danger-light); color: #991b1b; border: 1px solid #fecaca; padding: 10px 14px; border-radius: var(--radius-sm); font-size: 13px; }
+    .ok { background: var(--success-light); color: #065f46; border: 1px solid #a7f3d0; padding: 10px 14px; border-radius: var(--radius-sm); font-size: 13px; }
+
+    .unit-hint { font-size: .85rem; color: #d32f2f; margin-top: 6px; }
+    .unit-hint code { background: #f3f4f6; padding: 2px 6px; border-radius: 6px; }
+
+    .blocked-input { outline: 2px solid #d32f2f; background: #fff6f6; }
+
+    /* ===== Overlays & Dialogs ===== */
+    #customAlert {
+      display: none; position: fixed; top: 30%; left: 50%;
+      transform: translate(-50%,-30%); background: white; border-radius: var(--radius);
+      padding: 28px 32px; z-index: 10002; box-shadow: var(--shadow-lg); text-align: center;
+      max-width: 500px; width: 90%;
+    }
+    #customAlert p { margin-bottom: 16px; line-height: 1.6; font-size: 14px; }
+    #customAlert button {
+      padding: 10px 24px; background: var(--primary); color: white; border: none;
+      border-radius: var(--radius-sm); font-weight: 600; cursor: pointer;
+    }
+    #customAlertOverlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.3); z-index: 10001; }
+
+    #dialogOverlay {
+      display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.4); backdrop-filter: blur(2px); z-index: 9999;
+    }
+    #overlayBlock {
+      display: none; position: fixed; inset: 0;
+      background: rgba(240,240,240,0.85); backdrop-filter: blur(2px);
+      z-index: 10000; text-align: center;
+    }
+    #overlayBlock .block-msg {
+      margin-top: 180px; font-size: 1.6rem; font-weight: bold; color: var(--text);
+      background: var(--card); display: inline-block; padding: 32px 60px; border-radius: 16px;
+      box-shadow: var(--shadow-lg);
+    }
+
+    #confirmDialog {
+      display: none; position: fixed; top: 50%; left: 50%;
+      transform: translate(-50%, -50%); background: white; border: 1px solid var(--border);
+      padding: 24px; z-index: 10001; box-shadow: var(--shadow-lg);
+      border-radius: var(--radius); width: 600px; max-width: 90%; max-height: 80vh; overflow-y: auto;
+    }
+    #confirmDialog h3 {
+      margin-top: 0; color: var(--text); border-bottom: 2px solid var(--primary); padding-bottom: 10px;
+      position: sticky; top: -24px; background: white; z-index: 1;
+    }
+    #confirmDialog .content-wrapper { padding: 10px 0; line-height: 1.8; }
+    #confirmDialog .question-item { margin-bottom: 15px; padding: 12px; background: #f8fafc; border-radius: var(--radius-sm); }
+    #confirmDialog .question-item strong { display: block; margin-bottom: 8px; font-size: 14px; }
+    #confirmDialog .sub-text { font-size: 13px; color: var(--text-muted); margin: 5px 0 8px 20px; }
+    #confirmDialog .input-group { margin-left: 20px; display: flex; align-items: center; gap: 10px; }
+    #confirmDialog .radio-group { margin-left: 20px; display: flex; gap: 30px; align-items: center; }
+    #confirmDialog .radio-group label { display: flex; align-items: center; cursor: pointer; }
+    #confirmDialog .radio-group input[type="radio"] { margin-right: 5px; cursor: pointer; }
+    #confirmDialog .button-group {
+      display: flex; gap: 10px; justify-content: center; margin-top: 20px; padding-top: 15px;
+      border-top: 1px solid var(--border); position: sticky; bottom: -24px; background: white; z-index: 1;
+    }
+    #confirmDialog button { padding: 10px 25px; border: none; border-radius: var(--radius-sm); cursor: pointer; font-size: 14px; font-weight: bold; }
+    #confirmDialog .btn-confirm { background: var(--primary); color: white; }
+    #confirmDialog .btn-confirm:disabled { background: #8e8e8e; color: #e0e0e0; cursor: not-allowed; }
+    #confirmDialog .btn-cancel { background: #6c757d; color: white; }
+    #confirmDialog, #confirmDialog .content-wrapper { word-break: keep-all; }
+    #confirmDialog .radio-group label { white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; }
+
+    /* ===== Load Dialog ===== */
+    #loadOverlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.35); backdrop-filter: blur(2px); z-index: 10010; }
+    #loadDialog {
+      display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%,-50%);
+      background: var(--card); width: 520px; max-width: 92vw; border-radius: var(--radius);
+      box-shadow: var(--shadow-lg); z-index: 10011; padding: 0; overflow: hidden;
+    }
+    #loadDialog.blurred { filter: blur(3px); pointer-events: none; }
+    #loadDialog .load-header { padding: 16px 20px 0 20px; }
+    #loadDialog .load-header h3 { margin: 0 0 12px; font-size: 1.1rem; color: var(--text); }
+    .load-tabs { display: flex; border-bottom: 2px solid var(--border); margin: 0; }
+    .load-tab {
+      flex: 1; padding: 10px 12px; text-align: center; cursor: pointer;
+      font-size: 14px; font-weight: 600; color: var(--text-muted); background: none;
+      border: none; border-bottom: 3px solid transparent;
+      transition: color .15s, border-color .15s; margin: 0; outline: none;
+    }
+    .load-tab:hover { color: var(--text); }
+    .load-tab.active { color: var(--primary); border-bottom-color: var(--primary); }
+    .load-tab.active-green { color: var(--success); border-bottom-color: var(--success); }
+    .load-panel { display: none; padding: 16px 20px 20px 20px; }
+    .load-panel.active { display: block; }
+    .load-panel .form-row { display: flex; gap: 10px; margin: 10px 0; }
+    .load-panel .form-row > * { flex: 1; }
+    .load-panel .btns { display: flex; gap: 10px; justify-content: flex-end; margin-top: 12px; }
+    .load-panel .btn {
+      padding: 8px 14px; border: none; border-radius: var(--radius-sm); cursor: pointer; font-weight: 600; background: #e0e0e0;
+    }
+    .load-panel .btn:hover { filter: brightness(1.05); }
+    .load-panel .result-list { margin-top: 12px; max-height: 280px; overflow-y: auto; }
+    .load-panel .result-item {
+      display: flex; justify-content: space-between; align-items: center; padding: 10px; margin: 6px 0;
+      border: 1px solid var(--border); border-radius: var(--radius-sm); background: #fafafa; gap: 8px; flex-wrap: wrap;
+    }
+    .load-panel .result-item:hover { background: var(--primary-light); border-color: var(--primary); }
+    .load-panel .result-info { flex: 1; font-size: 13px; line-height: 1.5; }
+    .load-panel .result-info b { color: var(--text); }
+
+    /* ===== Bottom Nav ===== */
+    .bottom-nav {
+      position: fixed; bottom: 0; left: 0; right: 0;
+      background: var(--card); border-top: 1px solid var(--border);
+      padding: 16px 24px; display: flex; justify-content: center;
+      box-shadow: 0 -4px 6px -1px rgba(0,0,0,0.05); z-index: 100;
+    }
+    .bottom-nav-inner { max-width: 900px; width: 100%; display: flex; justify-content: space-between; align-items: center; }
+    .nav-btn {
+      padding: 12px 32px; border-radius: var(--radius-sm); font-size: 14px; font-weight: 600;
+      cursor: pointer; border: none; transition: all 0.15s;
+    }
+    .nav-btn.prev { background: #f1f5f9; color: var(--text-muted); }
+    .nav-btn.prev:hover { background: #e2e8f0; }
+    .nav-btn.next { background: var(--primary); color: white; }
+    .nav-btn.next:hover { background: var(--primary-dark); }
+    .nav-btn.submit { background: var(--success); color: white; font-size: 15px; padding: 14px 48px; }
+    .nav-btn.submit:hover { background: #059669; }
+    .nav-btn.draft { background: #f1f5f9; color: var(--text-muted); }
+    .step-indicator { font-size: 13px; color: var(--text-muted); font-weight: 500; }
+
+    /* ===== Review Section (Step 5) ===== */
+    .review-section {
+      margin-bottom: 20px; padding: 20px; background: #f8fafc;
+      border-radius: var(--radius-sm); border: 1px solid var(--border);
+    }
+    .review-section-title {
+      font-size: 14px; font-weight: 700; color: var(--primary); margin-bottom: 12px;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .review-row { display: flex; padding: 6px 0; font-size: 13px; }
+    .review-label { width: 120px; color: var(--text-muted); font-weight: 500; flex-shrink: 0; }
+    .review-value { color: var(--text); font-weight: 500; flex: 1; }
+
+    /* ===== Agreement ===== */
+    .agreement-box {
+      background: #f8fafc; border: 1px solid var(--border); border-radius: var(--radius);
+      padding: 20px; max-height: 200px; overflow-y: auto; font-size: 13px; line-height: 1.8;
+      margin-bottom: 16px; color: var(--text-muted);
+    }
+
+    /* ===== Ripple Effect ===== */
+    .fab .ripple, button .ripple { position: absolute; border-radius: 50%; transform: scale(0); animation: ripple .5s linear; background: rgba(255,255,255,.45); pointer-events: none; }
+    @keyframes ripple { to { transform: scale(4); opacity: 0; } }
+
+    /* ===== Pointer events ===== */
+    #overlayBlock, #dialogOverlay, #loadOverlay { pointer-events: none; }
+    #overlayBlock[style*="display: block"],
+    #dialogOverlay[style*="display: block"],
+    #loadOverlay[style*="display: block"] { pointer-events: auto; }
+
+    /* ===== Focus styles ===== */
+    :focus-visible { outline: 3px solid var(--primary); outline-offset: 2px; }
+    button:focus-visible { outline: 3px solid var(--primary); outline-offset: 2px; }
+
+    /* ===== Reduced motion ===== */
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+    }
+
+    /* ===== Tablet / Mobile Responsive ===== */
+    @media (max-width: 900px) {
+      .main { padding: 24px 16px 120px; }
+      .form-card { padding: 24px; }
+      .form-row { grid-template-columns: 1fr; }
+      .header-inner { padding: 0 16px; }
+      .progress-inner { padding: 0 16px; }
+      .safety-row { flex-direction: column; gap: 8px; align-items: stretch; }
+      .radio-row { flex-direction: column; gap: 8px; align-items: stretch; }
+      #chemicalSearchGroup { flex-direction: column; }
+      #chemicalSearchGroup input, #chemicalSearchGroup button { width: 100%; }
+      table { font-size: 12px; display: block; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+      .chem-table { min-width: 700px; }
+      #confirmDialog { width: 95vw; max-height: 85vh; padding: 14px; }
+      #loadDialog { width: 95vw; padding: 0; }
+      .load-tab { font-size: 13px; padding: 8px 6px; }
+      .load-panel .result-item { flex-direction: column; align-items: stretch; }
+      .header-logo span:not(.icon) { font-size: 15px; }
+      .step-label { font-size: 10px; }
+    }
+
+    @media (max-width: 650px) {
+      .time-row { flex-direction: column; gap: 8px; align-items: flex-start; }
+      .header-actions { gap: 4px; }
+      .header-btn { padding: 6px 10px; font-size: 12px; }
+      input, select, textarea, button { font-size: 16px !important; }
+    }
+
+    /* ===== Hidden helper for form ID ===== */
+    #statusMessage { display: inline-block; font-weight: bold; margin-left: 16px; color: var(--text-muted); }
+
+    /* ===== noWarningDialog ===== */
+    #noWarningDialog {
+      display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%,-50%);
+      background: white; border: 2px solid var(--danger); padding: 24px; z-index: 10002;
+      box-shadow: var(--shadow-lg); border-radius: var(--radius); width: 400px; max-width: 90%;
+    }
+  </style>
+  <script>
+    (function throttleReload(){
+      try {
+        var lastReloadTime = Number(localStorage.getItem('lastReloadTime') || 0);
+        var now = Date.now();
+        if (now - lastReloadTime < 3000) {
+          function showMsg() {
+            document.body.innerHTML =
+              '<div style="font-size:2rem; color:red; text-align:center; margin-top:100px;">새로고침이 너무 빠릅니다.<br>잠시 후 다시 시도하세요.</div>';
+          }
+          if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', showMsg);
+          else showMsg();
+          throw new Error('Reload throttled');
+        } else {
+          localStorage.setItem('lastReloadTime', String(now));
+        }
+      } catch(e) {}
+    })();
+
+    window.addEventListener('DOMContentLoaded', () => {
+      ['overlayBlock','dialogOverlay','loadOverlay'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) {
+          el.style.display = 'none';
+          el.style.pointerEvents = 'none';
+        }
+      });
+    });
+
+    // ===== 페이지 이탈 경고 =====
+    let formDirty = false;
+    window.addEventListener('DOMContentLoaded', () => {
+      const appForm = document.getElementById('applicationForm');
+      if (appForm) {
+        appForm.addEventListener('input', () => { formDirty = true; });
+        appForm.addEventListener('change', () => { formDirty = true; });
+      }
+    });
+    window.addEventListener('beforeunload', (e) => {
+      if (formDirty) {
+        e.preventDefault();
+        e.returnValue = '';
+      }
+    });
+
+    // ===== 로컬 자동 임시저장 =====
+    let autoSaveTimer = null;
+    const AUTO_SAVE_KEY = 'lab-form-autosave';
+
+    function scheduleAutoSave() {
+      if (autoSaveTimer) clearTimeout(autoSaveTimer);
+      autoSaveTimer = setTimeout(doAutoSave, 3000);
+    }
+
+    function doAutoSave() {
+      try {
+        const sid = (document.getElementById('studentId')?.value || '').trim();
+        if (!sid) return;
+        const snapshot = {
+          studentId: sid,
+          studentName: document.getElementById('studentName')?.value || '',
+          date: document.getElementById('date')?.value || '',
+          lab: document.getElementById('lab')?.value || '',
+          title: document.getElementById('title')?.value || '',
+          purpose: document.getElementById('purpose')?.value || '',
+          materials: document.getElementById('materials')?.value || '',
+          process: document.getElementById('process')?.value || '',
+          cleanup: document.getElementById('cleanup')?.value || '',
+          precautions: document.getElementById('precautions')?.value || '',
+          savedAt: new Date().toISOString()
+        };
+        localStorage.setItem(AUTO_SAVE_KEY, JSON.stringify(snapshot));
+      } catch(e) { /* localStorage 실패 무시 */ }
+    }
+
+    function checkAutoSave() {
+      try {
+        const saved = localStorage.getItem(AUTO_SAVE_KEY);
+        if (!saved) return;
+        const data = JSON.parse(saved);
+        if (!data.studentId) return;
+
+        const savedAt = new Date(data.savedAt);
+        if (Date.now() - savedAt.getTime() > 30 * 60 * 1000) {
+          localStorage.removeItem(AUTO_SAVE_KEY);
+          return;
+        }
+
+        const bar = document.createElement('div');
+        bar.id = 'autoSaveBar';
+        bar.style.cssText = 'background:var(--primary-light);border:1px solid #c7d2fe;border-radius:var(--radius-sm);padding:12px 16px;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;';
+        bar.innerHTML = '<span style="font-weight:600;color:var(--primary-dark);">💾 이전에 작성 중이던 내용이 있습니다 (' + data.studentId + ', ' + (data.title || '제목 없음') + ')</span>' +
+          '<span><button onclick="loadAutoSave()" style="padding:6px 14px;background:var(--primary);color:#fff;border:none;border-radius:6px;cursor:pointer;font-weight:600;margin-right:6px;">불러오기</button>' +
+          '<button onclick="dismissAutoSave()" style="padding:6px 14px;background:#e5e7eb;color:#374151;border:none;border-radius:6px;cursor:pointer;font-weight:600;">무시</button></span>';
+
+        const form = document.getElementById('applicationForm');
+        const firstStep = document.getElementById('step1');
+        if (firstStep) firstStep.insertBefore(bar, firstStep.firstChild);
+        else form.insertBefore(bar, form.firstChild);
+      } catch(e) { /* 무시 */ }
+    }
+
+    function loadAutoSave() {
+      try {
+        const saved = localStorage.getItem(AUTO_SAVE_KEY);
+        if (!saved) return;
+        const data = JSON.parse(saved);
+        ['studentId','studentName','date','lab','title','purpose','materials','process','cleanup','precautions'].forEach(field => {
+          const el = document.getElementById(field);
+          if (el && data[field]) el.value = data[field];
+        });
+        dismissAutoSave();
+      } catch(e) { /* 무시 */ }
+    }
+
+    function dismissAutoSave() {
+      const bar = document.getElementById('autoSaveBar');
+      if (bar) bar.remove();
+      localStorage.removeItem(AUTO_SAVE_KEY);
+    }
+
+    const TIME_SLOTS = ['ET','EP1','7교시'];
+    let labOriginalLabels = {};
+
+    let calendarFetchSeq = 0;
+    let currentCalendarBlocks = null;
+
+    let lastCopyTime = 0, lastPasteTime = 0, copyCount = 0, pasteCount = 0;
+    const ACTION_DELAY = 1000, MAX_ACTIONS_PER_MINUTE = 10;
+    setInterval(() => { copyCount = Math.max(0, copyCount - 1); pasteCount = Math.max(0, pasteCount - 1); }, 6000);
+
+    document.addEventListener('keydown', function(e) {
+      if (e.key === "F12" || (e.ctrlKey && e.shiftKey && (e.key.toLowerCase() === "i" || e.key.toLowerCase() === "j")) || (e.ctrlKey && e.key.toLowerCase() === "u")) {
+        e.preventDefault(); alert("허용되지 않은 동작입니다."); return false;
+      }
+      const t = Date.now();
+      const isC = (e.ctrlKey || e.metaKey) && e.key.toLowerCase()==='c';
+      const isV = (e.ctrlKey || e.metaKey) && e.key.toLowerCase()==='v';
+      const isX = (e.ctrlKey || e.metaKey) && e.key.toLowerCase()==='x';
+      if (isC){ if (t-lastCopyTime<ACTION_DELAY || copyCount>=MAX_ACTIONS_PER_MINUTE){ e.preventDefault(); showCustomAlert('복사 제한을 초과했습니다. 잠시 후 다시 시도해주세요.'); return false; } lastCopyTime=t; copyCount++; }
+      if (isV){ if (t-lastPasteTime<ACTION_DELAY || pasteCount>=MAX_ACTIONS_PER_MINUTE){ e.preventDefault(); showCustomAlert('붙여넣기 제한을 초과했습니다. 잠시 후 다시 시도해주세요.'); return false; } lastPasteTime=t; pasteCount++; }
+      if (isX){ if (t-lastCopyTime<ACTION_DELAY || copyCount>=MAX_ACTIONS_PER_MINUTE){ e.preventDefault(); showCustomAlert('잘라내기 제한을 초과했습니다. 잠시 후 다시 시도해주세요.'); return false; } lastCopyTime=t; copyCount++; }
+    });
+
+    function showOverlayBlock(msg, bringToFront) {
+      const overlay = document.getElementById('overlayBlock');
+      overlay.querySelector('.block-msg').innerHTML = msg;
+      overlay.style.display = 'block';
+
+      if (bringToFront) {
+        overlay.style.zIndex = '11000';
+        const dlg = document.getElementById('loadDialog');
+        if (dlg) dlg.classList.add('blurred');
+      } else {
+        overlay.style.zIndex = '10000';
+      }
+    }
+    function hideOverlayBlock() {
+      const overlay = document.getElementById('overlayBlock');
+      overlay.style.display = 'none';
+      overlay.style.zIndex = '10000';
+      const dlg = document.getElementById('loadDialog');
+      if (dlg) dlg.classList.remove('blurred');
+    }
+
+    let restrictedIds = [], hasRestrictedMatch = false, restrictedHitSet = new Set();
+    function extractFiveDigitTokens(text){ if(!text) return []; const a=[], re=/\b(\d{5})\b/g; let m; while((m=re.exec(String(text)))!==null) a.push(m[1]); return a; }
+    function isTuesday(dateStr){ if(!dateStr) return false; const d=new Date(dateStr); return !isNaN(d) && d.getDay()===2; }
+    function isSeventhExceptionActive(){
+      const purpose=(document.getElementById('purpose')?.value||'').trim();
+      const dateStr=(document.getElementById('date')?.value||'').trim();
+      const p7=document.getElementById('period7');
+      return !!(p7 && p7.checked) && purpose==='동아리 활동' && isTuesday(dateStr);
+    }
+
+    let chemicalDB = [], allTeachers = [];
+    const MAX_CHEMICALS = 20;
+
+    let validatedOk = false, cooldownTimer = null, cooldownRemain = 0;
+
+    function teachersBySubject(subj){ return (allTeachers||[]).filter(t=>t.subject===subj); }
+    function dedupeTeachers(list){ const seen=new Map(); list.forEach(t=>{ const key=`${t.name}||${t.email||''}`; if(!seen.has(key)) seen.set(key,t); }); return Array.from(seen.values()); }
+    function getC1(obj){ return (obj.class1 || obj['분류1'] || obj.state || '').trim(); }
+    /* === 통일된 시약 상태 판별 함수 === */
+    const RE_SOLID = /고체|분말|결정|시약병|pellet|powder/i;
+    const RE_BIO   = /생물/i;
+    const RE_INDICATOR = /지시약/i;
+    function isSolidLike_(state, name) {
+      return RE_SOLID.test(state || '') || RE_BIO.test(state || '') || RE_INDICATOR.test((state || '') + ' ' + (name || ''));
+    }
+    function getConcPlaceholder_(state, name) {
+      if (RE_BIO.test(state || '')) return '생물 시약(입력 불필요)';
+      if (RE_INDICATOR.test((state || '') + ' ' + (name || ''))) return '지시약(입력 불필요)';
+      if (RE_SOLID.test(state || '')) return '고체 시약(입력 불필요)';
+      return '농도 단위를 꼭 입력하세요.';
+    }
+
+    function normalizeRecord(rec){
+      const r = {
+        name:       rec['물질명'] || rec.name || '',
+        formula:    rec['화학식'] || rec.formula || '',
+        class1:     rec['분류1'] || rec.class1 || '',
+        class2:     rec['분류2'] || rec.class2 || '',
+        guidance:   rec['임장여부'] || rec['교사임장여부'] || rec.guidance || '',
+        disposal:   rec['폐수처리'] || rec['폐수 처리 분류'] || rec.disposal || '',
+        studentOK:  rec['불출가능'] || rec['학생 불출 가능 여부'] || rec.studentOK || '',
+        hazard:     rec['유해영역'] || rec['유해화학물질관리에 의한 규제 영역'] || rec.hazard || '',
+        cas:        rec['화학물질 고유번호'] || rec.cas || ''
+      };
+      r.state = getC1(r);
+      r.isBio = RE_BIO.test(r.state);
+      r.isIndicator = RE_INDICATOR.test(r.state + ' ' + r.name);
+      r.studentOK = normalizeYesNo(r.studentOK);
+      r.guidance  = normalizeGuidance(r.guidance);
+      r.disposal  = normDisposal(r.disposal);
+      return r;
+    }
+    function normalizeYesNo(v){
+      const s=String(v||'').trim();
+      if(!s) return '';
+      if(/(예|가능|yes|true)/i.test(s)) return '예';
+      if(/(아니오|불가|no|false)/i.test(s)) return '아니오';
+      return s;
+    }
+    function normalizeGuidance(v){
+      const s = String(v || '').trim();
+      if (!s) return '';
+      if (/(불필요|불요|해당없음|무|x|X|미필요|없음|N\b|no\b|false)/i.test(s)) return '불필요';
+      if (/(필요|임장|참관|교사참관|교사임장|O\b|o\b|Y\b|yes\b|true\b|필수)/i.test(s)) return '필요';
+      return s;
+    }
+    function normDisposal(v){
+      const s=String(v||'').trim().toLowerCase();
+      const map={ '유기':'유기','유기성':'유기','organic':'유기','무기':'무기','무기성':'무기','inorganic':'무기','산':'산','산성':'산','acid':'산','염기':'염기','알칼리':'염기','base':'염기','기타':'기타','etc':'기타','other':'기타' };
+      if(map[s]) return map[s];
+      if(/inorganic/i.test(s)) return '무기'; if(/organic/i.test(s)) return '유기'; if(/acid/i.test(s)) return '산'; if(/base|alkali/i.test(s)) return '염기';
+      return v||'';
+    }
+
+    function initApp(){
+      const searchBtn = document.querySelector('#chemicalSearchGroup button');
+      if (searchBtn) searchBtn.disabled = true;
+
+      const labSel = document.getElementById('lab');
+      if (labSel) {
+        [...labSel.options].forEach(opt => {
+          opt.dataset.originalLabel = opt.textContent;
+          if (opt.value) labOriginalLabels[opt.value] = opt.textContent;
+        });
+      }
+
+      google.script.run
+        .withSuccessHandler(db => {
+          let arr = [];
+
+          if (Array.isArray(db) && db.length && typeof db[0] === 'object' && !Array.isArray(db[0])) {
+            arr = db;
+          }
+          else if (Array.isArray(db) && db.length && Array.isArray(db[0])) {
+            let headerRowIdx = 0;
+            if (db.length > 1) {
+              const r1 = (db[1] || []).map(x => String(x || '').trim());
+              if (r1.includes('물질명') && r1.includes('화학식')) {
+                headerRowIdx = 1;
+              }
+            }
+            const header = (db[headerRowIdx] || []).map(x => String(x || '').trim());
+            for (let i = headerRowIdx + 1; i < db.length; i++) {
+              const row = db[i] || [];
+              if (row.every(v => v === '' || v == null)) continue;
+              const obj = {};
+              header.forEach((h, idx) => {
+                if (!h) return;
+                obj[h] = row[idx] != null ? row[idx] : '';
+              });
+              arr.push(obj);
+            }
+          }
+
+          try {
+            chemicalDB = arr.map(normalizeRecord);
+          } catch(e) {
+            chemicalDB = [];
+          }
+
+          if (searchBtn) searchBtn.disabled = false;
+        })
+        .withFailureHandler(_ => {
+          if (searchBtn) searchBtn.disabled = false; chemicalDB = [];
+        })
+        .getChemicalList();
+
+      google.script.run.withSuccessHandler(list => {
+        allTeachers = list;
+        loadTeachers([]); recomputeTeacherOptions(); enforceAdvancedLabByLab(document.getElementById('lab')?.value);
+      }).getTeacherList();
+
+      google.script.run.withSuccessHandler(list => { restrictedIds = Array.isArray(list) ? list.slice() : []; }).getRestrictedList();
+
+      const teacherEmailEl = document.getElementById('teacherEmail'); if (teacherEmailEl) teacherEmailEl.value = '';
+
+      showDayOfWeek(); updatePeriod7Availability();
+
+      const sidEl = document.getElementById('studentId');
+      const tmEl  = document.getElementById('teamMembers');
+      sidEl?.addEventListener('input', immediateWarnIfBlocked);
+      tmEl?.addEventListener('input', immediateWarnIfBlocked);
+      sidEl?.addEventListener('blur', immediateWarnIfBlocked);
+      tmEl?.addEventListener('blur', immediateWarnIfBlocked);
+
+      document.querySelectorAll('input[name="timeSlot"]').forEach(cb => {
+        if (cb.id !== 'period7') cb.disabled = false;
+      });
+
+      const chemSearchInput = document.getElementById('chemicalSearch');
+      chemSearchInput?.addEventListener('keydown', (e)=>{ if(e.key==='Enter'){ e.preventDefault(); searchChemical(); }});
+
+      initFabFeedback();
+
+      const chemTable = document.getElementById('chemicalList');
+      chemTable.addEventListener('input', markUnvalidated);
+      chemTable.addEventListener('change', markUnvalidated);
+
+      document.getElementById('applicationForm').addEventListener('input', scheduleAutoSave);
+      checkAutoSave();
+    }
+    document.addEventListener('DOMContentLoaded', initApp);
+
+    function loadTeachers(list) {
+      const sel = document.getElementById('teacher');
+      sel.innerHTML = '<option value="">선택</option>';
+      list.forEach(item => {
+        const o = document.createElement('option');
+        o.value = item.name; o.textContent = item.name; o.dataset.email = item.email || '';
+        sel.appendChild(o);
+      });
+      sel.selectedIndex = 0;
+      sel.onchange = e => {
+        document.getElementById('teacherEmail').value = e.target.selectedOptions[0]?.dataset.email || '';
+      };
+    }
+
+    function enforceAdvancedLabByLab(labVal) {
+      const advSel   = document.getElementById('advancedLab');
+      const advNote  = document.getElementById('advancedLabNote');
+      const reasonEl = document.getElementById('advancedLabReason');
+      if (!advSel || !reasonEl) return;
+
+      if (String(labVal || '').trim() === '첨단기기실험실') {
+        advSel.value = '예'; advSel.disabled = true; advSel.style.background = '#f8f9fa';
+        reasonEl.style.display = 'block';
+        if (advNote) advNote.style.display = 'block';
+      } else {
+        advSel.disabled = false; advSel.style.background = '';
+        if (advNote) advNote.style.display = 'none';
+        if (advSel.value !== '예') { reasonEl.style.display = 'none'; reasonEl.value = ''; }
+      }
+    }
+
+    function recomputeTeacherOptions() {
+      const purpose = (document.getElementById('purpose')?.value || '').trim();
+      const labVal  = (document.getElementById('lab')?.value  || '').trim();
+
+      const chem = teachersBySubject('화학');
+      const bio  = teachersBySubject('생명과학');
+
+      const isClubPurpose = (purpose === '동아리' || purpose === '동아리 활동' || purpose.includes('동아리'));
+      if (isClubPurpose) { loadTeachers(dedupeTeachers([...chem, ...bio])); return; }
+
+      const isOpenGroupLab = (labVal === '프로젝트실험실' || labVal === '첨단기기실험실' || labVal === '오픈랩');
+      if (isOpenGroupLab) { loadTeachers(dedupeTeachers([...chem, ...bio])); return; }
+
+      if (!labVal) { loadTeachers([]); return; }
+      if (labVal === '화학실험실')      loadTeachers(chem);
+      else if (labVal === '생물실험실') loadTeachers(bio);
+      else loadTeachers([]);
+    }
+
+    function resetTimeLabelsOnly() {
+      const timeCbs = document.querySelectorAll('input[name="timeSlot"]');
+      timeCbs.forEach(cb => {
+        cb.disabled = false;
+        const label = cb.closest('label');
+        if (label) {
+          label.textContent = label.textContent.replace(/\s*\(신청 불가\)\s*$/, '');
+          label.insertBefore(cb, label.firstChild);
+        }
+      });
+      updatePeriod7Availability();
+    }
+
+    function disableAllTimeSlots() {
+      const timeCbs = document.querySelectorAll('input[name="timeSlot"]');
+      timeCbs.forEach(cb => {
+        cb.checked = false;
+        cb.disabled = true;
+        const label = cb.closest('label');
+        if (label) {
+          label.textContent = label.textContent.replace(/\s*\(신청 불가\)\s*$/, '');
+          label.insertBefore(cb, label.firstChild);
+        }
+      });
+      updatePeriod7Availability();
+    }
+
+    function disableTimeSlots(blockedList) {
+      const timeCbs = document.querySelectorAll('input[name="timeSlot"]');
+      timeCbs.forEach(cb => {
+        const label = cb.closest('label');
+        if (blockedList.indexOf(cb.value) !== -1) {
+          cb.checked = false;
+          cb.disabled = true;
+          if (label) {
+            label.textContent = label.textContent.replace(/\s*\(신청 불가\)\s*$/, '');
+            label.insertBefore(cb, label.firstChild);
+          }
+        } else {
+          cb.disabled = false;
+          if (label) {
+            label.textContent = label.textContent.replace(/\s*\(신청 불가\)\s*$/, '');
+            label.insertBefore(cb, label.firstChild);
+          }
+        }
+      });
+      updatePeriod7Availability();
+    }
+
+    function applyCalendarBlocksForSelectedLab() {
+      const labSel = document.getElementById('lab');
+      const info   = currentCalendarBlocks;
+
+      if (labSel) {
+        [...labSel.options].forEach(opt => {
+          if (!opt.value) return;
+          opt.disabled = false;
+          if (labOriginalLabels[opt.value]) {
+            opt.textContent = labOriginalLabels[opt.value];
+          }
+        });
+      }
+
+      if (!info) {
+        resetTimeLabelsOnly();
+        return;
+      }
+
+      if (info.allBlocked) {
+        if (labSel) {
+          [...labSel.options].forEach(opt => {
+            if (opt.value) opt.disabled = true;
+          });
+          labSel.value = '';
+        }
+        disableAllTimeSlots();
+        if (info.notice) {
+          showCustomAlert(info.notice);
+        } else {
+          showCustomAlert('해당 날짜에는 과학 실험·실습실 사용이 불가능합니다.');
+        }
+        return;
+      }
+
+      if (labSel && Array.isArray(info.blockedLabs) && info.blockedLabs.length) {
+        info.blockedLabs.forEach(bl => {
+          const opt = [...labSel.options].find(o => o.value === bl);
+          if (opt) {
+            opt.disabled = true;
+            opt.textContent = labOriginalLabels[bl] ? labOriginalLabels[bl] : bl;
+          }
+        });
+      }
+
+      const selectedLab = labSel ? labSel.value : '';
+
+      if (!selectedLab) {
+        resetTimeLabelsOnly();
+        return;
+      }
+
+      const isThisLabBlocked =
+        Array.isArray(info.blockedLabs) && info.blockedLabs.includes(selectedLab);
+
+      if (isThisLabBlocked) {
+        labSel.value = '';
+        disableAllTimeSlots();
+        if (info.notice) {
+          showCustomAlert(info.notice);
+        } else {
+          showCustomAlert(selectedLab + '은(는) 이 날짜에는 신청할 수 없습니다.');
+        }
+        return;
+      }
+
+      resetTimeLabelsOnly();
+
+      const mergedBlocked = [];
+      if (info.blockedTimesByLab && info.blockedTimesByLab[selectedLab]) {
+        const blockedList = info.blockedTimesByLab[selectedLab];
+        blockedList.forEach(t => { if (mergedBlocked.indexOf(t) === -1) mergedBlocked.push(t); });
+        if (info.noticeForLab && info.noticeForLab[selectedLab]) {
+          showCustomAlert(info.noticeForLab[selectedLab]);
+        }
+      }
+      if (Array.isArray(info.blockedTimes) && info.blockedTimes.length) {
+        info.blockedTimes.forEach(t => { if (mergedBlocked.indexOf(t) === -1) mergedBlocked.push(t); });
+      }
+      if (mergedBlocked.length) {
+        disableTimeSlots(mergedBlocked);
+      }
+    }
+
+    function showLookupLoading() {
+      var el = document.getElementById('lookupLoading');
+      if (el) { el.style.display = 'flex'; }
+    }
+    function hideLookupLoading() {
+      var el = document.getElementById('lookupLoading');
+      if (el) el.style.display = 'none';
+    }
+
+    function fetchCalendarBlocks(dateStr) {
+      if (!dateStr) {
+        resetCalendarBlocks();
+        hideLookupLoading();
+        currentCalendarBlocks = null;
+        return;
+      }
+
+      const mySeq = ++calendarFetchSeq;
+      showLookupLoading();
+
+      google.script.run
+        .withSuccessHandler(function(info) {
+          if (mySeq !== calendarFetchSeq) return;
+          currentCalendarBlocks = info;
+          applyCalendarBlocksForSelectedLab();
+          renderAvailabilityTable(info);
+          if (info && info.notice && !info.allBlocked) {
+            showCustomAlert(info.notice);
+          }
+          hideLookupLoading();
+        })
+        .withFailureHandler(function(err) {
+          if (mySeq !== calendarFetchSeq) return;
+          hideLookupLoading();
+          console && console.warn && console.warn('캘린더 조회 실패:', err);
+        })
+        .getUnavailableForDate(dateStr);
+    }
+
+    function showDayOfWeek() {
+      const input = document.getElementById('date'), span = document.getElementById('dayOfWeek');
+      if (!input.value) {
+        span.textContent = '';
+        updatePeriod7Availability();
+        recomputeTeacherOptions();
+        resetCalendarBlocks();
+        currentCalendarBlocks = null;
+        return;
+      }
+      const daysKor = ['일', '월', '화', '수', '목', '금', '토'];
+      const d = new Date(input.value);
+      const dayOfWeek = d.getDay();
+
+      if (dayOfWeek === 0 || dayOfWeek === 6) {
+        showCustomAlert('주말은 실험·실습실을 이용할 수 없습니다.');
+        input.value = '';
+        span.textContent = '';
+        updatePeriod7Availability();
+        recomputeTeacherOptions();
+        immediateWarnIfBlocked();
+        resetCalendarBlocks();
+        currentCalendarBlocks = null;
+        return;
+      }
+
+      span.textContent = `(${daysKor[dayOfWeek]}요일)`;
+      updatePeriod7Availability();
+      recomputeTeacherOptions();
+      immediateWarnIfBlocked();
+      fetchCalendarBlocks(input.value);
+    }
+
+    function handleLabChange(s) {
+      const teacherSelect = document.getElementById('teacher');
+      teacherSelect.innerHTML = '<option value="">선택</option>';
+      document.getElementById('teacherEmail').value = '';
+      recomputeTeacherOptions();
+      enforceAdvancedLabByLab(s && s.value);
+      applyCalendarBlocksForSelectedLab();
+      markUnvalidated();
+    }
+
+    function resetCalendarBlocks() {
+      const labSel = document.getElementById('lab');
+      if (labSel) {
+        [...labSel.options].forEach(opt => {
+          opt.disabled = false;
+          if (opt.value && labOriginalLabels[opt.value]) {
+            opt.textContent = labOriginalLabels[opt.value];
+          }
+        });
+      }
+      resetTimeLabelsOnly();
+    }
+
+    function handleAdvancedLabChange(s) {
+      const o = document.getElementById('advancedLabReason');
+      o.style.display = s.value==='예' ? 'block' : 'none';
+      if(s.value!=='예') o.value='';
+      markUnvalidated();
+    }
+    function handleHoodChange(s) {
+      const o = document.getElementById('hoodReason');
+      o.style.display = s.value==='예' ? 'block' : 'none';
+      if(s.value!=='예') o.value='';
+    }
+    function handleSafetyOtherChange(cb) {
+      const o = document.getElementById('otherSafety');
+      o.style.display = cb.checked ? 'inline-block' : 'none';
+      if(!cb.checked) o.value='';
+    }
+
+    function updatePeriod7Availability() {
+      const dateInput = document.getElementById('date');
+      const purposeSelect = document.getElementById('purpose');
+      const label = document.getElementById('period7Label');
+      const period7 = document.getElementById('period7');
+
+      if (!dateInput.value || !purposeSelect.value) {
+        label.style.display = 'none'; period7.checked = false; period7.disabled = true; return;
+      }
+      const day = new Date(dateInput.value).getDay();
+      const isTue = day === 2;
+      const isClub = purposeSelect.value === '동아리 활동';
+      if (isTue && isClub) {
+        label.style.display = 'inline-block';
+        const blocked7th = is7thPeriodBlockedByCalendar_();
+        period7.disabled = blocked7th;
+        if (blocked7th) period7.checked = false;
+      }
+      else { label.style.display = 'none'; period7.checked = false; period7.disabled = true; }
+    }
+
+    function is7thPeriodBlockedByCalendar_() {
+      if (!currentCalendarBlocks) return false;
+      if (currentCalendarBlocks.allBlocked) return true;
+      const globalTimes = currentCalendarBlocks.blockedTimes || [];
+      if (globalTimes.includes('7교시')) return true;
+      const selectedLab = (document.getElementById('lab')?.value || '').trim();
+      if (selectedLab && currentCalendarBlocks.blockedTimesByLab) {
+        const labTimes = currentCalendarBlocks.blockedTimesByLab[selectedLab] || [];
+        if (labTimes.includes('7교시')) return true;
+      }
+      return false;
+    }
+
+    function updateRestrictedFlags() {
+      restrictedHitSet.clear();
+      const sidEl = document.getElementById('studentId');
+      const tmEl  = document.getElementById('teamMembers');
+      const sid = sidEl?.value || '';
+      const tm  = tmEl?.value  || '';
+
+      const sidTokens = extractFiveDigitTokens(sid);
+      const tmTokens  = extractFiveDigitTokens(tm);
+
+      sidTokens.forEach(t => { if (restrictedIds.includes(t)) restrictedHitSet.add(t); });
+      tmTokens.forEach(t => { if (restrictedIds.includes(t)) restrictedHitSet.add(t); });
+
+      hasRestrictedMatch = restrictedHitSet.size > 0;
+
+      if (isSeventhExceptionActive()) {
+        sidEl?.classList.remove('blocked-input');
+        tmEl?.classList.remove('blocked-input');
+        return;
+      }
+      sidEl?.classList.toggle('blocked-input', sidTokens.some(t => restrictedIds.includes(t)));
+      tmEl?.classList.toggle('blocked-input', tmTokens.some(t => restrictedIds.includes(t)));
+    }
+    function immediateWarnIfBlocked() {
+      updateRestrictedFlags();
+      if (isSeventhExceptionActive()) return;
+      if (hasRestrictedMatch) {
+        showCustomAlert(
+          '해당 학생은 실험·실습실 사용 신청 불가합니다.<br>' +
+          '문의 사항은 과학기술과 학과사무실에 문의해주세요.<br><br>' +
+          '<b>※ 단, 7교시에는 신청이 가능합니다.</b>'
+        );
+      }
+    }
+
+    let _lastChemSearch = [];
+    function searchChemical(){
+      const q = (document.getElementById('chemicalSearch').value || '').trim().toLowerCase();
+      const table = document.getElementById('searchResults');
+
+      const header = `
+        <tr>
+          <th>물질명</th>
+          <th>화학식</th>
+          <th>분류1</th>
+          <th>교사임장여부</th>
+          <th>선택</th>
+        </tr>`;
+
+      if (!q || q.length < 2){
+        table.innerHTML = header + `<tr><td colspan="5">두 글자 이상 입력 후 [검색]을 누르세요.</td></tr>`;
+        return;
+      }
+
+      const rows = chemicalDB.filter(r=>{
+        const name=(r.name||'').toLowerCase();
+        const formula=(r.formula||'').toLowerCase();
+        const c1=(r.class1||'').toLowerCase();
+        const c2=(r.class2||'').toLowerCase();
+        return name.includes(q)||formula.includes(q)||c1.includes(q)||c2.includes(q);
+      });
+      _lastChemSearch = rows;
+
+      if(!rows.length){
+        table.innerHTML = header + `<tr><td colspan="5">검색 결과가 없습니다.</td></tr>`;
+        return;
+      }
+
+      const body = rows.map((r,i)=>`
+        <tr>
+          <td>${escapeHtml(r.name)}</td>
+          <td>${escapeHtml(r.formula)}</td>
+          <td>${escapeHtml(r.class1 || '')}</td>
+          <td>${r.guidance === '필요'
+                ? '<b style="color:#d93025">필요</b>'
+                : (r.guidance ? escapeHtml(r.guidance) : '-')
+              }</td>
+          <td><button type="button" onclick="selectFromSearch(${i})">선택</button></td>
+        </tr>`).join('');
+
+      table.innerHTML = header + body;
+    }
+
+    function selectFromSearch(idx){
+      const rec = _lastChemSearch[idx];
+      if(!rec) return;
+      addChemicalFromDB(rec);
+      markUnvalidated();
+    }
+    function escapeHtml(s){ return String(s??'').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
+
+    function addSelectedChemical(obj){
+      const rec = normalizeRecord(obj||{});
+      addChemicalFromDB(rec);
+      markUnvalidated();
+    }
+
+    function addChemicalFromDB(rec){
+      const tbl = document.getElementById('chemicalList');
+      if (tbl.rows.length - 1 >= MAX_CHEMICALS) { showCustomAlert(`시약은 한 번에 최대 ${MAX_CHEMICALS}개까지만 신청할 수 있습니다.`); return; }
+      const r = tbl.insertRow();
+
+      const inpName = document.createElement('input'); inpName.type='text'; inpName.value=rec.name; inpName.readOnly=true; r.insertCell().appendChild(inpName);
+
+      const inpFormula = document.createElement('input'); inpFormula.type='text'; inpFormula.value=rec.formula||''; inpFormula.readOnly=true; r.insertCell().appendChild(inpFormula);
+
+      const stateCell = r.insertCell(); const state = rec.state || ''; stateCell.innerText = state;
+
+      const inpConc = document.createElement('input'); inpConc.type='text'; inpConc.placeholder='농도 단위를 꼭 입력하세요.';
+      if (isSolidLike_(state, rec.name)) { inpConc.value=''; inpConc.disabled=true; inpConc.placeholder = getConcPlaceholder_(state, rec.name); }
+      r.insertCell().appendChild(inpConc);
+
+      const inpVol = document.createElement('input'); inpVol.type='text'; inpVol.placeholder='사용량 단위를 꼭 입력하세요.'; r.insertCell().appendChild(inpVol);
+
+      const selDisp = document.createElement('select');
+      selDisp.innerHTML = '<option>선택하세요</option><option>유기</option><option>무기</option><option>산</option><option>염기</option><option>기타</option>';
+      if (rec.disposal) selDisp.value = rec.disposal;
+      r.insertCell().appendChild(selDisp);
+
+      const inpMsds= document.createElement('input'); inpMsds.type='text'; inpMsds.placeholder='취급 주의/MSDS 핵심사항을 기록하세요.'; r.insertCell().appendChild(inpMsds);
+
+      const tdGuidance = r.insertCell();
+      tdGuidance.innerText = rec.guidance || '';
+      if (rec.guidance === '필요') tdGuidance.classList.add('guidance-required');
+
+      const del = document.createElement('button'); del.type='button'; del.textContent='삭제'; del.className='btn-del';
+      del.onclick = () => { tbl.deleteRow(r.rowIndex); markUnvalidated(); };
+      r.insertCell().appendChild(del);
+
+      r.dataset.state = state;
+      r.dataset.isBio = rec.isBio ? '1' : '0';
+      r.dataset.isIndicator = rec.isIndicator ? '1' : '0';
+      r.dataset.isSolidLike = isSolidLike_(state, rec.name) ? '1' : '0';
+      r.dataset.disposalDefault = rec.disposal || '';
+      r.dataset.guidance = rec.guidance || '';
+      r.dataset.class1 = rec.class1 || '';
+      r.dataset.class2 = rec.class2 || '';
+      r.dataset.studentOK = rec.studentOK || '';
+      r.dataset.hazard = rec.hazard || '';
+      r.dataset.cas = rec.cas || '';
+      r.dataset.formula = rec.formula || '';
+
+      markUnvalidated();
+    }
+
+    function addBlankChemical() {
+      const tbl = document.getElementById('chemicalList');
+      if (tbl.rows.length - 1 >= MAX_CHEMICALS) { showCustomAlert(`시약은 한 번에 최대 ${MAX_CHEMICALS}개까지만 신청할 수 있습니다.`); return; }
+      const r = tbl.insertRow();
+
+      const inpName = document.createElement('input'); inpName.type = 'text'; r.insertCell().appendChild(inpName);
+      const inpFormula = document.createElement('input'); inpFormula.type = 'text'; r.insertCell().appendChild(inpFormula);
+
+      const tdState = r.insertCell();
+      const inpState = document.createElement('input');
+      inpState.type = 'text';
+      inpState.placeholder = '상태';
+      inpState.addEventListener('input', function () {
+        r.dataset.state = this.value.trim();
+      });
+      tdState.appendChild(inpState);
+
+      const inpConc = document.createElement('input'); inpConc.type = 'text'; inpConc.placeholder = '농도 단위를 꼭 입력하세요.'; r.insertCell().appendChild(inpConc);
+      const inpVol = document.createElement('input'); inpVol  .type  = 'text'; inpVol.placeholder  = '사용량 단위를 꼭 입력하세요.'; r.insertCell().appendChild(inpVol);
+
+      const selDisp = document.createElement('select'); selDisp.innerHTML = '<option>선택하세요</option><option>유기</option><option>무기</option><option>산</option><option>염기</option><option>기타</option>'; r.insertCell().appendChild(selDisp);
+
+      const inpMsds= document.createElement('input'); inpMsds.type = 'text'; inpMsds.placeholder = '취급 주의/MSDS 핵심사항을 기록하세요.'; r.insertCell().appendChild(inpMsds);
+
+      const tdGuidance = r.insertCell(); tdGuidance.innerText = '';
+
+      const del = document.createElement('button'); del.type='button'; del.textContent='삭제'; del.className='btn-del';
+      del.onclick = () => { tbl.deleteRow(r.rowIndex); markUnvalidated(); };
+      r.insertCell().appendChild(del);
+
+      r.dataset.state = ''; r.dataset.isBio='0'; r.dataset.isIndicator='0';
+      r.dataset.disposalDefault = ''; r.dataset.guidance=''; r.dataset.class1=''; r.dataset.class2='';
+      r.dataset.studentOK=''; r.dataset.hazard=''; r.dataset.cas=''; r.dataset.formula='';
+      markUnvalidated();
+    }
+
+    function showCustomAlert(msg){
+      document.getElementById('alertMessage').innerHTML = msg;
+      document.getElementById('customAlertOverlay').style.display = 'block';
+      document.getElementById('customAlert').style.display = 'block';
+    }
+    function closeCustomAlert(){
+      document.getElementById('customAlert').style.display = 'none';
+      document.getElementById('customAlertOverlay').style.display = 'none';
+    }
+
+    function markUnvalidated(){
+      validatedOk = false;
+      const badge = document.getElementById('chemValidateBadge');
+      if (badge){ badge.className = 'pill'; badge.textContent = '미검증'; }
+      const rep = document.getElementById('chemValidateReport');
+      if (rep){ rep.className='note'; rep.style.display='none'; rep.innerHTML=''; }
+      const guard = document.getElementById('submitGuard');
+      if (guard){ guard.className='danger'; guard.textContent='시약 정보 검증을 통과해야 제출할 수 있습니다.'; }
+
+      const cd = document.getElementById('cooldownMsg');
+      if (cd && cooldownRemain > 0) cd.style.display='inline-block';
+
+      const btn = document.getElementById('btnValidateChem');
+      if (btn) btn.disabled = (cooldownRemain > 0);
+    }
+
+    function collectChemsForValidation(){
+      const chems = [];
+      document.querySelectorAll('#chemicalList tr').forEach((tr,i) => {
+        if (i===0) return;
+        const c = tr.cells;
+        const state = (tr.dataset.state || c[2].innerText.trim() || '');
+        chems.push({
+          name: (c[0].querySelector('input').value || '').trim(),
+          disposal: normDisposal(c[5].querySelector('select') ? c[5].querySelector('select').value : ''),
+          guidance: (c[7].innerText || tr.dataset.guidance || '').trim(),
+          conc: (c[3].querySelector('input').value || '').trim(),
+          vol:  (c[4].querySelector('input').value || '').trim(),
+          msds: (c[6].querySelector('input').value || '').trim(),
+          state: state
+        });
+      });
+      return chems;
+    }
+
+    function preCheckChems(chems){
+      const errs = [];
+      chems.forEach(ch => {
+        if (!ch.name) errs.push('• 시약명 누락');
+        if (!ch.vol)  errs.push(`• ${ch.name||'시약'}: 사용량 누락`);
+        if (!ch.msds) errs.push(`• ${ch.name||'시약'}: MSDS/주의사항 누락`);
+        if (isSolidLike_(ch.state, ch.name)) {
+          if (ch.conc) errs.push(`• ${ch.name||'시약'}: 고체/생물/지시약은 농도 입력 금지`);
+        } else {
+          if (!ch.conc) errs.push(`• ${ch.name||'시약'}: 액체는 농도 필수`);
+        }
+        if (!ch.disposal || ch.disposal==='선택하세요') errs.push(`• ${ch.name||'시약'}: 폐기 방법 미선택`);
+      });
+      return errs;
+    }
+
+    function onValidateChem(){
+      if (cooldownRemain > 0) return;
+
+      const chems = collectChemsForValidation();
+      const pre = preCheckChems(chems);
+      const badge = document.getElementById('chemValidateBadge');
+      const btn = document.getElementById('btnValidateChem');
+
+      if (pre.length){
+        const box = document.getElementById('chemValidateReport');
+        box.className='danger'; box.style.display='block';
+        box.innerHTML = `<b>검증 실패(입력 누락)</b><br>${pre.join('<br>')}`;
+        badge.className = 'pill badge-err'; badge.textContent = '검증 실패';
+        validatedOk = false; return;
+      }
+
+      btn.disabled = true; badge.textContent = '검증 중…';
+
+      const key = keyForThrottle();
+
+      google.script.run
+        .withSuccessHandler(res => {
+          btn.disabled = false;
+          if (res.throttle && !res.ok) {
+            startCooldown(res.retryAfterSec || 30);
+            showReport([], true);
+            badge.className = 'pill badge-err';
+            badge.textContent = '검증 실패(잠금)';
+            validatedOk = false; return;
+          }
+          if (res.ok) {
+            badge.className = 'pill badge-ok';
+            badge.textContent = '검증 통과';
+            const guard = document.getElementById('submitGuard');
+            guard.className='ok';
+            guard.textContent='검증 통과: 제출 가능합니다.';
+            const rep = document.getElementById('chemValidateReport');
+            rep.style.display='none'; rep.innerHTML='';
+            validatedOk = true;
+          } else {
+            badge.className = 'pill badge-err';
+            badge.textContent = '검증 실패';
+            showReport(res.mismatches || [], false);
+            validatedOk = false;
+          }
+        })
+        .withFailureHandler(err => {
+          btn.disabled = false;
+          badge.className = 'pill';
+          badge.textContent = '미검증';
+          alert('검증 중 오류: ' + (err && err.message ? err.message : err));
+        })
+        .validateChemicalsWithThrottle(key, chems);
+    }
+
+    function keyForThrottle(){
+      const sid   = (document.getElementById('studentId').value || '').trim();
+      const sname = (document.getElementById('studentName').value || '').trim();
+      const date  = (document.getElementById('date').value || '').trim();
+      if (sid && sname && date) return `${sid}_${sname}_${date}`;
+
+      const today = new Date().toISOString().slice(0,10);
+      let anon = localStorage.getItem('anonThrottleKey');
+      if (!anon) { anon = 'anon_' + Math.random().toString(36).slice(2); localStorage.setItem('anonThrottleKey', anon); }
+      return `${anon}_${today}`;
+    }
+
+    function showReport(mismatches, throttled){
+      const box = document.getElementById('chemValidateReport');
+      if(!box) return;
+      if (throttled){
+        box.className='danger'; box.style.display='block';
+        box.innerHTML='관리대장 분류와 불일치 항목이 있어 <b>일시적으로 재검증이 잠금</b>되었습니다.';
+        return;
+      }
+      if (!mismatches.length){ box.style.display='none'; box.innerHTML=''; return; }
+      const lines = mismatches.map(m => `• ${m.name} → 기대 분류: <b>${m.expected}</b>, 입력: <b>${m.got}</b>`).join('<br>');
+      box.className='danger'; box.style.display='block';
+      box.innerHTML = `<b>검증 실패 항목</b><br>${lines}<br>'폐기 방법'을 수정한 뒤 다시 검증하세요.`;
+    }
+
+    function startCooldown(sec){
+      cooldownRemain = sec;
+      const msg = document.getElementById('cooldownMsg');
+      msg.style.display='inline-block';
+      tickCooldown();
+    }
+    function tickCooldown(){
+      const msg = document.getElementById('cooldownMsg');
+      msg.textContent = `재검증까지 ${cooldownRemain}초`;
+      const btn = document.getElementById('btnValidateChem'); btn.disabled = true;
+      if (cooldownRemain <= 0){ stopCooldown(); return; }
+      cooldownTimer = setTimeout(()=>{ cooldownRemain--; tickCooldown(); },1000);
+    }
+    function stopCooldown(){
+      if (cooldownTimer) clearTimeout(cooldownTimer);
+      cooldownTimer = null; cooldownRemain = 0;
+      const msg = document.getElementById('cooldownMsg'); if (msg) msg.style.display='none';
+      const btn = document.getElementById('btnValidateChem'); if (btn) btn.disabled = false;
+    }
+
+    function validateForm() {
+      const ids = ['studentId','studentName','lab','title','purpose','materials','process','cleanup','precautions','teacher','totalParticipants'];
+      for (let id of ids) { if (!document.getElementById(id).value.trim()) { showCustomAlert('필수 항목을 모두 입력/선택해주세요.'); return false; } }
+      if (!document.getElementById('date').value) { showCustomAlert('실험할 날짜를 선택해주세요.'); return false; }
+
+      const timeCbs = Array.from(document.querySelectorAll('input[name="timeSlot"]')).filter(cb => !cb.disabled);
+      const timeChecked = timeCbs.some(cb => cb.checked);
+      if (!timeChecked) {
+        showCustomAlert('신청 가능한 시간 중 하나 이상을 선택해주세요.');
+        return false;
+      }
+
+      if (document.getElementById('purpose').value==='기타' && !document.getElementById('otherPurpose').value.trim()) { showCustomAlert('사용 목적을 "기타"로 선택한 경우 내용을 입력해야 합니다.'); return false; }
+      const agr = document.querySelector('input[name="agreement"]:checked'); if (!agr || agr.value!=='yes') { showCustomAlert('실험·실습실 사용 제약 안내에 동의해야 신청할 수 있습니다.'); return false; }
+      if (!document.querySelectorAll('.safety-item input:checked').length) { showCustomAlert('안전장구를 최소 하나 이상 선택해야 합니다.'); return false; }
+      if (document.getElementById('otherSafetyCheck').checked && !document.getElementById('otherSafety').value.trim()) { showCustomAlert('기타 안전장구를 선택한 경우 내용을 입력해야 합니다.'); return false; }
+
+      const labVal = (document.getElementById('lab')?.value || '').trim();
+      const advSel = document.getElementById('advancedLab');
+      const advReason = document.getElementById('advancedLabReason');
+      if (labVal === '첨단기기실험실') {
+        if (advSel.value !== '예') { showCustomAlert('첨단기기실험실은 "첨단기기실 이용 여부"가 예로 고정됩니다.'); return false; }
+        if (!advReason.value.trim()) { showCustomAlert('첨단기기실 이용 사유를 입력하세요.'); return false; }
+      } else {
+        if (advSel.value==='예' && !advReason.value.trim()) { showCustomAlert('첨단기기실 이용을 예로 선택하면 사유를 입력해야 합니다.'); return false; }
+      }
+
+      if (document.getElementById('hood').value==='예' && !document.getElementById('hoodReason').value.trim()) { showCustomAlert('후드 사용을 예로 선택하면 사유를 입력해야 합니다.'); return false; }
+
+      const rows = document.querySelectorAll('#chemicalList tr');
+      if (rows.length > (MAX_CHEMICALS + 1)) { showCustomAlert(`시약은 한 번에 최대 ${MAX_CHEMICALS}개까지만 신청할 수 있습니다.`); return false; }
+      if (rows.length > 1) {
+        for (let i = 1; i < rows.length; i++) {
+          const tr = rows[i];
+          const c = tr.cells;
+          const name  = c[0].querySelector('input').value.trim();
+          const state = (tr.dataset.state || c[2].innerText.trim() || '');
+          const vol   = c[4].querySelector('input').value.trim();
+          const disposal = c[5].querySelector('select') ? c[5].querySelector('select').value : '';
+          const msds  = c[6].querySelector('input').value.trim();
+
+          if (!name) { showCustomAlert('시약명을 입력해야 합니다.'); return false; }
+          if (!vol || !msds) { showCustomAlert('시약의 사용량과 MSDS를 모두 입력하세요.'); return false; }
+          if (!disposal || disposal === '선택하세요') { showCustomAlert('시약의 폐수 처리 분류(유기/무기/산/염기/기타)를 선택하세요.'); return false; }
+
+          const conc  = c[3].querySelector('input').value.trim();
+
+          if (isSolidLike_(state, name)) {
+            if (conc) { showCustomAlert('고체/생물/지시약 시약은 농도를 입력할 수 없습니다.'); return false; }
+          } else {
+            if (!conc) { showCustomAlert('액체 시약은 농도를 반드시 입력해야 합니다.'); return false; }
+          }
+        }
+      }
+
+      updateRestrictedFlags();
+      if (isSeventhExceptionActive()) {
+        document.getElementById('studentId')?.classList.remove('blocked-input');
+        document.getElementById('teamMembers')?.classList.remove('blocked-input');
+      } else if (hasRestrictedMatch) {
+        showCustomAlert(
+          '과학 실험·실습실 사용 신청이 불가능한 학생의 정보가 포함되어 있습니다.<br>' +
+          '과학 실험·실습실 사용 신청하려면 해당 정보를 수정 혹은 삭제한 뒤 다시 신청해주세요.<br><br>' +
+          '<b>※ 단, 7교시에는 신청이 가능합니다.</b>'
+        );
+        return false;
+      }
+
+      if (!validatedOk) {
+        showCustomAlert('시약 정보 검증을 먼저 통과하세요.');
+        return false;
+      }
+
+      return true;
+    }
+
+    function submitForm(){ if(!validateForm()) return; showConfirmDialog(); }
+    function showConfirmDialog() {
+      const dialog = document.getElementById('confirmDialog');
+      const overlay = document.getElementById('dialogOverlay');
+      const confirmBtn = document.getElementById('btnConfirmSubmit');
+      document.getElementById('confirmStudentCount').value = '';
+      document.querySelectorAll('#confirmDialog input[type="radio"]').forEach(radio => radio.checked = false);
+      confirmBtn.disabled = true; overlay.style.display = 'block'; dialog.style.display = 'block';
+    }
+    function closeConfirmDialog() {
+      document.getElementById('confirmDialog').style.display = 'none';
+      document.getElementById('dialogOverlay').style.display = 'none';
+    }
+    function checkAllConfirms() {
+      const studentCount = document.getElementById('confirmStudentCount').value;
+      const totalParticipants = document.getElementById('totalParticipants').value;
+      const confirm2 = document.querySelector('input[name="confirm2"]:checked');
+      const confirm3 = document.querySelector('input[name="confirm3"]:checked');
+      const confirm4 = document.querySelector('input[name="confirm4"]:checked');
+      const allYes =
+        studentCount && studentCount === totalParticipants &&
+        confirm2 && confirm2.value === 'yes' &&
+        confirm3 && confirm3.value === 'yes' &&
+        confirm4 && confirm4.value === 'yes';
+      document.getElementById('btnConfirmSubmit').disabled = !allYes;
+    }
+    function handleNo(q) {
+      document.getElementById('noWarningDialog').style.display = 'block';
+      setTimeout(() => {
+        document.querySelectorAll(`input[name="confirm${q}"]`).forEach(r => r.checked = false);
+        checkAllConfirms();
+      }, 100);
+    }
+    function closeNoWarning() { document.getElementById('noWarningDialog').style.display = 'none'; }
+
+    document.addEventListener('DOMContentLoaded', function() {
+      const confirmCount = document.getElementById('confirmStudentCount');
+      if (confirmCount) confirmCount.addEventListener('input', function() { this.value = this.value.replace(/[^0-9]/g, ''); checkAllConfirms(); });
+    });
+
+    function processSubmit() {
+      closeConfirmDialog();
+      showOverlayBlock("신청 중입니다.<br>잠시만 기다려주세요.<br>클릭은 한 번만 해주세요.");
+      const btn = document.querySelector('#applicationForm button'); if (btn) btn.disabled = true;
+
+      const timeSlots = Array.from(document.querySelectorAll('input[name="timeSlot"]:checked')).map(cb => cb.value);
+      const safety = Array.from(document.querySelectorAll('.safety-item input:checked')).map(cb => cb.id==='otherSafetyCheck' ? document.getElementById('otherSafety').value : cb.value);
+
+      const chems = [];
+      document.querySelectorAll('#chemicalList tr').forEach((tr,i) => {
+        if (i===0) return;
+        const c = tr.cells;
+        chems.push({
+          '시약명'       : c[0].querySelector('input').value.trim(),
+          '화학식'       : c[1].querySelector('input').value.trim(),
+          '상태'         : (tr.dataset.state || c[2].innerText.trim()),
+          '농도'         : c[3].querySelector('input').value.trim(),
+          '용량'         : c[4].querySelector('input').value.trim(),
+          '폐기 방법'    : c[5].querySelector('select') ? c[5].querySelector('select').value : '',
+          'MSDS 및 취급 주의사항' : c[6].querySelector('input').value.trim(),
+          '교사임장여부' : (c[7].innerText || tr.dataset.guidance || '').trim()
+        });
+      });
+
+      const data = {
+        studentId        : document.getElementById('studentId').value,
+        studentName      : document.getElementById('studentName').value,
+        teamMembers      : document.getElementById('teamMembers').value,
+        totalParticipants: document.getElementById('totalParticipants').value,
+        lab              : document.getElementById('lab').value,
+        date             : document.getElementById('date').value,
+        timeSlot         : timeSlots.join(', '),
+        title            : document.getElementById('title').value,
+        purpose          : document.getElementById('purpose').value,
+        otherPurpose     : document.getElementById('otherPurpose').value,
+        advancedLab      : document.getElementById('advancedLab').value,
+        advancedLabReason: document.getElementById('advancedLabReason').value,
+        materials        : document.getElementById('materials').value,
+        hood             : document.getElementById('hood').value,
+        hoodReason       : document.getElementById('hoodReason').value,
+        process          : document.getElementById('process').value,
+        cleanup          : document.getElementById('cleanup').value,
+        precautions      : document.getElementById('precautions').value,
+        safety           : safety.join(', '),
+        teacher          : document.getElementById('teacher').value,
+        teacherEmail     : document.getElementById('teacherEmail').value,
+        chemicals        : chems,
+        is7thPeriod      : timeSlots.includes('7교시')
+      };
+
+      google.script.run
+        .withSuccessHandler(res => {
+          hideOverlayBlock();
+          formDirty = false;
+          localStorage.removeItem(AUTO_SAVE_KEY);
+          const idMatch = String(res).match(/ID:\s*([^\s)]+)/);
+          const appId = idMatch ? idMatch[1] : '';
+
+          const form = document.getElementById('applicationForm');
+          form.style.display = 'none';
+          document.querySelector('.header').style.display = 'none';
+          document.querySelector('.progress-section').style.display = 'none';
+          document.querySelector('.bottom-nav').style.display = 'none';
+
+          let completionDiv = document.getElementById('completionScreen');
+          if (!completionDiv) {
+            completionDiv = document.createElement('div');
+            completionDiv.id = 'completionScreen';
+            form.parentNode.insertBefore(completionDiv, form.nextSibling);
+          }
+
+          const lab = document.getElementById('lab') ? document.getElementById('lab').value : '';
+          const date = document.getElementById('date') ? document.getElementById('date').value : '';
+          const title = document.getElementById('title') ? document.getElementById('title').value : '';
+
+          completionDiv.innerHTML =
+            '<div style="text-align:center;max-width:600px;margin:60px auto;padding:30px;">' +
+            '<div style="font-size:3rem;margin-bottom:16px;">✅</div>' +
+            '<h2 style="color:var(--success);margin-bottom:12px;">신청이 완료되었습니다!</h2>' +
+            '<div style="background:var(--success-light);border:1px solid #bbf7d0;border-radius:var(--radius);padding:20px;margin:20px 0;text-align:left;">' +
+            '<div style="margin-bottom:8px;"><b>신청 ID:</b> <code style="background:#e2e8f0;padding:2px 8px;border-radius:4px;user-select:all;">' + (appId || '(확인 중)') + '</code></div>' +
+            (lab ? '<div style="margin-bottom:8px;"><b>실험·실습실:</b> ' + lab + '</div>' : '') +
+            (date ? '<div style="margin-bottom:8px;"><b>실험 날짜:</b> ' + date + '</div>' : '') +
+            (title ? '<div style="margin-bottom:8px;"><b>실험 제목:</b> ' + title + '</div>' : '') +
+            '</div>' +
+            '<p style="color:var(--text-muted);margin:16px 0;">지도교사의 1차 승인 → 담당교사의 최종 승인을 거쳐 확정됩니다.<br>승인/반려 결과는 이메일로 안내됩니다.</p>' +
+            '<button onclick="resetToNewForm()" style="padding:12px 24px;background:var(--primary);color:#fff;border:none;border-radius:var(--radius-sm);font-size:1rem;font-weight:600;cursor:pointer;">새 신청서 작성</button>' +
+            '</div>';
+          completionDiv.style.display = 'block';
+        })
+        .withFailureHandler(err => {
+          hideOverlayBlock();
+          console.error(err);
+          const raw = (err && err.message ? err.message : String(err) || '');
+          const note = '\n\n※ 단, 7교시에는 신청이 가능합니다.';
+          const finalMsg = /7교시에는 신청이 가능합니다/.test(raw) ? raw : (raw + note);
+          alert('오류 발생: ' + finalMsg);
+          if (btn) btn.disabled = false;
+          document.getElementById('statusMessage').textContent = '';
+        })
+        .submitApplication(data);
+    }
+
+    /* ====================== 통합 불러오기 다이얼로그 ====================== */
+    function openLoadDialog(tabIndex) {
+      document.getElementById('loadSid').value  = '';
+      document.getElementById('loadName').value = '';
+      document.getElementById('loadDate').value = '';
+      document.getElementById('approvedSid').value  = '';
+      document.getElementById('approvedName').value = '';
+      document.getElementById('approvedResults').innerHTML = '';
+
+      document.getElementById('loadOverlay').style.display = 'block';
+      document.getElementById('loadDialog').style.display  = 'block';
+
+      switchLoadTab(tabIndex || 0);
+
+      if (tabIndex === 1) {
+        setTimeout(() => document.getElementById('approvedSid').focus(), 0);
+      } else {
+        setTimeout(() => document.getElementById('loadSid').focus(), 0);
+      }
+    }
+    function closeLoadDialog() {
+      document.getElementById('loadOverlay').style.display = 'none';
+      document.getElementById('loadDialog').style.display  = 'none';
+    }
+
+    function switchLoadTab(idx) {
+      const tabs = document.querySelectorAll('.load-tab');
+      const panels = document.querySelectorAll('.load-panel');
+      tabs.forEach((tab, i) => {
+        tab.classList.remove('active', 'active-green');
+        panels[i].classList.remove('active');
+        if (i === idx) {
+          tab.classList.add(i === 1 ? 'active-green' : 'active');
+          panels[i].classList.add('active');
+        }
+      });
+    }
+
+    function snapshotForm() {
+      const sid  = (document.getElementById('studentId').value || '').trim();
+      const name = (document.getElementById('studentName').value || '').trim();
+      const date = (document.getElementById('date').value || '').trim();
+      if (!sid || !name || !date) { showCustomAlert('임시저장: 학번·이름·날짜는 반드시 입력해야 합니다.'); return; }
+
+      showOverlayBlock("임시 저장 중입니다…");
+      const timeSlots = Array.from(document.querySelectorAll('input[name="timeSlot"]:checked')).map(cb => cb.value);
+      const safety = Array.from(document.querySelectorAll('.safety-item input:checked')).map(cb => cb.id==='otherSafetyCheck' ? document.getElementById('otherSafety').value : cb.value);
+      const chems = [];
+      document.querySelectorAll('#chemicalList tr').forEach((tr,i) => {
+        if (i===0) return;
+        const c = tr.cells;
+        chems.push({
+          '시약명' : c[0].querySelector('input').value.trim(),
+          '화학식' : c[1].querySelector('input').value.trim(),
+          '상태'   : (tr.dataset.state || c[2].innerText.trim()),
+          '농도'   : c[3].querySelector('input').value.trim(),
+          '용량'   : c[4].querySelector('input').value.trim(),
+          '폐기 방법' : c[5].querySelector('select') ? c[5].querySelector('select').value : '',
+          'MSDS 및 취급 주의사항' : c[6].querySelector('input').value.trim(),
+          '교사임장여부': (c[7].innerText || tr.dataset.guidance || '').trim()
+        });
+      });
+      const payload = {
+        studentId   : sid,
+        studentName : name,
+        date        : date,
+        timeSlot    : timeSlots.join(', '),
+        lab         : document.getElementById('lab').value,
+        title       : document.getElementById('title').value,
+        purpose     : document.getElementById('purpose').value,
+        otherPurpose: document.getElementById('otherPurpose').value,
+        advancedLab : document.getElementById('advancedLab').value,
+        advancedLabReason: document.getElementById('advancedLabReason').value,
+        materials   : document.getElementById('materials').value,
+        hood        : document.getElementById('hood').value,
+        hoodReason  : document.getElementById('hoodReason').value,
+        process     : document.getElementById('process').value,
+        cleanup     : document.getElementById('cleanup').value,
+        precautions : document.getElementById('precautions').value,
+        safety      : safety.join(', '),
+        teacher     : document.getElementById('teacher').value,
+        teacherEmail: document.getElementById('teacherEmail').value,
+        chemicals   : chems,
+        teamMembers      : document.getElementById('teamMembers').value,
+        totalParticipants: document.getElementById('totalParticipants').value
+      };
+      google.script.run.withSuccessHandler(msg => {
+        hideOverlayBlock(); formDirty = false; alert(msg || '임시저장 완료');
+      }).withFailureHandler(err => {
+        hideOverlayBlock(); alert('임시저장 실패: ' + (err && err.message || err));
+      }).saveDraft(payload);
+    }
+
+    function normalizeYMD(s){
+      const m = String(s||'').match(/(\d{4})[-./](\d{1,2})[-./](\d{1,2})/);
+      if(!m) return '';
+      const y=m[1], mm=('0'+m[2]).slice(-2), dd=('0'+m[3]).slice(-2);
+      return `${y}-${mm}-${dd}`;
+    }
+
+    function loadDraftSubmit(){
+      const sid  = (document.getElementById('loadSid').value || '').replace(/\D/g,'');
+      const name = (document.getElementById('loadName').value || '').trim();
+      const date = normalizeYMD(document.getElementById('loadDate').value || '');
+
+      if(sid.length !== 5){ alert('대표자 학번(5자리)을 정확히 입력하세요.'); return; }
+      if(!name){ alert('대표자 이름을 입력하세요.'); return; }
+      if(!date){ alert('신청 날짜(YYYY-MM-DD)를 선택하세요.'); return; }
+
+      showOverlayBlock('불러오는 중입니다…', true);
+
+      google.script.run.withSuccessHandler(data=>{
+        hideOverlayBlock();
+        try {
+          applyLoadedData(data);
+          closeLoadDialog();
+          alert('임시저장 내역을 불러왔습니다.');
+          markUnvalidated();
+        } catch(e) {
+          alert('불러오기 적용 중 오류: ' + e);
+        }
+      }).withFailureHandler(err => {
+        hideOverlayBlock();
+        alert((err && err.message) ? err.message : '임시저장 불러오기 실패');
+      }).loadDraft(sid, name, date);
+    }
+
+    /* ===== 승인된 신청서 조회 ===== */
+    function searchApproved() {
+      const sid  = (document.getElementById('approvedSid').value || '').replace(/\D/g, '');
+      const name = (document.getElementById('approvedName').value || '').trim();
+      if (sid.length !== 5) { alert('학번(5자리)을 정확히 입력하세요.'); return; }
+      if (!name) { alert('이름을 입력하세요.'); return; }
+
+      const container = document.getElementById('approvedResults');
+      container.innerHTML = '<div style="text-align:center;padding:12px;color:#666;">검색 중...</div>';
+
+      google.script.run
+        .withSuccessHandler(list => {
+          if (!list || !list.length) {
+            container.innerHTML = '<div style="text-align:center;padding:12px;color:#999;">승인된 신청서가 없습니다.</div>';
+            return;
+          }
+          container.innerHTML = list.map((item, i) => `
+            <div class="result-item">
+              <div class="result-info">
+                <b>${escapeHtml(item.title || '(제목없음)')}</b><br>
+                ${escapeHtml(item.lab)} / ${escapeHtml(item.date)} / ${escapeHtml(item.time)}<br>
+                <span style="color:#888;font-size:11px;">제출: ${escapeHtml(item.submit)}</span>
+              </div>
+              <button type="button" style="padding:6px 14px;background:var(--success);color:#fff;border:none;border-radius:4px;cursor:pointer;font-weight:bold;white-space:nowrap;"
+                      onclick="loadApprovedItem('${escapeHtml(item.id)}')">불러오기</button>
+            </div>`).join('');
+        })
+        .withFailureHandler(err => {
+          container.innerHTML = '<div style="color:#d32f2f;padding:12px;">검색 실패: ' + escapeHtml(err.message || String(err)) + '</div>';
+        })
+        .getApprovedApplications(sid, name);
+    }
+
+    function loadApprovedItem(appId) {
+      showOverlayBlock('승인된 신청서를 불러오는 중…', true);
+      google.script.run
+        .withSuccessHandler(data => {
+          hideOverlayBlock();
+          try {
+            applyLoadedData(data, true);
+            closeLoadDialog();
+            alert('승인된 신청서를 불러왔습니다.\n실험 날짜와 시간을 새로 선택해 주세요.');
+            markUnvalidated();
+          } catch(e) {
+            alert('불러오기 적용 중 오류: ' + e);
+          }
+        })
+        .withFailureHandler(err => {
+          hideOverlayBlock();
+          alert((err && err.message) ? err.message : '신청서 불러오기 실패');
+        })
+        .loadApprovedApplication(appId);
+    }
+
+    /** 임시저장 / 승인 신청서 공통 폼 복원 함수 */
+    function applyLoadedData(data, clearDate) {
+      document.getElementById('studentId').value    = data.studentId || '';
+      document.getElementById('studentName').value  = data.studentName || '';
+      document.getElementById('date').value         = clearDate ? '' : (data.date || '');
+      showDayOfWeek();
+
+      document.getElementById('teamMembers').value       = data.teamMembers || '';
+      document.getElementById('totalParticipants').value = data.totalParticipants || '';
+      document.getElementById('lab').value = data.lab || '';
+      handleLabChange(document.getElementById('lab'));
+      document.getElementById('title').value       = data.title || '';
+      document.getElementById('purpose').value     = data.purpose || '';
+      handlePurposeChange(document.getElementById('purpose'));
+      document.getElementById('otherPurpose').value = data.otherPurpose || '';
+
+      document.getElementById('advancedLab').value = data.advancedLab || '';
+      handleAdvancedLabChange(document.getElementById('advancedLab'));
+      document.getElementById('advancedLabReason').value = data.advancedLabReason || '';
+
+      document.getElementById('materials').value   = data.materials || '';
+      document.getElementById('hood').value        = data.hood || '';
+      handleHoodChange(document.getElementById('hood'));
+      document.getElementById('hoodReason').value  = data.hoodReason || '';
+      document.getElementById('process').value     = data.process || '';
+      document.getElementById('cleanup').value     = data.cleanup || '';
+      document.getElementById('precautions').value = data.precautions || '';
+
+      // 안전장구
+      document.querySelectorAll('.safety-item input[type="checkbox"]').forEach(cb => cb.checked = false);
+      const safetyItems = (data.safety || '').split(',').map(s => s.trim()).filter(Boolean);
+      const safetyMap = {
+        '실험복':'실험복','보안경':'보안경','덮개신발(슬리퍼 금지)':'덮개신발(슬리퍼 금지)',
+        '라텍스 장갑(흰색)':'라텍스 장갑(흰색)','내열장갑(주황색)':'내열장갑(주황색)','산 방호장갑(초록색)':'산 방호장갑(초록색)'
+      };
+      let otherUsed = false;
+      safetyItems.forEach(item => {
+        const key = safetyMap[item];
+        if (key) {
+          const sel = Array.from(document.querySelectorAll('.safety-item input[type="checkbox"]')).find(cb => cb.value === key);
+          if (sel) sel.checked = true;
+        } else if (item) {
+          otherUsed = true;
+          const otherCb = document.getElementById('otherSafetyCheck');
+          otherCb.checked = true; handleSafetyOtherChange(otherCb);
+          document.getElementById('otherSafety').value = item;
+        }
+      });
+      if (!otherUsed) {
+        const otherCb = document.getElementById('otherSafetyCheck');
+        otherCb.checked = false; handleSafetyOtherChange(otherCb);
+      }
+
+      // 시간
+      document.querySelectorAll('input[name="timeSlot"]').forEach(cb => cb.checked = false);
+      if (!clearDate) {
+        (data.timeSlot || '').split(',').map(s=>s.trim()).filter(Boolean).forEach(v => {
+          const el = Array.from(document.querySelectorAll('input[name="timeSlot"]')).find(cb => cb.value === v);
+          if (el && !el.disabled) el.checked = true;
+        });
+      }
+
+      document.getElementById('teacher').value     = data.teacher || '';
+      document.getElementById('teacherEmail').value = data.teacherEmail || '';
+
+      // 시약
+      resetChemicalTable();
+      (data.chemicals || []).forEach(c => {
+        const tbl = document.getElementById('chemicalList');
+        const r = tbl.insertRow();
+        const inpName = document.createElement('input'); inpName.type='text'; inpName.value=c['시약명']||''; r.insertCell().appendChild(inpName);
+        const inpFormula = document.createElement('input'); inpFormula.type='text'; inpFormula.value=c['화학식']||''; r.insertCell().appendChild(inpFormula);
+        const tdState = r.insertCell(); tdState.innerText = c['상태'] || c['분류1'] || '';
+        const chemState = tdState.innerText;
+        const chemName = inpName.value;
+        const inpConc = document.createElement('input'); inpConc.type='text'; inpConc.value=c['농도']||'';
+        if (isSolidLike_(chemState, chemName)) { inpConc.value=''; inpConc.disabled=true; inpConc.placeholder=getConcPlaceholder_(chemState, chemName); }
+        r.insertCell().appendChild(inpConc);
+        const inpVol  = document.createElement('input'); inpVol.type='text'; inpVol.value=c['용량']||''; r.insertCell().appendChild(inpVol);
+        const selDisp = document.createElement('select'); selDisp.innerHTML='<option>선택하세요</option><option>유기</option><option>무기</option><option>산</option><option>염기</option><option>기타</option>'; r.insertCell().appendChild(selDisp);
+        selDisp.value = normDisposal(c['폐기 방법']||'');
+        const inpMsds = document.createElement('input'); inpMsds.type='text'; inpMsds.value=c['MSDS 및 취급 주의사항']||c['MSDS']||''; r.insertCell().appendChild(inpMsds);
+        const tdG = r.insertCell(); tdG.innerText = normalizeGuidance(c['교사임장여부']||'');
+        const del = document.createElement('button'); del.type='button'; del.textContent='삭제'; del.className='btn-del'; del.onclick=()=>{ tbl.deleteRow(r.rowIndex); markUnvalidated(); }; r.insertCell().appendChild(del);
+        r.dataset.state = chemState;
+        r.dataset.isBio = RE_BIO.test(chemState) ? '1' : '0';
+        r.dataset.isIndicator = RE_INDICATOR.test(chemState + ' ' + chemName) ? '1' : '0';
+        r.dataset.isSolidLike = isSolidLike_(chemState, chemName) ? '1' : '0';
+        r.dataset.disposalDefault='';
+        r.dataset.guidance = tdG.innerText; r.dataset.class1 = c['분류1']||'';
+        r.dataset.class2=''; r.dataset.studentOK=''; r.dataset.hazard=''; r.dataset.cas='';
+        r.dataset.formula = inpFormula.value;
+      });
+
+      if (document.getElementById('lab').value === '첨단기기실험실') {
+        document.getElementById('advancedLab').value = '예';
+        document.getElementById('advancedLab').disabled = true;
+        document.getElementById('advancedLabNote').style.display = 'block';
+        document.getElementById('advancedLabReason').style.display = 'block';
+      }
+
+      // 스텝1로 이동
+      goStep(1);
+    }
+
+    function resetChemicalTable() { const tbl = document.getElementById('chemicalList'); while (tbl.rows.length > 1) tbl.deleteRow(1); markUnvalidated(); }
+    function resetSearchResults() {
+      document.getElementById('chemicalSearch').value = '';
+      document.getElementById('searchResults').innerHTML = `
+        <tr>
+          <th>물질명</th><th>화학식</th><th>분류1</th><th>교사임장여부</th><th>선택</th>
+        </tr>`;
+    }
+
+    function scrollToTopSmooth(){ window.scrollTo({top:0, behavior:'smooth'}); }
+    function scrollToBottomSmooth(){ window.scrollTo({top:document.body.scrollHeight, behavior:'smooth'}); }
+
+    function createRipple(e){
+      const btn = e.currentTarget;
+      if (!btn.style.position || btn.style.position === 'static') btn.style.position = 'relative';
+      btn.style.overflow = 'hidden';
+      const rect = btn.getBoundingClientRect();
+      const ripple = document.createElement('span');
+      const size = Math.max(rect.width, rect.height);
+      ripple.className = 'ripple';
+      ripple.style.width = ripple.style.height = size + 'px';
+      const x = e.clientX - rect.left - size/2;
+      const y = e.clientY - rect.top  - size/2;
+      ripple.style.left = x + 'px'; ripple.style.top  = y + 'px';
+      btn.appendChild(ripple);
+      setTimeout(() => ripple.remove(), 500);
+    }
+    function initFabFeedback(){
+      document.querySelectorAll('button').forEach(btn=>{
+        btn.addEventListener('click', createRipple);
+        btn.addEventListener('keydown', (ev)=>{ if(ev.key === ' ' || ev.key === 'Enter'){ ev.preventDefault(); btn.click(); }});
+      });
+    }
+
+    function handlePurposeChange(sel) {
+      const other = document.getElementById('otherPurpose');
+      if (sel.value === '기타') {
+        other.style.display = 'block';
+      } else {
+        other.style.display = 'none';
+        other.value = '';
+      }
+      updatePeriod7Availability();
+      markUnvalidated();
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+      const labSel = document.getElementById('lab');
+      if (labSel) {
+        [...labSel.options].forEach(opt => {
+          if (opt.value) {
+            labOriginalLabels[opt.value] = opt.textContent;
+          }
+        });
+      }
+    });
+
+    function resetToNewForm() {
+      const form = document.getElementById('applicationForm');
+      const completion = document.getElementById('completionScreen');
+      if (completion) completion.style.display = 'none';
+      form.style.display = '';
+      document.querySelector('.header').style.display = '';
+      document.querySelector('.progress-section').style.display = '';
+      document.querySelector('.bottom-nav').style.display = '';
+      form.reset();
+      if (typeof resetChemicalTable === 'function') resetChemicalTable();
+      if (typeof resetSearchResults === 'function') resetSearchResults();
+      if (typeof markUnvalidated === 'function') markUnvalidated();
+      document.getElementById('statusMessage').textContent = '';
+      formDirty = false;
+      goStep(1);
+      window.scrollTo(0, 0);
+    }
+
+    function renderAvailabilityTable(unavail) {
+      let tableDiv = document.getElementById('availabilityTable');
+      if (!tableDiv) {
+        tableDiv = document.createElement('div');
+        tableDiv.id = 'availabilityTable';
+        tableDiv.style.cssText = 'margin:12px 0;font-size:13px;';
+        const labSel = document.getElementById('lab');
+        if (labSel) labSel.parentNode.insertBefore(tableDiv, labSel.nextSibling);
+      }
+
+      if (!unavail) {
+        tableDiv.innerHTML = '';
+        return;
+      }
+
+      if (unavail.allBlocked) {
+        tableDiv.innerHTML = '<div style="background:var(--danger-light);color:#dc2626;padding:8px 12px;border-radius:6px;font-weight:600;">해당 날짜는 전체 사용 불가입니다.</div>';
+        return;
+      }
+
+      const labs = [...document.getElementById('lab').options].filter(o => o.value).map(o => o.value);
+      const purposeVal = (document.getElementById('purpose')?.value || '').trim();
+      const dateVal = (document.getElementById('date')?.value || '').trim();
+      const show7th = purposeVal === '동아리 활동' && isTuesday(dateVal);
+      const slots = show7th ? ['ET','EP1','7교시'] : ['ET','EP1'];
+
+      let html = '<table style="width:100%;border-collapse:collapse;font-size:12px;margin-top:8px;">';
+      html += '<tr><th style="border:1px solid #ddd;padding:6px;background:#f3f4f6;">실험·실습실</th>';
+      slots.forEach(s => { html += '<th style="border:1px solid #ddd;padding:6px;background:#f3f4f6;">' + s + '</th>'; });
+      html += '</tr>';
+
+      labs.forEach(lab => {
+        html += '<tr><td style="border:1px solid #ddd;padding:6px;font-weight:600;">' + lab + '</td>';
+        slots.forEach(slot => {
+          const labBlocked = (unavail.blockedLabs || []).includes(lab);
+          const timeBlocked = (unavail.blockedTimes || []).includes(slot);
+          const perLabBlocked = unavail.blockedTimesByLab && unavail.blockedTimesByLab[lab] && unavail.blockedTimesByLab[lab].includes(slot);
+          const blocked = labBlocked || timeBlocked || perLabBlocked;
+          const style = blocked
+            ? 'border:1px solid #ddd;padding:6px;text-align:center;background:var(--danger-light);color:#dc2626;'
+            : 'border:1px solid #ddd;padding:6px;text-align:center;background:var(--success-light);color:#16a34a;';
+          html += '<td style="' + style + '">' + (blocked ? '❌' : '✅') + '</td>';
+        });
+        html += '</tr>';
+      });
+      html += '</table>';
+      tableDiv.innerHTML = html;
+    }
+
+    /* ===== Step Navigation ===== */
+    var currentStep = 1;
+
+    function goStep(n) {
+      currentStep = n;
+      for (var i = 1; i <= 5; i++) {
+        document.getElementById('step' + i).classList.toggle('active', i === n);
+        var si = document.getElementById('si' + i);
+        si.classList.remove('active', 'done');
+        if (i < n) si.classList.add('done');
+        else if (i === n) si.classList.add('active');
+      }
+      document.getElementById('progressSteps').className = 'progress-steps step-' + n;
+
+      // Bottom nav
+      document.getElementById('btnPrev').style.display = n > 1 ? '' : 'none';
+      document.getElementById('btnNext').style.display = n < 5 ? '' : 'none';
+      document.getElementById('btnSubmit').style.display = n === 5 ? '' : 'none';
+      document.getElementById('stepIndicator').textContent = 'Step ' + n + ' / 5';
+
+      // Build review on step 5
+      if (n === 5) buildReview();
+
+      window.scrollTo(0, 0);
+    }
+
+    function nextStep() { if (currentStep < 5) goStep(currentStep + 1); }
+    function prevStep() { if (currentStep > 1) goStep(currentStep - 1); }
+
+    function buildReview() {
+      const r = document.getElementById('reviewContent');
+      if (!r) return;
+
+      const sid = document.getElementById('studentId').value || '';
+      const sname = document.getElementById('studentName').value || '';
+      const tm = document.getElementById('teamMembers').value || '';
+      const total = document.getElementById('totalParticipants').value || '';
+      const purpose = document.getElementById('purpose').value || '';
+      const otherPurpose = document.getElementById('otherPurpose').value || '';
+      const dateVal = document.getElementById('date').value || '';
+      const daySpan = document.getElementById('dayOfWeek').textContent || '';
+      const timeSlots = Array.from(document.querySelectorAll('input[name="timeSlot"]:checked')).map(cb => cb.value).join(', ');
+      const lab = document.getElementById('lab').value || '';
+      const title = document.getElementById('title').value || '';
+      const advLab = document.getElementById('advancedLab').value || '';
+      const hood = document.getElementById('hood').value || '';
+      const materials = document.getElementById('materials').value || '';
+      const teacher = document.getElementById('teacher').value || '';
+      const safety = Array.from(document.querySelectorAll('.safety-item input:checked')).map(cb => {
+        if (cb.id === 'otherSafetyCheck') return document.getElementById('otherSafety').value || '기타';
+        return cb.value;
+      }).join(', ');
+
+      // 시약 목록
+      let chemHtml = '';
+      document.querySelectorAll('#chemicalList tr').forEach((tr, i) => {
+        if (i === 0) return;
+        const c = tr.cells;
+        const name = c[0].querySelector('input').value.trim();
+        const conc = c[3].querySelector('input').value.trim();
+        const vol = c[4].querySelector('input').value.trim();
+        const guidance = (c[7].innerText || '').trim();
+        const guidanceBadge = guidance === '필요'
+          ? '<span style="color:#92400e;font-weight:600;">임장필요</span>'
+          : '<span style="color:#065f46;">불필요</span>';
+        chemHtml += '<div style="margin-bottom:4px;">' + escapeHtml(name);
+        if (conc || vol) chemHtml += ' (' + (conc ? escapeHtml(conc) : '') + (conc && vol ? ', ' : '') + (vol ? escapeHtml(vol) : '') + ')';
+        chemHtml += ' — ' + guidanceBadge + '</div>';
+      });
+      if (!chemHtml) chemHtml = '<span style="color:var(--text-muted);">시약 없음</span>';
+
+      r.innerHTML =
+        '<div class="review-section">' +
+        '<div class="review-section-title">📋 기본 정보</div>' +
+        '<div class="review-row"><div class="review-label">대표자</div><div class="review-value">' + escapeHtml(sid) + ' ' + escapeHtml(sname) + '</div></div>' +
+        '<div class="review-row"><div class="review-label">동반자</div><div class="review-value">' + escapeHtml(tm || '없음') + '</div></div>' +
+        '<div class="review-row"><div class="review-label">총 인원</div><div class="review-value">' + escapeHtml(total) + '명</div></div>' +
+        '<div class="review-row"><div class="review-label">목적</div><div class="review-value">' + escapeHtml(purpose === '기타' ? otherPurpose : purpose) + '</div></div>' +
+        '</div>' +
+        '<div class="review-section">' +
+        '<div class="review-section-title">📅 일정</div>' +
+        '<div class="review-row"><div class="review-label">날짜</div><div class="review-value">' + escapeHtml(dateVal) + ' ' + escapeHtml(daySpan) + '</div></div>' +
+        '<div class="review-row"><div class="review-label">시간</div><div class="review-value">' + escapeHtml(timeSlots || '미선택') + '</div></div>' +
+        '<div class="review-row"><div class="review-label">실험실</div><div class="review-value">' + escapeHtml(lab) + '</div></div>' +
+        '</div>' +
+        '<div class="review-section">' +
+        '<div class="review-section-title">🧪 실험 내용</div>' +
+        '<div class="review-row"><div class="review-label">제목</div><div class="review-value">' + escapeHtml(title) + '</div></div>' +
+        '<div class="review-row"><div class="review-label">첨단기기실</div><div class="review-value">' + escapeHtml(advLab || '미선택') + '</div></div>' +
+        '<div class="review-row"><div class="review-label">후드 사용</div><div class="review-value">' + escapeHtml(hood || '미선택') + '</div></div>' +
+        '<div class="review-row"><div class="review-label">시약</div><div class="review-value">' + chemHtml + '</div></div>' +
+        '</div>' +
+        '<div class="review-section">' +
+        '<div class="review-section-title">🦺 안전 계획</div>' +
+        '<div class="review-row"><div class="review-label">안전장구</div><div class="review-value">' + escapeHtml(safety || '미선택') + '</div></div>' +
+        '<div class="review-row"><div class="review-label">지도교사</div><div class="review-value">' + escapeHtml(teacher || '미선택') + '</div></div>' +
+        '</div>';
+    }
+  </script>
+</head>
+<body>
+  <div id="overlayBlock">
+    <div class="block-msg">신청 중입니다.<br>잠시만 기다려주세요.<br>클릭은 한 번만 해주세요.</div>
+  </div>
+
+  <!-- 조회 중 UI -->
+  <div id="lookupLoading"
+       style="display:none; position:fixed; inset:0;
+              align-items:center; justify-content:center;
+              background:rgba(0,0,0,0.25);
+              backdrop-filter:blur(2px);
+              z-index:11000;">
+    <div style="background:#fff; padding:20px 28px; border-radius:10px;
+                box-shadow:0 8px 25px rgba(0,0,0,0.25); text-align:center;">
+      신청 가능 여부를 조회 중입니다...<br>잠시만 기다려주세요.
+    </div>
+  </div>
+
+  <!-- ===== Header ===== -->
+  <div class="header">
+    <div class="header-inner">
+      <div class="header-logo">
+        <span class="icon">🔬</span>
+        <span>과학 실험실 사용 신청</span>
+      </div>
+      <div class="header-actions">
+        <button class="header-btn" type="button" onclick="openLoadDialog(0)">📂 불러오기</button>
+        <button class="header-btn" type="button" onclick="snapshotForm()">💾 임시저장</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== Progress Bar ===== -->
+  <div class="progress-section">
+    <div class="progress-inner">
+      <div class="progress-steps step-1" id="progressSteps">
+        <div class="step-item active" id="si1">
+          <div class="step-circle">1</div>
+          <div class="step-label">기본 정보</div>
+        </div>
+        <div class="step-item" id="si2">
+          <div class="step-circle">2</div>
+          <div class="step-label">일정 선택</div>
+        </div>
+        <div class="step-item" id="si3">
+          <div class="step-circle">3</div>
+          <div class="step-label">실험 내용</div>
+        </div>
+        <div class="step-item" id="si4">
+          <div class="step-circle">4</div>
+          <div class="step-label">안전 계획</div>
+        </div>
+        <div class="step-item" id="si5">
+          <div class="step-circle">5</div>
+          <div class="step-label">확인/제출</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== Main Content ===== -->
+  <div class="main">
+    <form id="applicationForm" onsubmit="return false;">
+
+      <!-- ==================== STEP 1: 기본 정보 ==================== -->
+      <div class="step-view active" id="step1">
+
+        <div class="form-card">
+          <div class="form-card-title">📋 대표자 정보</div>
+          <div class="form-card-desc">실험을 신청하는 대표 학생의 정보를 입력하세요.</div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label" for="studentId">학번 <span class="required">*</span></label>
+              <input type="text" id="studentId" placeholder="5자리 학번 입력 (예: 30412)" maxlength="5" required>
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="studentName">이름 <span class="required">*</span></label>
+              <input type="text" id="studentName" placeholder="대표 학생의 이름을 입력하세요." required>
+            </div>
+          </div>
+        </div>
+
+        <div class="form-card">
+          <div class="form-card-title">👥 동반자 정보</div>
+          <div class="form-card-desc">함께 실험에 참여하는 학생들의 정보를 입력하세요.</div>
+
+          <div class="info-box">
+            <span class="icon">ℹ️</span>
+            <span>학번 5자리와 이름을 함께 입력하세요. 여러 명은 쉼표 또는 줄바꿈으로 구분합니다.<br>예: 30415 이서연, 30423 박지호</span>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="teamMembers">동반자 명단 <span class="hint">대표자 포함하지 않음</span></label>
+            <textarea id="teamMembers" rows="2" placeholder="참석하는 모든 학생의 학번 이름을 입력해주세요.(예시: 학번 이름, 학번 이름)" style="min-height:80px;"></textarea>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label" for="totalParticipants">총 참여 인원 <span class="required">*</span> <span class="hint">대표자 포함, 숫자만</span></label>
+              <input type="number" id="totalParticipants" min="1" required placeholder="대표자 포함해서 참석하는 총 인원수를 입력하세요.">
+            </div>
+            <div></div>
+          </div>
+        </div>
+
+        <div class="form-card">
+          <div class="form-card-title">🎯 사용 목적</div>
+          <div class="form-card-desc">실험실 사용 목적을 선택하세요.</div>
+
+          <div class="form-group">
+            <label class="form-label" for="purpose">사용 목적 <span class="required">*</span></label>
+            <select id="purpose" onchange="handlePurposeChange(this)" required>
+              <option value="">선택</option>
+              <option>과제연구</option>
+              <option>학급활동</option>
+              <option>동아리 활동</option>
+              <option>기타</option>
+            </select>
+            <input type="text" id="otherPurpose" placeholder="기타 목적 입력" style="display:none; margin-top:8px;">
+          </div>
+        </div>
+      </div>
+
+      <!-- ==================== STEP 2: 일정 선택 ==================== -->
+      <div class="step-view" id="step2">
+
+        <div class="form-card">
+          <div class="form-card-title">📅 실험 날짜 선택</div>
+          <div class="form-card-desc">실험을 진행할 날짜를 선택하세요.</div>
+
+          <div class="info-box warning">
+            <span class="icon">⚠️</span>
+            <span>신청하고자 하는 연도-월-일 잘 보고 선택하세요. 주말에는 실험실 사용이 불가합니다.</span>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="date">실험 날짜 <span class="required">*</span></label>
+            <div style="display:flex; align-items:center; gap:12px;">
+              <input type="date" id="date" required onchange="showDayOfWeek();" style="max-width:250px;">
+              <span id="dayOfWeek" style="font-weight:bold; color:var(--primary);"></span>
+            </div>
+          </div>
+        </div>
+
+        <div class="form-card">
+          <div class="form-card-title">🕐 신청 시간</div>
+          <div class="form-card-desc">실험 시간대를 선택하세요. 복수 선택이 가능합니다.</div>
+
+          <div class="safety-row" style="gap:16px;">
+            <label class="safety-item" style="min-width:120px; justify-content:center;">
+              <input type="checkbox" name="timeSlot" value="ET"> ET
+            </label>
+            <label class="safety-item" style="min-width:120px; justify-content:center;">
+              <input type="checkbox" name="timeSlot" value="EP1"> EP1
+            </label>
+            <label class="safety-item" id="period7Label" style="display:none; min-width:120px; justify-content:center;">
+              <input type="checkbox" name="timeSlot" value="7교시" id="period7"> 7교시
+            </label>
+          </div>
+        </div>
+
+        <div class="form-card">
+          <div class="form-card-title">🏠 신청 실험·실습실</div>
+          <div class="form-card-desc">사용할 실험실을 선택하세요.</div>
+
+          <div class="form-group">
+            <label class="form-label" for="lab">실험·실습실 <span class="required">*</span></label>
+            <select id="lab" onchange="handleLabChange(this)" required>
+              <option value="">선택</option>
+              <option>화학실험실</option>
+              <option>생물실험실</option>
+              <option>프로젝트실험실</option>
+              <option>첨단기기실험실</option>
+              <option>오픈랩</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <!-- ==================== STEP 3: 실험 내용 ==================== -->
+      <div class="step-view" id="step3">
+
+        <div class="form-card">
+          <div class="form-card-title">📝 실험 정보</div>
+          <div class="form-card-desc">실험의 기본 정보를 입력하세요.</div>
+
+          <div class="form-group">
+            <label class="form-label" for="title">실험 제목 <span class="required">*</span></label>
+            <input type="text" id="title" placeholder="실험 제목을 입력하세요" required>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label" for="advancedLab">첨단기기실 이용 여부</label>
+              <div id="advancedLabNote" style="display:none; margin-bottom:6px; padding:8px 10px; background:var(--warning-light); border:1px solid #fde68a; border-radius:var(--radius-sm); font-size:13px; color:#7A5D00;">
+                '첨단기기실험실'을 선택하면 이 항목은 자동으로 <b>예</b>로 고정되며, <b>이용 사유</b>를 반드시 입력해야 합니다.
+              </div>
+              <select id="advancedLab" onchange="handleAdvancedLabChange(this)" required>
+                <option value="">선택</option>
+                <option>예</option>
+                <option>아니오</option>
+              </select>
+              <input type="text" id="advancedLabReason" placeholder="첨단기기실 이용 사유 입력" style="display:none; margin-top:8px;">
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="hood">후드 사용 여부</label>
+              <select id="hood" onchange="handleHoodChange(this)" required>
+                <option value="">선택</option>
+                <option>예</option>
+                <option>아니오</option>
+              </select>
+              <input type="text" id="hoodReason" placeholder="후드 사용 사유 입력" style="display:none; margin-top:8px;">
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="materials">실험 준비물 <span class="required">*</span> <span class="hint">시약 제외 기자재</span></label>
+            <textarea id="materials" rows="2" placeholder="실험에 사용할 시약을 제외하고 실험에 필요한 모든 장치와 도구를 입력하세요." required style="min-height:70px;"></textarea>
+          </div>
+        </div>
+
+        <div class="form-card">
+          <div class="form-card-title">🧪 시약 정보</div>
+          <div class="form-card-desc">사용할 시약을 검색하여 추가하고, 농도와 사용량을 입력하세요.</div>
+
+          <div class="info-box">
+            <span class="icon">ℹ️</span>
+            <span>시약명 또는 화학식을 입력하고 검색하세요. 교내 구비된 시약만 검색 가능합니다. 두 글자 이상 입력해야 검색됩니다.</span>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">시약 검색</label>
+            <div id="chemicalSearchGroup">
+              <input type="text" id="chemicalSearch" placeholder="시약명 또는 화학식 입력 (예: NaOH, 염산...)">
+              <button type="button" onclick="searchChemical()">🔍 검색</button>
+            </div>
+          </div>
+
+          <table id="searchResults">
+            <tr>
+              <th>물질명</th><th>화학식</th><th>분류1</th><th>교사임장여부</th><th>선택</th>
+            </tr>
+          </table>
+
+          <div style="margin:16px 0 8px 0; display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+            <span style="font-weight:700; font-size:15px;">추가된 시약 목록</span>
+            <button type="button" onclick="addBlankChemical()" style="padding:6px 14px; background:var(--primary-light); color:var(--primary-dark); border:1px solid #c7d2fe; border-radius:var(--radius-sm); font-weight:600; cursor:pointer;">+ 행 추가</button>
+          </div>
+          <div class="unit-hint" style="margin-bottom:12px;">
+            <strong>단위 입력 가이드</strong> — 농도: M, m, %, 질량: g, kg, mg, 부피: mL, L, cc, 방울 등 단위를 꼭 입력해주세요.
+          </div>
+
+          <div style="overflow-x:auto;">
+            <table id="chemicalList" class="chem-table">
+              <colgroup>
+                <col style="width:18%;"><col style="width:13%;"><col style="width:10%;"><col style="width:10%;"><col style="width:10%;">
+                <col style="width:11%;"><col style="width:18%;"><col style="width:6%;"><col style="width:4%;">
+              </colgroup>
+              <tr>
+                <th>시약명</th><th>화학식</th><th>상태</th><th>농도(단위를 기록하세요.)</th><th>사용량(단위를 기록하세요.)</th>
+                <th>폐기 방법</th><th>MSDS 및 취급 주의사항</th><th>교사 임장 여부</th><th>삭제</th>
+              </tr>
+            </table>
+          </div>
+
+          <div style="display:flex; align-items:center; gap:12px; margin:12px 0; padding:12px 16px; background:#f8fafc; border-radius:var(--radius-sm); border:1px solid var(--border);">
+            <button type="button" id="btnValidateChem" onclick="onValidateChem()" style="padding:8px 16px; background:var(--primary); color:white; border:none; border-radius:var(--radius-sm); font-weight:600; cursor:pointer; font-size:13px;">시약 정보 검증</button>
+            <span id="chemValidateBadge" class="pill">미검증</span>
+            <span id="cooldownMsg" style="display:none; font-size:12px; color:#666;"></span>
+          </div>
+          <div style="font-size:12px; color:#9a3412; margin:4px 0 10px 0;">
+            ※ 시약 목록을 수정(추가/삭제/수정)하면 검증 상태가 자동으로 해제됩니다. 제출 전 다시 '시약 정보 검증'을 눌러주세요.
+          </div>
+          <div id="chemValidateReport" class="note" style="display:none;"></div>
+          <div id="submitGuard" class="danger">시약 정보 검증을 통과해야 제출할 수 있습니다.</div>
+        </div>
+      </div>
+
+      <!-- ==================== STEP 4: 안전 계획 ==================== -->
+      <div class="step-view" id="step4">
+
+        <div class="form-card">
+          <div class="form-card-title">📝 실험 과정</div>
+          <div class="form-card-desc">실험의 단계별 과정을 작성하세요.</div>
+
+          <div class="form-group">
+            <label class="form-label" for="process">실험 과정 <span class="required">*</span></label>
+            <textarea id="process" rows="6" style="min-height:140px;" placeholder="실험 과정을 기록할 때 번호를 붙여서 나열하시오." required></textarea>
+          </div>
+        </div>
+
+        <div class="form-card">
+          <div class="form-card-title">🧹 실험 뒷정리</div>
+          <div class="form-card-desc">실험 종료 후 정리 방법을 작성하세요.</div>
+
+          <div class="form-group">
+            <label class="form-label" for="cleanup">뒷정리 방법 <span class="required">*</span></label>
+            <textarea id="cleanup" rows="4" style="min-height:100px;" placeholder="실험 후 뒷정리 방법을 기록하세요." required></textarea>
+          </div>
+        </div>
+
+        <div class="form-card">
+          <div class="form-card-title">⚠️ 실험시 주의사항</div>
+          <div class="form-card-desc">실험 중 주의해야 할 안전 사항을 작성하세요.</div>
+
+          <div class="form-group">
+            <label class="form-label" for="precautions">주의사항 <span class="required">*</span></label>
+            <textarea id="precautions" rows="4" style="min-height:100px;" placeholder="실험시 반드시 주의해야 할 사항을 기록하세요." required></textarea>
+          </div>
+        </div>
+
+        <div class="form-card">
+          <div class="form-card-title">🦺 안전장구 선택</div>
+          <div class="form-card-desc">실험에 필요한 안전장구를 모두 선택하세요.</div>
+
+          <div class="safety-row">
+            <label class="safety-item"><input type="checkbox" value="실험복"> 🥼 실험복</label>
+            <label class="safety-item"><input type="checkbox" value="보안경"> 🥽 보안경</label>
+            <label class="safety-item"><input type="checkbox" value="덮개신발(슬리퍼 금지)"> 👟 덮개신발(슬리퍼 금지)</label>
+            <label class="safety-item"><input type="checkbox" value="라텍스 장갑(흰색)"> 🧤 라텍스 장갑(흰색)</label>
+            <label class="safety-item"><input type="checkbox" value="내열장갑(주황색)"> 🧤 내열장갑(주황색)</label>
+            <label class="safety-item"><input type="checkbox" value="산 방호장갑(초록색)"> 🧤 산 방호장갑(초록색)</label>
+            <label class="safety-item"><input type="checkbox" id="otherSafetyCheck" onchange="handleSafetyOtherChange(this)"> 📦 기타</label>
+            <input type="text" id="otherSafety" placeholder="기타 안전장구 입력" style="display:none; width:200px;">
+          </div>
+        </div>
+
+        <div class="form-card">
+          <div class="form-card-title">👨‍🏫 지도교사 선택</div>
+          <div class="form-card-desc">실험을 지도할 교사를 선택하세요. 실험실과 목적에 따라 자동으로 필터링됩니다.</div>
+
+          <div class="form-group">
+            <label class="form-label" for="teacher">지도교사 <span class="required">*</span></label>
+            <select id="teacher" required>
+              <option value="">선택</option>
+            </select>
+            <input type="hidden" id="teacherEmail">
+          </div>
+        </div>
+      </div>
+
+      <!-- ==================== STEP 5: 확인/제출 ==================== -->
+      <div class="step-view" id="step5">
+
+        <div class="form-card">
+          <div class="form-card-title">✅ 신청 내용 최종 확인</div>
+          <div class="form-card-desc">아래 내용을 확인한 후 제출하세요. 수정이 필요하면 해당 단계로 돌아가세요.</div>
+
+          <div id="reviewContent">
+            <!-- 동적으로 채워짐 -->
+          </div>
+        </div>
+
+        <div class="form-card">
+          <div class="form-card-title">📜 실험·실습실 사용 제약 안내</div>
+          <div class="form-card-desc">사용 규정을 읽고 동의해 주세요.</div>
+
+          <div class="agreement-box">
+            <p style="color:var(--danger); font-weight:600; margin-bottom:8px;">
+              작성된 문서에 위배되거나 실험·실습실 안전 수칙에 위배될 경우(특히, 안전 장구 미착용, 사전 지도교사 협의 없이 신청한 경우 등)<br>
+              1개월간 과학 실험·실습실 사용에 제한됩니다.
+            </p>
+          </div>
+
+          <div class="radio-row" style="margin-bottom:16px;">
+            <label class="radio-item"><input type="radio" name="agreement" value="yes"> 동의합니다</label>
+            <label class="radio-item"><input type="radio" name="agreement" value="no"> 동의하지 않습니다</label>
+          </div>
+        </div>
+
+        <span id="statusMessage" aria-live="polite"></span>
+      </div>
+
+    </form>
+  </div>
+
+  <!-- ===== Bottom Navigation ===== -->
+  <div class="bottom-nav">
+    <div class="bottom-nav-inner">
+      <button class="nav-btn draft" type="button" onclick="snapshotForm()">💾 임시저장</button>
+      <div class="step-indicator" id="stepIndicator">Step 1 / 5</div>
+      <div style="display:flex; gap:8px;">
+        <button class="nav-btn prev" type="button" id="btnPrev" onclick="prevStep()" style="display:none">← 이전</button>
+        <button class="nav-btn next" type="button" id="btnNext" onclick="nextStep()">다음 →</button>
+        <button class="nav-btn submit" type="button" id="btnSubmit" onclick="submitForm()" style="display:none">🚀 제출하기</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== Custom Alert ===== -->
+  <div id="customAlertOverlay"></div>
+  <div id="customAlert" role="alertdialog" aria-modal="true">
+    <p id="alertMessage"></p>
+    <button type="button" onclick="closeCustomAlert()">확인</button>
+  </div>
+
+  <!-- ===== Confirm Dialog ===== -->
+  <div id="dialogOverlay"></div>
+  <div id="confirmDialog" role="dialog" aria-modal="true">
+    <h3 style="text-align: center;">신청하기 전 한번 더 확인하기</h3>
+    <div class="content-wrapper">
+      <p style="margin-bottom: 15px; font-size: 14px;">
+        아래의 내용을 읽고 정확히 입력하고 동의하지 않을 수 있으나<br>
+        동의하지 않으면 실험·실습실 사용 신청이 거부될 수 있습니다.
+      </p>
+
+      <div class="question-item">
+        <strong>1. 대표자 정보(학번과 이름)과 동반자 정보를 모두 정확히 입력하셨나요?</strong>
+        <div class="input-group">
+          이번 실험에 참여하는 총 인원수를 다시 써주세요.
+          <input type="number" id="confirmStudentCount" style="width: 80px;" placeholder="숫자만"> 명
+        </div>
+      </div>
+
+      <div class="question-item">
+        <strong>2. 실험할 날짜와 신청할 실험·실습실을 정확히 입력하셨나요?</strong>
+        <div class="radio-group">
+          <label><input type="radio" name="confirm2" value="yes" onchange="checkAllConfirms()"> 예</label>
+          <label><input type="radio" name="confirm2" value="no"  onchange="handleNo(2)"> 아니오</label>
+        </div>
+      </div>
+
+      <div class="question-item">
+        <strong>3. 실험 과정, 실험 준비물, 실험 뒷정리, 실험시 주의사항, 폐수 및 폐시약 처리 방법을 모두 정확히 숙지하였나요?</strong>
+        <p class="sub-text">
+          만약 이를 제대로 숙지하지 않고 실험을 수행하는 경우 실험·실습실 사용 신청이 제한될 수 있습니다. 이에 동의하시나요?
+        </p>
+        <div class="radio-group">
+          <label><input type="radio" name="confirm3" value="yes" onchange="checkAllConfirms()"> 예</label>
+          <label><input type="radio" name="confirm3" value="no"  onchange="handleNo(3)"> 아니오</label>
+        </div>
+      </div>
+
+      <div class="question-item">
+        <strong>4. 실험·실습실 안전 수칙 위반(안전 장구 미착용 등) 시 1개월간 과학 실험·실습실 사용 제한에 동의하시나요?</strong>
+        <div class="radio-group">
+          <label><input type="radio" name="confirm4" value="yes" onchange="checkAllConfirms()"> 예</label>
+          <label><input type="radio" name="confirm4" value="no"  onchange="handleNo(4)"> 아니오</label>
+        </div>
+      </div>
+    </div>
+
+    <div class="button-group">
+      <button type="button" class="btn-confirm" id="btnConfirmSubmit" onclick="processSubmit()" disabled>신청하기</button>
+      <button type="button" class="btn-cancel" onclick="closeConfirmDialog()">다시 확인하기</button>
+    </div>
+  </div>
+
+  <!-- ===== No Warning Dialog ===== -->
+  <div id="noWarningDialog">
+    <button type="button" onclick="closeNoWarning()"
+            style="position:absolute; top:10px; right:10px; background:none; border:none;
+                   font-size:20px; cursor:pointer; padding:0; width:30px; height:30px;">✕</button>
+    <h4 style="color:var(--danger); margin-top:10px;">경고</h4>
+    <p style="margin: 20px 0;">
+      아니오를 체크하셨습니다.<br>
+      <strong>실험·실습실 사용 신청이 거부됩니다.</strong><br>
+      실험·실습실 사용을 신청하려면 '예'를 체크해주세요.
+    </p>
+    <button type="button" onclick="closeNoWarning()"
+            style="width:100%; padding:10px; background:var(--danger); color:white; border:none; border-radius:var(--radius-sm); cursor:pointer; font-weight:600;">
+      확인
+    </button>
+  </div>
+
+  <!-- ===== Load Dialog ===== -->
+  <div id="loadOverlay" role="dialog" aria-modal="true" onclick="closeLoadDialog()"></div>
+  <div id="loadDialog" role="dialog" aria-modal="true" aria-labelledby="loadDialogTitle">
+    <div class="load-header">
+      <h3 id="loadDialogTitle">📂 불러오기</h3>
+    </div>
+    <div class="load-tabs">
+      <button type="button" class="load-tab active" onclick="switchLoadTab(0)">임시저장 불러오기</button>
+      <button type="button" class="load-tab" onclick="switchLoadTab(1)">승인된 신청서 불러오기</button>
+    </div>
+
+    <!-- 탭 1: 임시저장 불러오기 -->
+    <div class="load-panel active" id="panelDraft">
+      <p style="font-size:13px;color:var(--text-muted);margin:0 0 10px;">임시저장한 신청서를 불러옵니다.</p>
+      <div class="form-row">
+        <div>
+          <label for="loadSid">대표자 학번(5자리)</label>
+          <input type="text" id="loadSid" placeholder="예: 12034" inputmode="numeric" maxlength="5">
+        </div>
+        <div>
+          <label for="loadName">대표자 이름</label>
+          <input type="text" id="loadName" placeholder="예: 홍길동">
+        </div>
+      </div>
+      <div class="form-row">
+        <div>
+          <label for="loadDate">신청 날짜</label>
+          <input type="date" id="loadDate">
+        </div>
+      </div>
+      <div class="btns">
+        <button class="btn" type="button" onclick="closeLoadDialog()" style="background:#e0e0e0;color:#333;">취소</button>
+        <button class="btn" type="button" onclick="loadDraftSubmit()" style="background:var(--primary);color:#fff;">불러오기</button>
+      </div>
+    </div>
+
+    <!-- 탭 2: 승인된 신청서 불러오기 -->
+    <div class="load-panel" id="panelApproved">
+      <p style="font-size:13px;color:var(--text-muted);margin:0 0 10px;">이전에 최종 승인된 신청서를 불러와 새 신청서의 기본 내용으로 사용할 수 있습니다.</p>
+      <div class="form-row">
+        <div>
+          <label for="approvedSid">대표자 학번(5자리)</label>
+          <input type="text" id="approvedSid" placeholder="예: 12034" inputmode="numeric" maxlength="5">
+        </div>
+        <div>
+          <label for="approvedName">대표자 이름</label>
+          <input type="text" id="approvedName" placeholder="예: 홍길동">
+        </div>
+      </div>
+      <div class="btns">
+        <button class="btn" type="button" onclick="closeLoadDialog()" style="background:#e0e0e0;color:#333;">취소</button>
+        <button class="btn" type="button" onclick="searchApproved()" style="background:var(--success);color:#fff;">검색</button>
+      </div>
+      <div id="approvedResults" class="result-list"></div>
+    </div>
+  </div>
+
+</body>
+</html>

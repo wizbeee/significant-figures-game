@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>퍼스널 컬러 분석 서비스</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://cdn.jsdelivr.net">
+  <link href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css" rel="stylesheet">
+  <style>
+    * { font-family: 'Pretendard Variable', 'Pretendard', -apple-system, sans-serif; }
+    body { background: #0a0a0f; color: #e4e4e7; overflow-x: hidden; }
+
+    .mesh-gradient {
+      position: fixed; inset: 0; z-index: 0;
+      background:
+        radial-gradient(ellipse at 20% 20%, rgba(88, 28, 135, 0.25) 0%, transparent 60%),
+        radial-gradient(ellipse at 80% 80%, rgba(15, 23, 42, 0.8) 0%, transparent 60%),
+        radial-gradient(ellipse at 60% 40%, rgba(30, 58, 138, 0.2) 0%, transparent 50%),
+        #0a0a0f;
+    }
+
+    .orb {
+      position: fixed; border-radius: 50%; filter: blur(80px); opacity: 0.3;
+      animation: float 20s ease-in-out infinite;
+    }
+    .orb-1 { width: 400px; height: 400px; background: #7c3aed; top: -100px; right: -100px; animation-delay: 0s; }
+    .orb-2 { width: 300px; height: 300px; background: #1e40af; bottom: -50px; left: -50px; animation-delay: -7s; }
+    .orb-3 { width: 200px; height: 200px; background: #db2777; top: 50%; left: 50%; animation-delay: -14s; }
+
+    @keyframes float {
+      0%, 100% { transform: translate(0, 0) scale(1); }
+      33% { transform: translate(30px, -30px) scale(1.05); }
+      66% { transform: translate(-20px, 20px) scale(0.95); }
+    }
+
+    .glass-card {
+      background: rgba(255, 255, 255, 0.05);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 24px;
+      transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    .glass-card:hover {
+      background: rgba(255, 255, 255, 0.08);
+      border-color: rgba(255, 255, 255, 0.2);
+      transform: translateY(-4px);
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    }
+
+    @keyframes fadeInUp {
+      from { opacity: 0; transform: translateY(30px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .animate-in { animation: fadeInUp 0.8s ease-out forwards; }
+    .delay-1 { animation-delay: 0.1s; opacity: 0; }
+    .delay-2 { animation-delay: 0.2s; opacity: 0; }
+    .delay-3 { animation-delay: 0.3s; opacity: 0; }
+    .delay-4 { animation-delay: 0.4s; opacity: 0; }
+
+    .btn-glow {
+      position: relative; overflow: hidden;
+    }
+    .btn-glow::after {
+      content: ''; position: absolute; inset: -2px;
+      background: linear-gradient(135deg, #7c3aed, #3b82f6, #7c3aed);
+      z-index: -1; border-radius: inherit;
+      opacity: 0; transition: opacity 0.3s;
+    }
+    .btn-glow:hover::after { opacity: 1; }
+
+    .accordion-content {
+      max-height: 0; overflow: hidden;
+      transition: max-height 0.4s ease-out;
+    }
+    .accordion-content.open { max-height: 500px; }
+
+    .step-line::before {
+      content: ''; position: absolute; left: 24px; top: 60px; bottom: -20px;
+      width: 2px; background: linear-gradient(to bottom, rgba(124, 58, 237, 0.5), transparent);
+    }
+  </style>
+</head>
+<body>
+  <div class="mesh-gradient"></div>
+  <div class="orb orb-1"></div>
+  <div class="orb orb-2"></div>
+  <div class="orb orb-3"></div>
+
+  <div class="relative z-10 min-h-screen flex flex-col items-center justify-center px-4 py-12">
+
+    <!-- Hero -->
+    <div class="text-center mb-16 animate-in">
+      <div class="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/5 border border-white/10 text-sm text-zinc-400 mb-8">
+        <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+        AI 기반 실시간 분석
+      </div>
+      <h1 class="text-5xl md:text-7xl font-light tracking-tight mb-6">
+        <span class="bg-gradient-to-r from-violet-400 via-blue-400 to-pink-400 bg-clip-text text-transparent">
+          Personal Color
+        </span>
+        <br>
+        <span class="text-white/90 font-extralight">Analysis</span>
+      </h1>
+      <p class="text-lg md:text-xl text-zinc-400 font-light max-w-2xl mx-auto leading-relaxed">
+        얼굴형 · 퍼스널 컬러 · 체형을 AI가 분석하여<br>
+        나만의 화장법, 컬러 팔레트, 코디를 추천합니다
+      </p>
+    </div>
+
+    <!-- Mode Selection Cards -->
+    <div class="grid md:grid-cols-2 gap-6 max-w-3xl w-full mb-20">
+      <!-- Laptop Card -->
+      <a href="laptop.html" class="glass-card p-8 block group animate-in delay-1">
+        <div class="w-14 h-14 rounded-2xl bg-gradient-to-br from-violet-500/20 to-blue-500/20 flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
+          <svg class="w-7 h-7 text-violet-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+              d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+          </svg>
+        </div>
+        <h2 class="text-2xl font-light text-white mb-3">노트북 모드</h2>
+        <p class="text-zinc-400 text-sm leading-relaxed mb-6">
+          분석 결과를 확인할 노트북에서 실행합니다.<br>
+          QR 코드로 폰과 연결하여 실시간 분석을 시작합니다.
+        </p>
+        <div class="flex items-center text-violet-400 text-sm font-medium">
+          분석 시작하기
+          <svg class="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+          </svg>
+        </div>
+      </a>
+
+      <!-- Phone Card -->
+      <a href="phone.html" class="glass-card p-8 block group animate-in delay-2">
+        <div class="w-14 h-14 rounded-2xl bg-gradient-to-br from-pink-500/20 to-orange-500/20 flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
+          <svg class="w-7 h-7 text-pink-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+              d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"/>
+          </svg>
+        </div>
+        <h2 class="text-2xl font-light text-white mb-3">폰 모드</h2>
+        <p class="text-zinc-400 text-sm leading-relaxed mb-6">
+          카메라로 사진을 촬영할 폰/태블릿에서 실행합니다.<br>
+          QR 코드를 스캔하거나 세션 코드를 입력합니다.
+        </p>
+        <div class="flex items-center text-pink-400 text-sm font-medium">
+          촬영 시작하기
+          <svg class="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+          </svg>
+        </div>
+      </a>
+    </div>
+
+    <!-- How it works -->
+    <div class="max-w-2xl w-full mb-20 animate-in delay-3">
+      <h3 class="text-xl font-light text-white/80 text-center mb-10">사용 방법</h3>
+      <div class="space-y-8">
+        <div class="relative step-line flex gap-6">
+          <div class="w-12 h-12 rounded-2xl bg-violet-500/10 border border-violet-500/20 flex items-center justify-center flex-shrink-0">
+            <span class="text-violet-400 font-light text-lg">1</span>
+          </div>
+          <div>
+            <h4 class="text-white font-medium mb-1">노트북에서 세션 시작</h4>
+            <p class="text-zinc-500 text-sm">노트북 모드를 선택하면 QR 코드가 생성됩니다</p>
+          </div>
+        </div>
+        <div class="relative step-line flex gap-6">
+          <div class="w-12 h-12 rounded-2xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center flex-shrink-0">
+            <span class="text-blue-400 font-light text-lg">2</span>
+          </div>
+          <div>
+            <h4 class="text-white font-medium mb-1">폰으로 QR 스캔</h4>
+            <p class="text-zinc-500 text-sm">같은 WiFi에서 폰 카메라로 QR 코드를 스캔합니다</p>
+          </div>
+        </div>
+        <div class="relative flex gap-6">
+          <div class="w-12 h-12 rounded-2xl bg-pink-500/10 border border-pink-500/20 flex items-center justify-center flex-shrink-0">
+            <span class="text-pink-400 font-light text-lg">3</span>
+          </div>
+          <div>
+            <h4 class="text-white font-medium mb-1">촬영 & 분석</h4>
+            <p class="text-zinc-500 text-sm">얼굴과 전신 사진을 촬영하면 노트북에서 실시간 분석 결과를 확인합니다</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- HTTPS Guide Accordion -->
+    <div class="max-w-2xl w-full animate-in delay-4">
+      <button onclick="toggleAccordion()" class="glass-card w-full p-5 flex items-center justify-between text-left">
+        <div class="flex items-center gap-3">
+          <svg class="w-5 h-5 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"/>
+          </svg>
+          <span class="text-zinc-300 text-sm">폰 카메라 연결 시 보안 설정 안내</span>
+        </div>
+        <svg id="accordionIcon" class="w-5 h-5 text-zinc-500 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+        </svg>
+      </button>
+      <div id="accordionContent" class="accordion-content">
+        <div class="glass-card mt-2 p-6 rounded-t-none border-t-0">
+          <p class="text-zinc-400 text-sm mb-4">
+            폰 카메라 접근은 보안상 HTTPS 또는 localhost에서만 허용됩니다.
+            로컬 네트워크에서 사용하려면 아래 설정이 필요합니다.
+          </p>
+          <div class="space-y-3">
+            <div class="bg-white/5 rounded-xl p-4">
+              <p class="text-white text-sm font-medium mb-2">Chrome (Android/PC)</p>
+              <ol class="text-zinc-400 text-xs space-y-1 list-decimal list-inside">
+                <li>Chrome 주소창에 <code class="bg-white/10 px-1.5 py-0.5 rounded text-violet-300">chrome://flags</code> 입력</li>
+                <li><code class="bg-white/10 px-1.5 py-0.5 rounded text-violet-300">#unsafely-treat-insecure-origin-as-secure</code> 검색</li>
+                <li>서버 주소 입력 (예: <code class="bg-white/10 px-1.5 py-0.5 rounded text-violet-300">http://192.168.0.10:5000</code>)</li>
+                <li>Enabled 선택 후 브라우저 재시작</li>
+              </ol>
+            </div>
+            <div class="bg-white/5 rounded-xl p-4">
+              <p class="text-white text-sm font-medium mb-2">Safari (iPhone/iPad)</p>
+              <p class="text-zinc-400 text-xs">설정 → Safari → 고급 → 실험적 기능 → MediaDevices 허용</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <div class="mt-20 text-center text-zinc-600 text-xs">
+      <p>Personal Color Analysis Service v1.0</p>
+      <p class="mt-1">같은 WiFi 네트워크에서 사용해 주세요</p>
+    </div>
+  </div>
+
+  <script>
+    function toggleAccordion() {
+      const content = document.getElementById('accordionContent');
+      const icon = document.getElementById('accordionIcon');
+      content.classList.toggle('open');
+      icon.style.transform = content.classList.contains('open') ? 'rotate(180deg)' : '';
+    }
+  </script>
+</body>
+</html>

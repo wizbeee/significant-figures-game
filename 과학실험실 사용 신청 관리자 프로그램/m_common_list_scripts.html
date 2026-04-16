@@ -1,0 +1,237 @@
+<script>
+/* ===== 모바일 시약 목록 — 데스크탑 기능 완전 반영 ===== */
+var MC_ALL = [], MC_CHEMS = [];
+var MC_LAB_ICONS = {'화학실험실':'🧪','생물실험실':'🧬','물리실험실':'⚡','프로젝트실험실':'🔬',
+  '첨단기기실험실':'🔧','오픈랩':'🏠','광학파동실험실':'🌊','AP Lab':'🔬','Tech&Art Lab':'🎨'};
+var MC_TIME_ORDER = {'ET':0,'EP1':1,'7교시':2};
+var MC_STATE_ORDER = {'고체':0,'solid':0,'액체':1,'liquid':1,'기체':2,'gas':2};
+
+/* ===== 데이터 로딩 ===== */
+function mcLoadData() {
+  var df = $('#mc-dateFrom').value, dt = $('#mc-dateTo').value;
+  if (!df || !dt) { alert('기간을 선택해주세요.'); return; }
+  $('#mc-card-list').innerHTML = '<div class="m-loading"><div class="m-loading-spinner"></div><span>데이터를 불러오는 중...</span></div>';
+  google.script.run
+    .withSuccessHandler(function(list) {
+      MC_ALL = Array.isArray(list) ? list : [];
+      mcUpdateLabFilter();
+      mcProcessAndRender();
+    })
+    .withFailureHandler(function(err) {
+      $('#mc-card-list').innerHTML = '<div class="m-empty"><div class="m-empty-icon">⚠️</div><div>' + escapeHtml(err.message||err) + '</div></div>';
+    })
+    .getApplicationsForPeriod(df, dt);
+}
+
+/* ===== 실험실 드롭다운 동적 업데이트 ===== */
+function mcUpdateLabFilter() {
+  var labs = new Set();
+  MC_ALL.forEach(function(app) { var l = app['신청실험실']||''; if (l) labs.add(l); });
+  var sel = $('#mc-labFilter'), val = sel.value;
+  var html = '<option value="">실험실 전체</option>';
+  Array.from(labs).sort(function(a,b){return a.localeCompare(b,'ko');}).forEach(function(l) {
+    html += '<option value="'+escapeHtml(l)+'">'+escapeHtml(l)+'</option>';
+  });
+  sel.innerHTML = html;
+  sel.value = val;
+}
+
+/* ===== 데이터 가공 (데스크탑 동일 로직) ===== */
+function mcProcessAndRender() {
+  var approval = $('#mc-approvalFilter').value;
+  var labFilter = $('#mc-labFilter').value;
+  var timeFilter = $('#mc-timeFilter').value;
+  var chemMap = {};
+
+  MC_ALL.forEach(function(app) {
+    var status = calcStatus(app);
+    // 승인 필터
+    if (approval === 'approved' && status !== '1차승인' && status !== '최종승인') return;
+    if (approval === 'pending' && status !== '대기') return;
+    // 실험실 필터
+    if (labFilter && (app['신청실험실']||'') !== labFilter) return;
+    // 시간 필터 — 복합 시간 "ET, EP1" 지원
+    var appTime = app['신청시간'] || '';
+    if (timeFilter) {
+      var times = String(appTime).split(/[,\s]+/).map(function(t){return t.trim();});
+      if (times.indexOf(timeFilter) === -1) return;
+    }
+
+    var chems = app['chemicals'] || app['시약목록'] || [];
+    if (!Array.isArray(chems)) return;
+
+    chems.forEach(function(c) {
+      var name = c['시약명'] || c['name'] || '';
+      if (!name) return;
+      var concentration = c['농도'] || c['concentration'] || '';
+      // 데스크탑과 동일: 시약명|상태|농도|실험실|날짜 로 키 생성 (중복 집계)
+      var key = name + '|' + (c['상태']||c['state']||'') + '|' + concentration + '|' + (app['신청실험실']||'') + '|' + fmtDate(app['실험할날짜']);
+      var needPresence = String(c['교사임장여부']||'').indexOf('필요') >= 0 || String(c['교사임장여부']||'') === 'Y';
+      if (!chemMap[key]) {
+        chemMap[key] = {
+          name: name, amount: c['용량']||c['amount']||'', unit: c['단위']||c['unit']||'',
+          state: c['상태']||c['state']||'', concentration: concentration,
+          lab: app['신청실험실']||'', date: fmtDate(app['실험할날짜']),
+          times: new Set(), students: [], appIds: new Set(), count: 0,
+          needPresence: needPresence, disposal: c['폐기방법']||c['disposal']||''
+        };
+      }
+      if (needPresence) chemMap[key].needPresence = true;
+      var entry = chemMap[key];
+      // 복합 시간 분해
+      String(appTime).split(/[,\s]+/).forEach(function(t) { t=t.trim(); if(t) entry.times.add(t); });
+      if (!entry.appIds.has(app['신청ID'])) {
+        entry.appIds.add(app['신청ID']);
+        entry.students.push(app['대표자이름']||'');
+        entry.count++;
+      }
+    });
+  });
+
+  MC_CHEMS = Object.values(chemMap);
+  MC_CHEMS.forEach(function(c) { c.timeStr = Array.from(c.times).join(', '); c.studentStr = c.students.join(', '); });
+  mcSortAndRender();
+}
+
+/* ===== 정렬 ===== */
+function mcSortAndRender() {
+  var sortBy = $('#mc-sortBy').value;
+  MC_CHEMS.sort(function(a, b) {
+    switch(sortBy) {
+      case 'name': return a.name.localeCompare(b.name,'ko');
+      case 'lab': return a.lab.localeCompare(b.lab,'ko') || a.name.localeCompare(b.name,'ko');
+      case 'time':
+        var ta = MC_TIME_ORDER[Array.from(a.times)[0]] != null ? MC_TIME_ORDER[Array.from(a.times)[0]] : 99;
+        var tb = MC_TIME_ORDER[Array.from(b.times)[0]] != null ? MC_TIME_ORDER[Array.from(b.times)[0]] : 99;
+        return ta - tb || a.name.localeCompare(b.name,'ko');
+      case 'state':
+        var sa = MC_STATE_ORDER[a.state] != null ? MC_STATE_ORDER[a.state] : 99;
+        var sb = MC_STATE_ORDER[b.state] != null ? MC_STATE_ORDER[b.state] : 99;
+        return sa - sb || a.name.localeCompare(b.name,'ko');
+      case 'date': return cmpDateTs(a.date, b.date) || a.name.localeCompare(b.name,'ko');
+      case 'count-desc': return b.count - a.count || a.name.localeCompare(b.name,'ko');
+      case 'count-asc': return a.count - b.count || a.name.localeCompare(b.name,'ko');
+      default: return 0;
+    }
+  });
+  mcRender();
+}
+
+/* ===== 렌더링 (그룹화 지원) ===== */
+function mcRender() {
+  var container = $('#mc-card-list');
+  if (!MC_CHEMS.length) {
+    container.innerHTML = '<div class="m-empty"><div class="m-empty-icon">📭</div><div>조건에 맞는 시약이 없습니다</div></div>';
+    $('#mc-stat-kinds').textContent = '0'; $('#mc-stat-total').textContent = '0'; mcUpdatePeriod();
+    return;
+  }
+  var uniqueNames = new Set();
+  MC_CHEMS.forEach(function(c) { uniqueNames.add(c.name); });
+  $('#mc-stat-kinds').textContent = uniqueNames.size;
+  $('#mc-stat-total').textContent = MC_CHEMS.length;
+  mcUpdatePeriod();
+
+  var groupBy = $('#mc-groupBy').value;
+  var groups = {};
+  MC_CHEMS.forEach(function(c) {
+    var key;
+    switch(groupBy) {
+      case 'lab': key = c.lab || '미지정'; break;
+      case 'time': key = c.timeStr || '미지정'; break;
+      case 'state': key = c.state || '미지정'; break;
+      case 'date': key = c.date || '미지정'; break;
+      default: key = '전체'; break;
+    }
+    if (!groups[key]) groups[key] = [];
+    groups[key].push(c);
+  });
+
+  var groupIcons = {
+    'lab': function(k) { return MC_LAB_ICONS[k] || '🧪'; },
+    'time': function() { return '🕐'; },
+    'state': function(k) { return k==='고체'?'ite':k==='액체'?'💧':k==='기체'?'💨':'🧪'; },
+    'date': function() { return '📅'; },
+    'none': function() { return '📦'; }
+  };
+  var getIcon = groupIcons[groupBy] || groupIcons['none'];
+
+  var html = '';
+  var keys = Object.keys(groups);
+  if (groupBy === 'date') keys.sort();
+  else if (groupBy === 'time') keys.sort(function(a,b) { var ta=MC_TIME_ORDER[a]!=null?MC_TIME_ORDER[a]:99; var tb=MC_TIME_ORDER[b]!=null?MC_TIME_ORDER[b]:99; return ta-tb; });
+
+  keys.forEach(function(key) {
+    var items = groups[key];
+    if (groupBy !== 'none') {
+      html += '<div class="group-header">' + getIcon(key) + ' ' + escapeHtml(key) + ' <span class="group-badge">' + items.length + '건</span></div>';
+    }
+    items.forEach(function(c) {
+      var stClass = (c.state==='고체'||c.state==='solid') ? 'solid' : (c.state==='기체'||c.state==='gas') ? 'solid' : 'liquid';
+      var stLabel = c.state || '-';
+      var presenceBadge = c.needPresence
+        ? '<span style="display:inline-block;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;background:#fef3c7;color:#92400e;margin-top:4px;">⚠️ 임장필요</span>'
+        : '<span style="display:inline-block;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;background:#d1fae5;color:#065f46;margin-top:4px;">✅ 불필요</span>';
+      html += '<div class="chem-card"' + (c.needPresence ? ' style="border-left:4px solid var(--warning);"' : '') + '><div class="chem-info"><div class="chem-name">' + escapeHtml(c.name) +
+        (c.concentration ? ' <span style="font-size:12px;color:var(--text-muted);">(' + escapeHtml(c.concentration) + ')</span>' : '') + '</div>' +
+        '<div class="chem-detail">' +
+        '<span>📅 ' + c.date + '</span>' +
+        '<span>🕐 ' + escapeHtml(c.timeStr) + '</span>' +
+        '<span>👤 ' + escapeHtml(c.studentStr) + '</span>' +
+        (c.count > 1 ? '<span>📋 ' + c.count + '건</span>' : '') +
+        '</div>' + presenceBadge +
+        '</div>' +
+        '<div class="chem-right"><div class="chem-amount">' + escapeHtml(c.amount) + '</div><div class="chem-unit">' + escapeHtml(c.unit) + '</div>' +
+        '<span class="chem-status ' + stClass + '">' + escapeHtml(stLabel) + '</span></div></div>';
+    });
+  });
+  container.innerHTML = html;
+}
+
+function mcUpdatePeriod() {
+  var df = $('#mc-dateFrom').value, dt = $('#mc-dateTo').value;
+  if (df && dt) $('#mc-stat-period').textContent = df.slice(5) + '~' + dt.slice(5);
+}
+
+/* ===== 빠른 기간 선택 ===== */
+function mcQuick(type, btn) {
+  $$('.quick-btn').forEach(function(b) { b.classList.remove('active'); });
+  btn.classList.add('active');
+  var today = startOfDay(new Date()), from, to;
+  switch(type) {
+    case 'today': from = to = today; break;
+    case 'week': var dow = today.getDay(); from = addDays(today,-dow); to = addDays(from,6); break;
+    case 'month': from = new Date(today.getFullYear(),today.getMonth(),1); to = new Date(today.getFullYear(),today.getMonth()+1,0); break;
+    case 'all': from = new Date(today.getFullYear(),0,1); to = new Date(today.getFullYear(),11,31); break;
+  }
+  $('#mc-dateFrom').value = toLocalYMD(from); $('#mc-dateTo').value = toLocalYMD(to);
+  mcLoadData();
+}
+
+/* ===== CSV 내보내기 ===== */
+function chemExportCSV() {
+  if (!MC_CHEMS.length) { alert('내보낼 데이터가 없습니다.'); return; }
+  var h = ['시약명','상태','농도','용량','단위','시간','실험실','날짜','신청자','신청건수'];
+  var rows = [h.join(',')];
+  MC_CHEMS.forEach(function(c) {
+    rows.push([c.name,c.state,c.concentration,c.amount,c.unit,c.timeStr,c.lab,c.date,c.studentStr,c.count].map(function(v) {
+      var s = String(v == null ? '' : v);
+      return (s.indexOf(',')>=0 || s.indexOf('"')>=0 || s.indexOf('\n')>=0) ? '"'+s.replace(/"/g,'""')+'"' : s;
+    }).join(','));
+  });
+  var blob = new Blob(['\uFEFF'+rows.join('\n')],{type:'text/csv;charset=utf-8;'});
+  var a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+  a.download = '시약목록_' + toLocalYMD(new Date()) + '.csv';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+}
+
+function printList() { window.print(); }
+
+/* ===== 초기화 ===== */
+function mcInit() {
+  var today = startOfDay(new Date()), dow = today.getDay();
+  $('#mc-dateFrom').value = toLocalYMD(addDays(today, -dow));
+  $('#mc-dateTo').value = toLocalYMD(addDays(addDays(today, -dow), 6));
+  mcLoadData();
+}
+if (typeof SPA_MODE === 'undefined') window.addEventListener('load', mcInit);
+</script>

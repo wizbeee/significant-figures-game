@@ -1,0 +1,476 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>촬영 - 퍼스널 컬러 분석</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css" rel="stylesheet">
+  <style>
+    * { font-family: 'Pretendard Variable', 'Pretendard', -apple-system, sans-serif; }
+    body { background: #0a0a0f; color: #e4e4e7; overflow-x: hidden; min-height: 100dvh; }
+
+    .mesh-bg {
+      position: fixed; inset: 0;
+      background:
+        radial-gradient(ellipse at 30% 20%, rgba(88, 28, 135, 0.2) 0%, transparent 60%),
+        radial-gradient(ellipse at 70% 80%, rgba(30, 58, 138, 0.15) 0%, transparent 50%),
+        #0a0a0f;
+    }
+
+    .glass { background: rgba(255,255,255,0.06); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); border: 1px solid rgba(255,255,255,0.1); }
+
+    .screen { display: none; min-height: 100dvh; }
+    .screen.active { display: flex; flex-direction: column; }
+
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    @keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+    .fade-in { animation: fadeIn 0.4s ease-out; }
+    .slide-up { animation: slideUp 0.5s ease-out; }
+
+    .gender-btn.selected { border-color: rgba(167, 139, 250, 0.6); background: rgba(167, 139, 250, 0.1); }
+    .gender-btn.selected span:last-child { color: #a78bfa; font-weight: 500; }
+
+    .status-dot { width: 8px; height: 8px; border-radius: 50%; }
+    .status-dot.connected { background: #34d399; animation: pulse-dot 2s infinite; }
+    @keyframes pulse-dot { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+
+    .checkmark { width: 64px; height: 64px; border-radius: 50%; background: rgba(52, 211, 153, 0.15); display: flex; align-items: center; justify-content: center; }
+
+    /* 촬영 버튼 스타일 */
+    .capture-card {
+      background: rgba(255,255,255,0.04);
+      backdrop-filter: blur(20px);
+      border: 2px dashed rgba(255,255,255,0.15);
+      border-radius: 24px;
+      transition: all 0.3s;
+      cursor: pointer;
+      position: relative;
+      overflow: hidden;
+    }
+    .capture-card:active {
+      transform: scale(0.97);
+      border-color: rgba(167, 139, 250, 0.5);
+    }
+    .capture-card.done {
+      border-style: solid;
+      border-color: rgba(52, 211, 153, 0.4);
+      background: rgba(52, 211, 153, 0.05);
+    }
+
+    /* 프리뷰 이미지 */
+    .preview-img {
+      width: 100%; height: 100%;
+      object-fit: cover;
+      border-radius: 22px;
+      position: absolute; inset: 0;
+    }
+
+    /* 전송 진행 */
+    .sending-overlay {
+      position: absolute; inset: 0;
+      background: rgba(0,0,0,0.6);
+      border-radius: 22px;
+      display: flex; align-items: center; justify-content: center;
+    }
+
+    /* file input 숨기기 */
+    .hidden-input { position: absolute; width: 0; height: 0; opacity: 0; overflow: hidden; }
+
+    .pulse-ring {
+      animation: pulse-ring 2s ease-out infinite;
+    }
+    @keyframes pulse-ring {
+      0% { box-shadow: 0 0 0 0 rgba(167, 139, 250, 0.4); }
+      100% { box-shadow: 0 0 0 20px rgba(167, 139, 250, 0); }
+    }
+  </style>
+</head>
+<body>
+  <div class="mesh-bg"></div>
+
+  <!-- ====== Screen 1: 세션 연결 ====== -->
+  <div id="connectScreen" class="screen active relative z-10">
+    <div class="flex-1 flex flex-col items-center justify-center px-6">
+      <div class="slide-up text-center">
+        <div class="w-16 h-16 rounded-3xl bg-gradient-to-br from-violet-500/20 to-pink-500/20 border border-white/10 flex items-center justify-center mx-auto mb-6">
+          <svg class="w-8 h-8 text-violet-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/>
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"/>
+          </svg>
+        </div>
+        <h1 class="text-2xl font-light text-white mb-2">촬영 모드</h1>
+        <p class="text-zinc-500 text-sm mb-10">노트북의 세션 코드를 입력하세요</p>
+
+        <div class="flex gap-2 justify-center mb-6">
+          <input id="sessionInput" type="text" maxlength="6" placeholder="세션 코드"
+            class="glass rounded-2xl px-6 py-4 text-center text-xl tracking-[0.3em] text-white placeholder-zinc-600 w-56 uppercase focus:outline-none focus:border-violet-500/50">
+        </div>
+        <button onclick="joinSession()" class="glass rounded-2xl px-8 py-4 text-violet-400 text-sm font-medium w-56 hover:bg-white/10 transition-colors">
+          연결하기
+        </button>
+        <p id="connectError" class="text-red-400 text-xs mt-4 hidden"></p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ====== Screen 2: 사진 촬영 (메인) ====== -->
+  <div id="captureScreen" class="screen relative z-10">
+    <div class="flex-1 flex flex-col px-6 py-8">
+
+      <!-- 상단 상태바 -->
+      <div class="flex items-center justify-between mb-8">
+        <div class="glass rounded-full px-4 py-2 flex items-center gap-2">
+          <div class="status-dot connected"></div>
+          <span class="text-xs text-zinc-300">연결됨</span>
+        </div>
+        <div id="stepIndicator" class="glass rounded-full px-4 py-2">
+          <span class="text-xs text-violet-300">사진을 촬영해 주세요</span>
+        </div>
+      </div>
+
+      <!-- 성별 선택 -->
+      <div class="mb-6">
+        <p class="text-zinc-500 text-xs text-center mb-3">성별에 따라 맞춤 가이드가 달라집니다</p>
+        <div class="flex gap-3 justify-center">
+          <button onclick="selectGender('female')" id="genderFemale"
+            class="gender-btn glass rounded-2xl px-6 py-3 text-sm flex items-center gap-2 transition-all">
+            <span class="text-lg">👩</span> <span class="text-zinc-300">여성</span>
+          </button>
+          <button onclick="selectGender('male')" id="genderMale"
+            class="gender-btn glass rounded-2xl px-6 py-3 text-sm flex items-center gap-2 transition-all">
+            <span class="text-lg">👨</span> <span class="text-zinc-300">남성</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- 안내 -->
+      <div class="text-center mb-6">
+        <h2 class="text-xl font-light text-white mb-2">사진 촬영</h2>
+        <p class="text-zinc-500 text-sm">각 카드를 탭하면 카메라가 열립니다</p>
+      </div>
+
+      <!-- 얼굴 사진 카드 -->
+      <div class="mb-4">
+        <label for="faceInput" id="faceCard" class="capture-card block p-6 h-48 relative">
+          <img id="facePreview" class="preview-img hidden">
+          <div id="facePlaceholder" class="flex flex-col items-center justify-center h-full">
+            <div class="w-14 h-14 rounded-full bg-violet-500/10 flex items-center justify-center mb-4 pulse-ring">
+              <svg class="w-7 h-7 text-violet-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+              </svg>
+            </div>
+            <p class="text-white text-sm font-medium">얼굴 사진 촬영</p>
+            <p class="text-zinc-500 text-xs mt-1">정면 셀카를 촬영해 주세요</p>
+          </div>
+          <div id="faceCheck" class="absolute top-4 right-4 hidden">
+            <div class="w-6 h-6 rounded-full bg-emerald-500/20 flex items-center justify-center">
+              <svg class="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+              </svg>
+            </div>
+          </div>
+        </label>
+        <input id="faceInput" type="file" accept="image/*" capture="user" class="hidden-input" onchange="onPhotoSelected(this, 'face')">
+      </div>
+
+      <!-- 전신 사진 카드 -->
+      <div class="mb-8">
+        <label for="bodyInput" id="bodyCard" class="capture-card block p-6 h-48 relative">
+          <img id="bodyPreview" class="preview-img hidden">
+          <div id="bodyPlaceholder" class="flex flex-col items-center justify-center h-full">
+            <div class="w-14 h-14 rounded-full bg-pink-500/10 flex items-center justify-center mb-4 pulse-ring">
+              <svg class="w-7 h-7 text-pink-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
+              </svg>
+            </div>
+            <p class="text-white text-sm font-medium">전신 사진 촬영</p>
+            <p class="text-zinc-500 text-xs mt-1">머리부터 발끝까지 보이게 촬영</p>
+          </div>
+          <div id="bodyCheck" class="absolute top-4 right-4 hidden">
+            <div class="w-6 h-6 rounded-full bg-emerald-500/20 flex items-center justify-center">
+              <svg class="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+              </svg>
+            </div>
+          </div>
+        </label>
+        <input id="bodyInput" type="file" accept="image/*" capture="environment" class="hidden-input" onchange="onPhotoSelected(this, 'body')">
+      </div>
+
+      <!-- 전송 버튼 -->
+      <button id="sendBtn" onclick="sendPhotos()" disabled
+        class="w-full py-4 rounded-2xl text-sm font-medium transition-all disabled:opacity-30 disabled:cursor-not-allowed bg-gradient-to-r from-violet-600 to-pink-600 text-white hover:from-violet-500 hover:to-pink-500">
+        <span id="sendBtnText">사진을 1장 이상 촬영해 주세요</span>
+      </button>
+
+      <!-- 안내 -->
+      <p class="text-center text-zinc-600 text-xs mt-4">
+        1장만 촬영해도 해당 분석이 진행됩니다 · 갤러리에서 선택도 가능
+      </p>
+    </div>
+  </div>
+
+  <!-- ====== Screen 3: 전송 중 ====== -->
+  <div id="sendingScreen" class="screen relative z-10">
+    <div class="flex-1 flex flex-col items-center justify-center px-6">
+      <div class="slide-up text-center">
+        <div class="w-16 h-16 rounded-3xl bg-violet-500/10 border border-white/10 flex items-center justify-center mx-auto mb-6">
+          <div class="w-8 h-8 border-2 border-violet-400 border-t-transparent rounded-full animate-spin"></div>
+        </div>
+        <h2 class="text-xl font-light text-white mb-2">전송 중...</h2>
+        <p id="sendingStatus" class="text-zinc-500 text-sm">사진을 노트북으로 전송하고 있습니다</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ====== Screen 4: 완료 ====== -->
+  <div id="completeScreen" class="screen relative z-10">
+    <div class="flex-1 flex flex-col items-center justify-center px-6">
+      <div class="slide-up text-center">
+        <div class="checkmark mx-auto mb-6">
+          <svg class="w-8 h-8 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+          </svg>
+        </div>
+        <h2 class="text-2xl font-light text-white mb-3">전송 완료</h2>
+        <p class="text-zinc-500 text-sm mb-2">사진이 노트북으로 전송되었습니다</p>
+        <p class="text-zinc-600 text-xs">노트북에서 분석 결과를 확인하세요</p>
+
+        <div id="analysisSummary" class="mt-8 glass rounded-2xl p-6 text-left hidden">
+          <p class="text-violet-400 text-xs font-medium mb-2">분석 완료</p>
+          <p id="summaryText" class="text-zinc-300 text-sm"></p>
+        </div>
+
+        <button onclick="resetCapture()" class="mt-8 glass rounded-2xl px-8 py-3 text-violet-400 text-sm hover:bg-white/10 transition-colors">
+          다시 촬영하기
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <canvas id="resizeCanvas" class="hidden"></canvas>
+
+  <script>
+    let ws = null;
+    let sessionCode = '';
+    let faceData = null;  // { dataUrl, width, height }
+    let bodyData = null;
+    let selectedGender = 'female'; // default
+
+    function selectGender(gender) {
+      selectedGender = gender;
+      document.querySelectorAll('.gender-btn').forEach(b => b.classList.remove('selected'));
+      document.getElementById(gender === 'female' ? 'genderFemale' : 'genderMale').classList.add('selected');
+    }
+    // Default selection
+    selectGender('female');
+
+    // URL에서 세션 코드 자동 추출
+    const urlParams = new URLSearchParams(window.location.search);
+    const autoSession = urlParams.get('session');
+    if (autoSession) {
+      document.getElementById('sessionInput').value = autoSession;
+      setTimeout(() => joinSession(), 500);
+    }
+
+    // ============================================================
+    //  WebSocket 연결
+    // ============================================================
+    function joinSession() {
+      sessionCode = document.getElementById('sessionInput').value.trim().toUpperCase();
+      if (sessionCode.length < 4) {
+        showError('세션 코드를 입력해 주세요');
+        return;
+      }
+
+      const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+      ws = new WebSocket(`${protocol}//${location.host}`);
+
+      ws.onopen = () => {
+        ws.send(JSON.stringify({ type: 'session:join', code: sessionCode }));
+      };
+
+      ws.onmessage = (e) => {
+        const msg = JSON.parse(e.data);
+        switch (msg.type) {
+          case 'session:joined':
+            showScreen('captureScreen');
+            break;
+          case 'error':
+            showError(msg.message);
+            break;
+          case 'photo:sent':
+            if (msg.photoType === 'face' && bodyData) {
+              document.getElementById('sendingStatus').textContent = '전신 사진 전송 중...';
+              ws.send(JSON.stringify({
+                type: 'photo:body',
+                image: bodyData.dataUrl,
+                width: bodyData.width,
+                height: bodyData.height,
+                gender: selectedGender
+              }));
+            } else {
+              showScreen('completeScreen');
+            }
+            break;
+          case 'analysis:complete':
+            document.getElementById('analysisSummary').classList.remove('hidden');
+            document.getElementById('summaryText').textContent = msg.summary || '분석이 완료되었습니다.';
+            break;
+          case 'session:ended':
+            showError('세션이 종료되었습니다');
+            showScreen('connectScreen');
+            break;
+        }
+      };
+
+      ws.onerror = () => showError('서버에 연결할 수 없습니다');
+      ws.onclose = () => {};
+    }
+
+    function showError(msg) {
+      const el = document.getElementById('connectError');
+      el.textContent = msg;
+      el.classList.remove('hidden');
+      setTimeout(() => el.classList.add('hidden'), 5000);
+    }
+
+    function showScreen(id) {
+      document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+      document.getElementById(id).classList.add('active');
+    }
+
+    // ============================================================
+    //  사진 선택/촬영 처리
+    // ============================================================
+    function onPhotoSelected(input, type) {
+      const file = input.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+          // 리사이즈 (최대 1280px)
+          const canvas = document.getElementById('resizeCanvas');
+          const ctx = canvas.getContext('2d');
+          let w = img.width;
+          let h = img.height;
+          if (w > 1280) {
+            h = Math.round(h * (1280 / w));
+            w = 1280;
+          }
+          if (h > 1280) {
+            w = Math.round(w * (1280 / h));
+            h = 1280;
+          }
+          canvas.width = w;
+          canvas.height = h;
+          ctx.drawImage(img, 0, 0, w, h);
+          const dataUrl = canvas.toDataURL('image/jpeg', 0.82);
+
+          if (type === 'face') {
+            faceData = { dataUrl, width: w, height: h };
+            document.getElementById('facePreview').src = dataUrl;
+            document.getElementById('facePreview').classList.remove('hidden');
+            document.getElementById('facePlaceholder').classList.add('hidden');
+            document.getElementById('faceCheck').classList.remove('hidden');
+            document.getElementById('faceCard').classList.add('done');
+          } else {
+            bodyData = { dataUrl, width: w, height: h };
+            document.getElementById('bodyPreview').src = dataUrl;
+            document.getElementById('bodyPreview').classList.remove('hidden');
+            document.getElementById('bodyPlaceholder').classList.add('hidden');
+            document.getElementById('bodyCheck').classList.remove('hidden');
+            document.getElementById('bodyCard').classList.add('done');
+          }
+
+          updateSendButton();
+        };
+        img.src = e.target.result;
+      };
+      reader.readAsDataURL(file);
+    }
+
+    function updateSendButton() {
+      const btn = document.getElementById('sendBtn');
+      const text = document.getElementById('sendBtnText');
+
+      if (faceData && bodyData) {
+        btn.disabled = false;
+        text.textContent = '사진 2장 전송하기';
+      } else if (faceData || bodyData) {
+        btn.disabled = false;
+        text.textContent = faceData ? '얼굴 사진 전송하기' : '전신 사진 전송하기';
+      }
+    }
+
+    // ============================================================
+    //  사진 전송
+    // ============================================================
+    function sendPhotos() {
+      if ((!faceData && !bodyData) || !ws || ws.readyState !== 1) return;
+
+      showScreen('sendingScreen');
+
+      if (faceData && bodyData) {
+        document.getElementById('sendingStatus').textContent = '얼굴 사진 전송 중...';
+        ws.send(JSON.stringify({
+          type: 'photo:face',
+          image: faceData.dataUrl,
+          width: faceData.width,
+          height: faceData.height,
+          gender: selectedGender
+        }));
+      } else if (faceData) {
+        document.getElementById('sendingStatus').textContent = '얼굴 사진 전송 중...';
+        ws.send(JSON.stringify({
+          type: 'photo:face',
+          image: faceData.dataUrl,
+          width: faceData.width,
+          height: faceData.height,
+          only: true,
+          gender: selectedGender
+        }));
+      } else {
+        document.getElementById('sendingStatus').textContent = '전신 사진 전송 중...';
+        ws.send(JSON.stringify({
+          type: 'photo:body',
+          image: bodyData.dataUrl,
+          width: bodyData.width,
+          height: bodyData.height,
+          only: true,
+          gender: selectedGender
+        }));
+      }
+    }
+
+    // ============================================================
+    //  리셋
+    // ============================================================
+    function resetCapture() {
+      faceData = null;
+      bodyData = null;
+
+      document.getElementById('facePreview').classList.add('hidden');
+      document.getElementById('facePlaceholder').classList.remove('hidden');
+      document.getElementById('faceCheck').classList.add('hidden');
+      document.getElementById('faceCard').classList.remove('done');
+      document.getElementById('faceInput').value = '';
+
+      document.getElementById('bodyPreview').classList.add('hidden');
+      document.getElementById('bodyPlaceholder').classList.remove('hidden');
+      document.getElementById('bodyCheck').classList.add('hidden');
+      document.getElementById('bodyCard').classList.remove('done');
+      document.getElementById('bodyInput').value = '';
+
+      document.getElementById('sendBtn').disabled = true;
+      document.getElementById('sendBtnText').textContent = '사진을 1장 이상 촬영해 주세요';
+      document.getElementById('analysisSummary').classList.add('hidden');
+
+      showScreen('captureScreen');
+    }
+  </script>
+</body>
+</html>

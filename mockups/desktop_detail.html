@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=1280, initial-scale=1.0">
+<title>데스크탑 상세보기 목업</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+:root { --primary: #2563eb; --primary-light: #dbeafe; --success: #16a34a; --warning: #f59e0b; --danger: #dc2626; --bg: #f1f5f9; --surface: #ffffff; --text: #1e293b; --text-muted: #64748b; --border: #e2e8f0; --shadow: 0 1px 3px rgba(0,0,0,0.08); --sidebar-w: 230px; }
+body { font-family: 'Pretendard', -apple-system, 'Noto Sans KR', sans-serif; background: var(--bg); color: var(--text); width: 1280px; margin: 0 auto; min-height: 900px; display: flex; }
+
+/* Sidebar (동일) */
+.sidebar { width: var(--sidebar-w); background: var(--surface); border-right: 1px solid var(--border); display: flex; flex-direction: column; position: fixed; top: 0; left: 50%; margin-left: -640px; height: 100vh; z-index: 50; }
+.sidebar-header { padding: 24px 20px 20px; border-bottom: 1px solid var(--border); }
+.sidebar-logo { font-size: 24px; margin-bottom: 6px; }
+.sidebar-title { font-size: 15px; font-weight: 800; }
+.sidebar-subtitle { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+.sidebar-nav { flex: 1; padding: 12px 0; }
+.sidebar-section { padding: 10px 20px 6px; font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px; }
+.sidebar-item { display: flex; align-items: center; gap: 12px; padding: 12px 20px; font-size: 14px; font-weight: 600; color: var(--text-muted); border: none; background: none; width: 100%; text-align: left; border-left: 3px solid transparent; }
+.sidebar-item.active { background: var(--primary-light); color: var(--primary); border-left-color: var(--primary); font-weight: 700; }
+.sidebar-item .icon { font-size: 18px; width: 24px; text-align: center; }
+.sidebar-divider { height: 1px; background: var(--border); margin: 8px 16px; }
+.sidebar-footer { padding: 16px 20px; border-top: 1px solid var(--border); }
+.sidebar-footer-item { display: flex; align-items: center; justify-content: space-between; padding: 10px 0; font-size: 13px; font-weight: 600; color: var(--text-muted); }
+.sidebar-footer-item .icon { margin-right: 10px; }
+.toggle { width: 40px; height: 22px; background: #cbd5e1; border-radius: 11px; position: relative; }
+.toggle::after { content: ''; position: absolute; top: 2px; left: 2px; width: 18px; height: 18px; background: white; border-radius: 50%; box-shadow: 0 1px 3px rgba(0,0,0,0.2); }
+
+/* Main */
+.main { flex: 1; margin-left: var(--sidebar-w); }
+
+/* Modal overlay */
+.modal-overlay { position: fixed; top: 0; left: var(--sidebar-w); right: 0; bottom: 0; background: rgba(0,0,0,0.4); display: flex; align-items: center; justify-content: center; z-index: 200; }
+.modal { background: var(--surface); border-radius: 16px; width: 720px; max-height: 85vh; overflow-y: auto; box-shadow: 0 20px 60px rgba(0,0,0,0.2); }
+.modal-header { padding: 20px 24px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
+.modal-title { font-size: 18px; font-weight: 800; }
+.modal-close { background: none; border: none; font-size: 24px; cursor: pointer; color: var(--text-muted); padding: 4px 8px; }
+.modal-status { padding: 12px 24px; font-weight: 700; font-size: 14px; }
+.modal-status.pending { background: #fef3c7; color: #92400e; }
+.modal-body { padding: 24px; }
+.section { margin-bottom: 24px; }
+.section-title { font-size: 14px; font-weight: 700; color: var(--text-muted); margin-bottom: 14px; letter-spacing: 0.5px; }
+.info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.info-row { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #f1f5f9; }
+.info-label { font-size: 13px; color: var(--text-muted); font-weight: 600; }
+.info-value { font-size: 14px; font-weight: 600; }
+.chem-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.chem-table th { background: #f8fafc; padding: 10px 12px; text-align: left; font-weight: 700; color: var(--text-muted); border-bottom: 2px solid var(--border); }
+.chem-table td { padding: 10px 12px; border-bottom: 1px solid #f1f5f9; }
+.companion-list { display: flex; gap: 10px; flex-wrap: wrap; }
+.companion-chip { background: var(--bg); padding: 8px 14px; border-radius: 20px; font-size: 13px; font-weight: 600; }
+.companion-role { font-size: 11px; color: var(--text-muted); margin-left: 4px; }
+.modal-footer { padding: 16px 24px; border-top: 1px solid var(--border); display: flex; gap: 10px; justify-content: flex-end; }
+.action-btn { padding: 10px 20px; border-radius: 10px; font-size: 13px; font-weight: 700; cursor: pointer; border: none; }
+.btn-first { background: #d1fae5; color: #065f46; }
+.btn-final { background: var(--primary); color: white; }
+.btn-reject { background: #fee2e2; color: #991b1b; }
+.btn-edit { background: var(--bg); color: var(--text); border: 1.5px solid var(--border); }
+.btn-print { background: var(--bg); color: var(--text); border: 1.5px solid var(--border); }
+
+/* Background dashboard blur */
+.bg-content { filter: blur(3px); opacity: 0.3; padding: 24px 32px; }
+.bg-title { font-size: 22px; font-weight: 800; margin-bottom: 16px; }
+.bg-card { background: var(--surface); border-radius: 10px; height: 40px; margin-bottom: 8px; }
+.bg-table { background: var(--surface); border-radius: 10px; height: 200px; }
+</style>
+</head>
+<body>
+<aside class="sidebar">
+  <div class="sidebar-header"><div class="sidebar-logo">🔬</div><div class="sidebar-title">과학 실험·실습실</div><div class="sidebar-subtitle">관리 시스템 v3.2</div></div>
+  <nav class="sidebar-nav">
+    <div class="sidebar-section">메뉴</div>
+    <button class="sidebar-item active"><span class="icon">📊</span> 대시보드</button>
+    <button class="sidebar-item"><span class="icon">📦</span> 시약 목록</button>
+    <button class="sidebar-item"><span class="icon">👥</span> 학생 명단</button>
+    <button class="sidebar-item"><span class="icon">🧑‍🏫</span> 임장 일정</button>
+    <div class="sidebar-divider"></div>
+    <div class="sidebar-section">관리</div>
+    <button class="sidebar-item"><span class="icon">📝</span> 지도일지 작성</button>
+    <button class="sidebar-item"><span class="icon">📊</span> 지도 통계</button>
+    <button class="sidebar-item"><span class="icon">🚫</span> 신청 제한 관리</button>
+  </nav>
+  <div class="sidebar-footer">
+    <div class="sidebar-footer-item"><span><span class="icon">🌙</span> 다크모드</span><div class="toggle"></div></div>
+    <div class="sidebar-footer-item" style="color:var(--danger);"><span><span class="icon">🚪</span> 로그아웃</span></div>
+  </div>
+</aside>
+<main class="main">
+  <div class="bg-content">
+    <div class="bg-title">📊 대시보드</div>
+    <div style="display:flex;gap:12px;margin-bottom:16px;"><div class="bg-card" style="flex:1"></div><div class="bg-card" style="flex:1"></div><div class="bg-card" style="flex:1"></div><div class="bg-card" style="flex:1"></div><div class="bg-card" style="flex:1"></div></div>
+    <div class="bg-card" style="height:60px;margin-bottom:12px;"></div>
+    <div class="bg-table"></div>
+  </div>
+  <div class="modal-overlay">
+    <div class="modal">
+      <div class="modal-header">
+        <span class="modal-title">상세 보기 — #2026-0042</span>
+        <button class="modal-close">×</button>
+      </div>
+      <div class="modal-status pending">⏳ 대기 — 승인 대기 중</div>
+      <div class="modal-body">
+        <div class="section">
+          <div class="section-title">📋 기본 정보</div>
+          <div class="info-grid">
+            <div class="info-row"><span class="info-label">신청번호</span><span class="info-value">#2026-0042</span></div>
+            <div class="info-row"><span class="info-label">대표자</span><span class="info-value">김민준 (30412)</span></div>
+            <div class="info-row"><span class="info-label">실험·실습실</span><span class="info-value">화학실험실</span></div>
+            <div class="info-row"><span class="info-label">실험날짜</span><span class="info-value">2026-04-08 (화)</span></div>
+            <div class="info-row"><span class="info-label">시간</span><span class="info-value">ET (방과후)</span></div>
+            <div class="info-row"><span class="info-label">실험제목</span><span class="info-value">NaOH 중화반응 실험</span></div>
+            <div class="info-row"><span class="info-label">지도교사</span><span class="info-value">이승현 T</span></div>
+            <div class="info-row"><span class="info-label">제출일시</span><span class="info-value" style="color:var(--text-muted)">2026-04-05 14:23</span></div>
+          </div>
+        </div>
+        <div class="section">
+          <div class="section-title">🧪 시약 정보</div>
+          <table class="chem-table"><thead><tr><th>시약명</th><th>용량</th><th>단위</th><th>상태</th><th>폐기방법</th></tr></thead>
+          <tbody>
+            <tr><td><strong>NaOH</strong></td><td>50</td><td>mL</td><td>액체</td><td>중화처리</td></tr>
+            <tr><td><strong>HCl</strong></td><td>30</td><td>mL</td><td>액체</td><td>중화처리</td></tr>
+            <tr><td><strong>페놀프탈레인</strong></td><td>5</td><td>mL</td><td>액체</td><td>유기폐액</td></tr>
+          </tbody></table>
+        </div>
+        <div class="section">
+          <div class="section-title">👥 동반 학생 (2명)</div>
+          <div class="companion-list">
+            <div class="companion-chip">박서연 (20315)<span class="companion-role">동반</span></div>
+            <div class="companion-chip">최지우 (10208)<span class="companion-role">동반</span></div>
+          </div>
+        </div>
+        <div class="section">
+          <div class="section-title">📝 비고</div>
+          <p style="font-size:14px; line-height:1.7; color:var(--text-muted);">산·염기 적정 실험으로 중화점을 확인합니다. 지시약으로 페놀프탈레인을 사용합니다.</p>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="action-btn btn-print">🖨️ 인쇄</button>
+        <button class="action-btn btn-edit">✏️ 편집</button>
+        <button class="action-btn btn-first">1차승인</button>
+        <button class="action-btn btn-final">최종승인</button>
+        <button class="action-btn btn-reject">반려</button>
+      </div>
+    </div>
+  </div>
+</main>
+</body>
+</html>
