@@ -73,7 +73,7 @@ th.sortable.sort-active .sort-arrow { opacity: 1; color: #2563eb; }
 // DATA LAYER - IndexedDB
 // ══════════════════════════════════════════════
 const DB_NAME = 'goip-admission';
-const DB_VER = 2;
+const DB_VER = 3;
 let db = null;
 
 function openDB() {
@@ -82,6 +82,7 @@ function openDB() {
     const r = indexedDB.open(DB_NAME, DB_VER);
     r.onupgradeneeded = e => {
       const d = e.target.result;
+      const tx = e.currentTarget.transaction;
       if (!d.objectStoreNames.contains('applicants')) {
         const s = d.createObjectStore('applicants', { keyPath: 'id', autoIncrement: true });
         s.createIndex('exam_number', '수험번호');
@@ -90,11 +91,19 @@ function openDB() {
         s.createIndex('type', '전형구분');
         s.createIndex('year', '_학년도');
       } else {
-        const s = e.currentTarget.transaction.objectStore('applicants');
+        const s = tx.objectStore('applicants');
         if (!s.indexNames.contains('year')) s.createIndex('year', '_학년도');
       }
       if (!d.objectStoreNames.contains('meta')) {
         d.createObjectStore('meta', { keyPath: 'key' });
+      }
+      if (!d.objectStoreNames.contains('mockExams')) {
+        const m = d.createObjectStore('mockExams', { keyPath: 'id', autoIncrement: true });
+        m.createIndex('기수', '기수');
+        m.createIndex('실시년월', '실시년월');
+        m.createIndex('응시학년', '응시학년');
+        m.createIndex('이름', '이름');
+        m.createIndex('dedupe', '_dedupe', { unique: false });
       }
     };
     r.onsuccess = () => { db = r.result; res(db); };
@@ -153,6 +162,54 @@ async function clearAllData() {
 async function getMetaInfo() {
   await openDB();
   try { return await pr(txStore('meta').get('lastUpload')); } catch { return null; }
+}
+
+// ── Mock Exam CRUD ──
+async function getAllMockExams() {
+  await openDB();
+  return pr(txStore('mockExams').getAll());
+}
+async function addMockExams(records) {
+  await openDB();
+  const existing = await pr(txStore('mockExams').getAll());
+  const keySet = new Set(existing.map(r => r._dedupe));
+  const store = txStore('mockExams', 'readwrite');
+  let added = 0, updated = 0;
+  for (const r of records) {
+    if (!r._dedupe) r._dedupe = `${r.기수||''}_${r.실시년월||''}_${r.응시학년||''}_${r.이름||''}_${r.반||''}_${r.번호||''}`;
+    if (keySet.has(r._dedupe)) {
+      // update existing
+      const old = existing.find(e => e._dedupe === r._dedupe);
+      if (old) { r.id = old.id; await pr(store.put(r)); updated++; }
+    } else {
+      delete r.id;
+      await pr(store.add(r));
+      keySet.add(r._dedupe);
+      added++;
+    }
+  }
+  return { added, updated };
+}
+async function updateMockExam(record) {
+  await openDB();
+  if (!record._dedupe) record._dedupe = `${record.기수||''}_${record.실시년월||''}_${record.응시학년||''}_${record.이름||''}_${record.반||''}_${record.번호||''}`;
+  return pr(txStore('mockExams', 'readwrite').put(record));
+}
+async function deleteMockExam(id) {
+  await openDB();
+  return pr(txStore('mockExams', 'readwrite').delete(id));
+}
+async function deleteMockExamBatch(filterFn) {
+  await openDB();
+  const all = await pr(txStore('mockExams').getAll());
+  const store = txStore('mockExams', 'readwrite');
+  let n = 0;
+  for (const r of all) { if (filterFn(r)) { await pr(store.delete(r.id)); n++; } }
+  return n;
+}
+async function clearAllMockExams() {
+  await openDB();
+  return pr(txStore('mockExams', 'readwrite').clear());
 }
 
 // ══════════════════════════════════════════════
@@ -226,6 +283,245 @@ function parseSheet(wb, sheetName) {
 let pendingFiles = [];
 
 // ══════════════════════════════════════════════
+// MOCK EXAM PARSER & CALCULATIONS
+// ══════════════════════════════════════════════
+// 과목 정규화 (유사어 → 카테고리)
+const MOCK_SUBJECT_NORMALIZE = {
+  // 국어
+  '국어': '국어', '언어와매체': '국어', '언어와 매체': '국어', '화법과작문': '국어', '화법과 작문': '국어', '언매': '국어', '화작': '국어',
+  // 수학
+  '수학': '수학', '확률과통계': '수학', '확률과 통계': '수학', '미적분': '수학', '기하': '수학', '확통': '수학',
+  // 영어
+  '영어': '영어',
+  // 한국사
+  '한국사': '한국사',
+  // 탐구 - 사회
+  '사회': '사회탐구', '사회탐구': '사회탐구', '통합사회': '사회탐구', '공통사회': '사회탐구', '통사': '사회탐구',
+  '한국지리': '사회탐구', '한국 지리': '사회탐구', '세계지리': '사회탐구', '세계 지리': '사회탐구',
+  '윤리와사상': '사회탐구', '윤리와 사상': '사회탐구', '생활과윤리': '사회탐구', '생활과 윤리': '사회탐구',
+  '사회문화': '사회탐구', '사회·문화': '사회탐구', '법과정치': '사회탐구', '법과 정치': '사회탐구',
+  '동아시아사': '사회탐구', '세계사': '사회탐구', '경제': '사회탐구',
+  // 탐구 - 과학
+  '과학': '과학탐구', '과학탐구': '과학탐구', '통합과학': '과학탐구', '공통과학': '과학탐구', '통과': '과학탐구',
+  '물리학Ⅰ': '과학탐구', '물리학1': '과학탐구', '물리학': '과학탐구',
+  '화학Ⅰ': '과학탐구', '화학1': '과학탐구', '화학': '과학탐구',
+  '생명과학Ⅰ': '과학탐구', '생명과학1': '과학탐구', '생명과학': '과학탐구',
+  '지구과학Ⅰ': '과학탐구', '지구과학1': '과학탐구', '지구과학': '과학탐구',
+};
+function normalizeSubject(name) {
+  if (!name) return '';
+  const s = String(name).trim();
+  return MOCK_SUBJECT_NORMALIZE[s] || s;
+}
+function parseGradeNum(v) {
+  if (v == null || v === '') return null;
+  const n = parseFloat(v);
+  return (isNaN(n) || n < 1 || n > 9) ? null : n;
+}
+function parseScoreNum(v) {
+  if (v == null || v === '') return null;
+  const n = parseFloat(v);
+  return isNaN(n) ? null : n;
+}
+
+// 양식 자동 감지 후 2D 배열에서 레코드 추출
+function detectMockFormat(aoa) {
+  // A: 2줄 헤더, "학년도"/"한국사"/"탐구영역1" 존재
+  // B: 1줄 헤더, "국어과목"/"수학과목"/"영어과목" 존재
+  const topRows = aoa.slice(0, 5).map(r => (r || []).map(c => String(c||'').trim()));
+  const flat = topRows.flat().join('|');
+  if (/국어과목|수학과목|영어과목/.test(flat)) return 'B';
+  if (/학년도|탐구영역|한국사/.test(flat)) return 'A';
+  // fallback: if row 1 has 국어/수학/영어 as standalone cells → B
+  if (topRows[0] && topRows[0].some(c => c === '국어') && topRows[0].some(c => c === '수학')) return 'B';
+  return null;
+}
+
+// 양식 A 파싱: 2줄 병합 헤더 구조
+function parseMockFormatA(aoa) {
+  // Find header rows: look for row with "학년도"/"학년" and "이름"
+  let mainRow = -1;
+  for (let i = 0; i < Math.min(6, aoa.length); i++) {
+    const row = (aoa[i] || []).map(c => String(c||'').trim());
+    if (row.some(c => /이름/.test(c)) && row.some(c => /국어|한국사/.test(c))) { mainRow = i; break; }
+  }
+  if (mainRow < 0) return { records: [], columns: [] };
+  const subRow = mainRow + 1;
+  const main = (aoa[mainRow] || []).map(c => String(c||'').trim());
+  const sub = (aoa[subRow] || []).map(c => String(c||'').trim());
+  // Propagate merged cells (fill empty main cells with previous non-empty)
+  const mainFilled = [];
+  let cur = '';
+  for (let i = 0; i < Math.max(main.length, sub.length); i++) {
+    if (main[i]) cur = main[i];
+    mainFilled[i] = cur;
+  }
+  // Build column map: idx → { category, subHeader }
+  const colMap = mainFilled.map((cat, i) => ({ idx: i, cat, sub: sub[i] || '' }));
+  // Find columns for each field
+  const findCol = (cat, subName) => {
+    const match = colMap.find(c => c.cat === cat && (subName ? c.sub === subName : true));
+    return match ? match.idx : -1;
+  };
+  const findMeta = (name) => {
+    const m = colMap.find(c => c.cat === name && !c.sub) || colMap.find(c => c.cat === name);
+    return m ? m.idx : -1;
+  };
+  const cols = {
+    학년도: findMeta('학년도'),
+    학년: findMeta('학년'),
+    반: findMeta('반'),
+    번호: findMeta('번호'),
+    이름: findMeta('이름'),
+    국어_원점수: findCol('국어', '원점수'),
+    국어_등급: findCol('국어', '등급'),
+    수학_원점수: findCol('수학', '원점수'),
+    수학_등급: findCol('수학', '등급'),
+    영어_원점수: findCol('영어', '원점수'),
+    영어_등급: findCol('영어', '등급'),
+    한국사_원점수: findCol('한국사', '원점수'),
+    한국사_등급: findCol('한국사', '등급'),
+    탐1_과목: (() => { const c = colMap.find(c => c.cat === '탐구영역1' && /과목명|선택/.test(c.sub)); return c ? c.idx : -1; })(),
+    탐1_원점수: findCol('탐구영역1', '원점수'),
+    탐1_등급: findCol('탐구영역1', '등급'),
+    탐2_과목: (() => { const c = colMap.find(c => c.cat === '탐구영역2' && /과목명|선택/.test(c.sub)); return c ? c.idx : -1; })(),
+    탐2_원점수: findCol('탐구영역2', '원점수'),
+    탐2_등급: findCol('탐구영역2', '등급'),
+  };
+  // If 국어/수학 등급 not found at sub level, look for "선택" for those categories (file3 structure)
+  if (cols.국어_등급 < 0) cols.국어_등급 = findCol('국어', '등급');
+  const records = [];
+  for (let i = subRow + 1; i < aoa.length; i++) {
+    const row = aoa[i] || [];
+    const name = String(row[cols.이름] || '').trim();
+    if (!name) continue;
+    const rec = {
+      학년도_raw: row[cols.학년도],
+      학년: parseScoreNum(row[cols.학년]),
+      반: parseScoreNum(row[cols.반]),
+      번호: parseScoreNum(row[cols.번호]),
+      이름: name,
+      국어_원점수: parseScoreNum(row[cols.국어_원점수]),
+      국어_등급: parseGradeNum(row[cols.국어_등급]),
+      수학_원점수: parseScoreNum(row[cols.수학_원점수]),
+      수학_등급: parseGradeNum(row[cols.수학_등급]),
+      영어_원점수: parseScoreNum(row[cols.영어_원점수]),
+      영어_등급: parseGradeNum(row[cols.영어_등급]),
+      한국사_원점수: parseScoreNum(row[cols.한국사_원점수]),
+      한국사_등급: parseGradeNum(row[cols.한국사_등급]),
+      탐1_과목: normalizeSubject(row[cols.탐1_과목]),
+      탐1_과목_원본: String(row[cols.탐1_과목]||'').trim(),
+      탐1_원점수: parseScoreNum(row[cols.탐1_원점수]),
+      탐1_등급: parseGradeNum(row[cols.탐1_등급]),
+      탐2_과목: normalizeSubject(row[cols.탐2_과목]),
+      탐2_과목_원본: String(row[cols.탐2_과목]||'').trim(),
+      탐2_원점수: parseScoreNum(row[cols.탐2_원점수]),
+      탐2_등급: parseGradeNum(row[cols.탐2_등급]),
+    };
+    records.push(rec);
+  }
+  return { records, columns: cols };
+}
+
+// 양식 B 파싱: 1줄 헤더, "과목"이 여러번 나타남
+function parseMockFormatB(aoa) {
+  if (!aoa.length) return { records: [], columns: [] };
+  const header = (aoa[0] || []).map(c => String(c||'').trim());
+  // find columns
+  const idx = {};
+  idx.학년 = header.indexOf('학년');
+  idx.반 = header.indexOf('반');
+  idx.번호 = header.indexOf('번호');
+  idx.이름 = header.indexOf('이름');
+  // 국어/수학/영어 블록: <과목>과목, 원점수, 등급
+  const findBlock = (cat) => {
+    const i = header.indexOf(cat + '과목');
+    if (i < 0) return { 과목: -1, 원점수: -1, 등급: -1 };
+    return { 과목: i, 원점수: i+1, 등급: i+2 };
+  };
+  idx.국어 = findBlock('국어');
+  idx.수학 = findBlock('수학');
+  idx.영어 = findBlock('영어');
+  // 이후 "과목"이 3번 반복 (탐1/탐2/한국사)
+  const genericCols = [];
+  for (let i = 0; i < header.length; i++) {
+    if (header[i] === '과목') genericCols.push(i);
+  }
+  // 순서: 탐1, 탐2, 한국사
+  idx.탐1 = genericCols[0] != null ? { 과목: genericCols[0], 원점수: genericCols[0]+1, 등급: genericCols[0]+2 } : { 과목:-1,원점수:-1,등급:-1 };
+  idx.탐2 = genericCols[1] != null ? { 과목: genericCols[1], 원점수: genericCols[1]+1, 등급: genericCols[1]+2 } : { 과목:-1,원점수:-1,등급:-1 };
+  idx.한국사 = genericCols[2] != null ? { 과목: genericCols[2], 원점수: genericCols[2]+1, 등급: genericCols[2]+2 } : { 과목:-1,원점수:-1,등급:-1 };
+
+  const records = [];
+  for (let i = 1; i < aoa.length; i++) {
+    const row = aoa[i] || [];
+    const name = String(row[idx.이름] || '').trim();
+    if (!name) continue;
+    const get = (c) => c >= 0 ? row[c] : null;
+    records.push({
+      학년도_raw: '',
+      학년: parseScoreNum(get(idx.학년)),
+      반: parseScoreNum(get(idx.반)),
+      번호: parseScoreNum(get(idx.번호)),
+      이름: name,
+      국어_원점수: parseScoreNum(get(idx.국어.원점수)),
+      국어_등급: parseGradeNum(get(idx.국어.등급)),
+      수학_원점수: parseScoreNum(get(idx.수학.원점수)),
+      수학_등급: parseGradeNum(get(idx.수학.등급)),
+      영어_원점수: parseScoreNum(get(idx.영어.원점수)),
+      영어_등급: parseGradeNum(get(idx.영어.등급)),
+      한국사_원점수: parseScoreNum(get(idx.한국사.원점수)),
+      한국사_등급: parseGradeNum(get(idx.한국사.등급)),
+      탐1_과목: normalizeSubject(get(idx.탐1.과목)),
+      탐1_과목_원본: String(get(idx.탐1.과목)||'').trim(),
+      탐1_원점수: parseScoreNum(get(idx.탐1.원점수)),
+      탐1_등급: parseGradeNum(get(idx.탐1.등급)),
+      탐2_과목: normalizeSubject(get(idx.탐2.과목)),
+      탐2_과목_원본: String(get(idx.탐2.과목)||'').trim(),
+      탐2_원점수: parseScoreNum(get(idx.탐2.원점수)),
+      탐2_등급: parseGradeNum(get(idx.탐2.등급)),
+    });
+  }
+  return { records, columns: idx };
+}
+
+function parseMockExamWorkbook(wb) {
+  // 시트별로 시도, 여러 시트가 있으면 첫 데이터 시트 사용
+  const candidates = [];
+  for (const sn of wb.SheetNames) {
+    const ws = wb.Sheets[sn];
+    const aoa = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+    const format = detectMockFormat(aoa);
+    if (!format) continue;
+    const parsed = format === 'A' ? parseMockFormatA(aoa) : parseMockFormatB(aoa);
+    if (parsed.records.length > 0) {
+      candidates.push({ sheetName: sn, format, ...parsed });
+    }
+  }
+  // 가장 많은 레코드를 가진 시트 선택
+  candidates.sort((a, b) => b.records.length - a.records.length);
+  return candidates[0] || null;
+}
+
+// 계산 함수
+function mockCalcFields(rec) {
+  const 국 = rec.국어_등급, 수 = rec.수학_등급, 영 = rec.영어_등급;
+  const 탐1 = rec.탐1_등급, 탐2 = rec.탐2_등급;
+  const 한 = rec.한국사_등급;
+  const 탐평균 = (탐1 != null && 탐2 != null) ? (탐1 + 탐2) / 2 : (탐1 ?? 탐2);
+  const 합2 = (국 != null && 수 != null) ? 국 + 수 : null;
+  const 합3 = (국 != null && 수 != null && 영 != null) ? 국 + 수 + 영 : null;
+  const 합4 = (국 != null && 수 != null && 영 != null && 탐평균 != null) ? 국 + 수 + 영 + 탐평균 : null;
+  const 합5 = (국 != null && 수 != null && 영 != null && 탐1 != null && 탐2 != null) ? 국 + 수 + 영 + 탐1 + 탐2 : null;
+  const vals = [국, 수, 영, 탐1, 탐2, 한].filter(v => v != null);
+  const 등급평균 = vals.length ? vals.reduce((s,v)=>s+v, 0) / vals.length : null;
+  return { 탐평균, 합2, 합3, 합4, 합5, 등급평균 };
+}
+
+let allMockExams = [];
+let pendingMockExam = null; // {sheetName, format, records, columns, wb, fileName, meta:{기수,실시년월,응시학년}}
+
+// ══════════════════════════════════════════════
 // UTILITY
 // ══════════════════════════════════════════════
 function num(v) { return parseFloat(v) || 0; }
@@ -296,6 +592,7 @@ const PAGES = [
   { id: 'analysis', label: '데이터 분석', icon: 'M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z' },
   { id: 'compare', label: '비교 분석', icon: 'M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4' },
   { id: 'school', label: '중학교별 분석', icon: 'M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4' },
+  { id: 'mock', label: '모의고사', icon: 'M3 4h18M3 10h18M3 16h18M3 22h18' },
   { id: 'report', label: '보고서', icon: 'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z' },
 ];
 
@@ -327,6 +624,7 @@ async function navigateTo(page) {
     case 'analysis': renderAnalysis(main); break;
     case 'compare': renderCompare(main); break;
     case 'school': renderSchool(main); break;
+    case 'mock': renderMock(main); break;
     case 'report': renderReport(main); break;
   }
   updateDataCount();
@@ -563,9 +861,11 @@ function renderUploadMeta() {
 
 async function exportBackup() {
   const data = await getAllApplicants();
-  if (!data.length) { alert('데이터가 없습니다.'); return; }
+  const mocks = await getAllMockExams();
+  if (!data.length && !mocks.length) { alert('데이터가 없습니다.'); return; }
   const cleanData = data.map(r => { const { id, ...rest } = r; return rest; });
-  const blob = new Blob([JSON.stringify({ version: 3, date: new Date().toISOString(), count: data.length, applicants: cleanData }, null, 2)], { type: 'application/json' });
+  const cleanMocks = mocks.map(r => { const { id, ...rest } = r; return rest; });
+  const blob = new Blob([JSON.stringify({ version: 4, date: new Date().toISOString(), count: data.length, mockCount: mocks.length, applicants: cleanData, mockExams: cleanMocks }, null, 2)], { type: 'application/json' });
   const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
   a.download = `고입전형_백업_${new Date().toISOString().slice(0,10)}.json`; a.click();
 }
@@ -576,11 +876,20 @@ async function restoreBackup(e) {
   try {
     const text = await file.text();
     const backup = JSON.parse(text);
-    if (!backup.applicants || !Array.isArray(backup.applicants)) { alert('유효하지 않은 백업 파일입니다.'); return; }
-    const result = await appendRecords(backup.applicants);
-    allData = await getAllApplicants();
+    let msg = [];
+    if (backup.applicants && Array.isArray(backup.applicants)) {
+      const result = await appendRecords(backup.applicants);
+      allData = await getAllApplicants();
+      msg.push(`지원자 추가 ${result.added}명, 중복 ${result.skipped}명 (총 ${result.total}명)`);
+    }
+    if (backup.mockExams && Array.isArray(backup.mockExams)) {
+      const res2 = await addMockExams(backup.mockExams);
+      allMockExams = await getAllMockExams();
+      msg.push(`모의고사 추가 ${res2.added}건, 갱신 ${res2.updated}건`);
+    }
+    if (!msg.length) { alert('유효하지 않은 백업 파일입니다.'); return; }
     updateDataCount();
-    alert(`복원 완료!\n추가: ${result.added}명, 중복 건너뜀: ${result.skipped}명\n전체: ${result.total}명`);
+    alert('복원 완료!\n' + msg.join('\n'));
     navigateTo('upload');
   } catch (err) { alert('복원 오류: ' + err.message); }
   e.target.value = '';
@@ -1095,6 +1404,7 @@ function filterCmpSchools() {
 // PAGE: SCHOOL ANALYSIS (sortable + 전형 filter + cutline)
 // ══════════════════════════════════════════════
 let selectedSchool = '', selectedSchoolType = '';
+let schoolMockSession = '';
 let schoolSortKey = '최종점수', schoolSortDir = 'desc';
 
 function renderSchool(el) {
@@ -1175,6 +1485,21 @@ function renderSchool(el) {
             </tbody>
           </table>
         </div>
+        ${(() => {
+          // 이 학교 출신 학생들이 실제로 가진 모의고사 회차 목록
+          const studentNames = new Set(students.map(s => s['성명']));
+          const relMocks = allMockExams.filter(m => studentNames.has(m.이름));
+          const sessions = [...new Set(relMocks.map(m => `${m.기수}|${m.실시년월}|${m.응시학년}`))].sort();
+          if (!sessions.length) return '';
+          return `<div class="flex items-center gap-2 flex-wrap text-sm">
+            <span class="font-semibold text-gray-700">모의고사 회차:</span>
+            <select onchange="schoolMockSession=this.value; renderSchool(document.getElementById('main-content'))">
+              <option value="">-- 최근 회차 자동 --</option>
+              ${sessions.map(s => { const [c, m, g] = s.split('|'); return `<option value="${s}" ${schoolMockSession===s?'selected':''}>${c}학년도 / ${m} / ${g}학년</option>`; }).join('')}
+            </select>
+            <span class="text-xs text-gray-400">(학생 리스트 끝에 표시)</span>
+          </div>`;
+        })()}
         <div class="overflow-x-auto">
           <table class="w-full text-sm">
             <thead><tr class="border-b bg-gray-50/80">
@@ -1186,9 +1511,32 @@ function renderSchool(el) {
               ${schoolSortTh('면접점수','면접')}
               ${schoolSortTh('최종점수','최종점수')}
               ${schoolSortTh('합불여부','합불')}
+              <th class="px-2 py-2 text-center text-xs font-semibold text-gray-500 border-l border-gray-200">국</th>
+              <th class="px-2 py-2 text-center text-xs font-semibold text-gray-500">수</th>
+              <th class="px-2 py-2 text-center text-xs font-semibold text-gray-500">영</th>
+              <th class="px-2 py-2 text-center text-xs font-semibold text-gray-500">탐평</th>
+              <th class="px-2 py-2 text-center text-xs font-semibold text-gray-500">한</th>
+              <th class="px-2 py-2 text-center text-xs font-semibold text-gray-500">2합</th>
+              <th class="px-2 py-2 text-center text-xs font-semibold text-gray-500">3합</th>
+              <th class="px-2 py-2 text-center text-xs font-semibold text-gray-500">4합</th>
+              <th class="px-2 py-2 text-center text-xs font-semibold text-gray-500">5합</th>
+              <th class="px-2 py-2 text-center text-xs font-semibold text-gray-500">등평</th>
             </tr></thead>
             <tbody>
-              ${sorted.map(r => `
+              ${sorted.map(r => {
+                // 모의고사 찾기
+                let mockCandidates = allMockExams.filter(m => m.이름 === r['성명']);
+                if (schoolMockSession) {
+                  const [c, mm, g] = schoolMockSession.split('|');
+                  mockCandidates = mockCandidates.filter(m => String(m.기수)===c && m.실시년월===mm && String(m.응시학년)===g);
+                } else {
+                  mockCandidates.sort((a, b) => (b.실시년월||'').localeCompare(a.실시년월||''));
+                  mockCandidates = mockCandidates.slice(0, 1);
+                }
+                const mock = mockCandidates[0];
+                const mg = v => v == null ? '-' : Number(v).toFixed(v%1?1:0);
+                const mc = mock ? mockCalcFields(mock) : null;
+                return `
                 <tr class="border-b border-gray-50 hover:bg-blue-50/30 cursor-pointer" onclick="showDetail(${r.id})">
                   <td class="px-3 py-2 font-mono text-gray-600">${r['수험번호']||'-'}</td>
                   <td class="px-3 py-2 font-semibold">${r['성명']}</td>
@@ -1198,8 +1546,18 @@ function renderSchool(el) {
                   <td class="px-3 py-2 text-center font-mono">${fmt(r['면접점수'])}</td>
                   <td class="px-3 py-2 text-center font-mono font-bold text-purple-700">${fmt(r['최종점수'])}</td>
                   <td class="px-3 py-2 text-center"><span class="badge ${r['합불여부']==='합격'?'badge-pass':'badge-fail'}">${r['합불여부']||'-'}</span></td>
+                  <td class="px-2 py-2 text-center font-mono text-xs border-l border-gray-100">${mock ? (mock.국어_등급 ?? '-') : '-'}</td>
+                  <td class="px-2 py-2 text-center font-mono text-xs">${mock ? (mock.수학_등급 ?? '-') : '-'}</td>
+                  <td class="px-2 py-2 text-center font-mono text-xs">${mock ? (mock.영어_등급 ?? '-') : '-'}</td>
+                  <td class="px-2 py-2 text-center font-mono text-xs">${mc ? mg(mc.탐평균) : '-'}</td>
+                  <td class="px-2 py-2 text-center font-mono text-xs">${mock ? (mock.한국사_등급 ?? '-') : '-'}</td>
+                  <td class="px-2 py-2 text-center font-mono text-xs">${mc ? mg(mc.합2) : '-'}</td>
+                  <td class="px-2 py-2 text-center font-mono text-xs">${mc ? mg(mc.합3) : '-'}</td>
+                  <td class="px-2 py-2 text-center font-mono text-xs">${mc ? mg(mc.합4) : '-'}</td>
+                  <td class="px-2 py-2 text-center font-mono text-xs">${mc ? mg(mc.합5) : '-'}</td>
+                  <td class="px-2 py-2 text-center font-mono text-xs font-semibold text-purple-700">${mc ? mg(mc.등급평균) : '-'}</td>
                 </tr>
-              `).join('')}
+              `;}).join('')}
             </tbody>
           </table>
         </div>
@@ -1444,11 +1802,660 @@ function printReport() {
 }
 
 // ══════════════════════════════════════════════
+// PAGE: MOCK EXAM (모의고사)
+// ══════════════════════════════════════════════
+let mockTab = 'list'; // list, upload, analyze, manual
+let mockFilterCohort = ''; // 기수 filter
+let mockFilterMonth = ''; // 실시년월 filter
+let mockFilterGrade = ''; // 응시학년 filter
+let mockAnalyzeMode = 'individual'; // individual, school, type
+let mockAnalyzeTarget = ''; // 이름 / 학교 / 전형
+let mockCompareMonth = ''; // 비교 월 (3월/6월/9월 등)
+let mockListSortKey = '기수', mockListSortDir = 'desc';
+
+function renderMock(el) {
+  const tabs = [
+    { id: 'list', label: '성적 목록' },
+    { id: 'upload', label: '엑셀 업로드' },
+    { id: 'manual', label: '수동 입력' },
+    { id: 'analyze', label: '비교 분석' },
+  ];
+  el.innerHTML = `
+    <div class="p-6 max-w-7xl mx-auto space-y-5">
+      <div class="flex items-center justify-between flex-wrap gap-3">
+        <h1 class="text-2xl font-bold text-gray-900">모의고사 성적 관리</h1>
+        <div class="flex gap-1.5">
+          ${tabs.map(t => `<button onclick="mockTab='${t.id}'; renderMock(document.getElementById('main-content'))" class="tab-btn ${mockTab===t.id?'active':''}">${t.label}</button>`).join('')}
+        </div>
+      </div>
+      <div id="mock-body"></div>
+    </div>`;
+  const body = document.getElementById('mock-body');
+  if (mockTab === 'list') renderMockList(body);
+  else if (mockTab === 'upload') renderMockUpload(body);
+  else if (mockTab === 'manual') renderMockManual(body);
+  else if (mockTab === 'analyze') renderMockAnalyze(body);
+}
+
+// ─── LIST ───
+function mockFilterBar() {
+  const cohorts = [...new Set(allMockExams.map(r => r.기수).filter(Boolean))].sort();
+  const months = [...new Set(allMockExams.map(r => r.실시년월).filter(Boolean))].sort();
+  const grades = [...new Set(allMockExams.map(r => r.응시학년).filter(Boolean))].sort();
+  return `<div class="card p-3 flex flex-wrap gap-2 items-center text-sm">
+    <span class="text-gray-500 text-xs font-semibold">필터:</span>
+    <select onchange="mockFilterCohort=this.value; renderMock(document.getElementById('main-content'))">
+      <option value="">기수 전체</option>${cohorts.map(c => `<option ${mockFilterCohort===c?'selected':''} value="${c}">${c}학년도</option>`).join('')}
+    </select>
+    <select onchange="mockFilterMonth=this.value; renderMock(document.getElementById('main-content'))">
+      <option value="">실시월 전체</option>${months.map(m => `<option ${mockFilterMonth===m?'selected':''} value="${m}">${m}</option>`).join('')}
+    </select>
+    <select onchange="mockFilterGrade=this.value; renderMock(document.getElementById('main-content'))">
+      <option value="">응시학년 전체</option>${grades.map(g => `<option ${String(mockFilterGrade)===String(g)?'selected':''} value="${g}">${g}학년</option>`).join('')}
+    </select>
+    <div class="flex-1"></div>
+    <div class="text-xs text-gray-500">총 ${allMockExams.length}건</div>
+  </div>`;
+}
+function getFilteredMockExams() {
+  return allMockExams.filter(r => {
+    if (mockFilterCohort && String(r.기수) !== String(mockFilterCohort)) return false;
+    if (mockFilterMonth && r.실시년월 !== mockFilterMonth) return false;
+    if (mockFilterGrade && String(r.응시학년) !== String(mockFilterGrade)) return false;
+    return true;
+  });
+}
+function renderMockList(body) {
+  if (!allMockExams.length) {
+    body.innerHTML = `<div class="card p-10 text-center text-gray-400">아직 모의고사 성적이 없습니다. 상단의 "엑셀 업로드" 또는 "수동 입력" 탭에서 추가하세요.</div>`;
+    return;
+  }
+  const filtered = getFilteredMockExams();
+  const sorted = [...filtered].sort((a, b) => {
+    let va = a[mockListSortKey], vb = b[mockListSortKey];
+    const na = num(va), nb = num(vb);
+    if (na || nb) { va = na; vb = nb; } else { va = String(va||''); vb = String(vb||''); }
+    if (va < vb) return mockListSortDir === 'asc' ? -1 : 1;
+    if (va > vb) return mockListSortDir === 'asc' ? 1 : -1;
+    return 0;
+  });
+  const sortTh = (key, label) => {
+    const active = mockListSortKey === key;
+    const arrow = active ? (mockListSortDir === 'asc' ? '▲' : '▼') : '⇅';
+    return `<th class="px-2 py-2 text-xs text-gray-500 sortable ${active?'sort-active':''}" onclick="mockListSortKey='${key}'; mockListSortDir=mockListSortKey==='${key}'&&mockListSortDir==='desc'?'asc':'desc'; renderMock(document.getElementById('main-content'))">${label}<span class="sort-arrow">${arrow}</span></th>`;
+  };
+  const gd = v => v == null ? '-' : Number(v).toFixed(v % 1 ? 1 : 0);
+  body.innerHTML = `
+    ${mockFilterBar()}
+    <div class="card overflow-x-auto mt-3">
+      <table class="w-full text-xs">
+        <thead><tr class="border-b bg-gray-50/80">
+          ${sortTh('기수','기수')}${sortTh('실시년월','실시')}${sortTh('응시학년','학년')}${sortTh('반','반')}${sortTh('번호','번호')}${sortTh('이름','이름')}
+          ${sortTh('국어_등급','국')}${sortTh('수학_등급','수')}${sortTh('영어_등급','영')}${sortTh('탐1_등급','탐1')}${sortTh('탐2_등급','탐2')}${sortTh('한국사_등급','한')}
+          <th class="px-2 py-2 text-xs text-gray-500">탐평균</th>
+          <th class="px-2 py-2 text-xs text-gray-500">2합</th>
+          <th class="px-2 py-2 text-xs text-gray-500">3합</th>
+          <th class="px-2 py-2 text-xs text-gray-500">4합</th>
+          <th class="px-2 py-2 text-xs text-gray-500">5합</th>
+          <th class="px-2 py-2 text-xs text-gray-500">등급평균</th>
+          <th class="px-2 py-2 text-xs text-gray-500">관리</th>
+        </tr></thead>
+        <tbody>
+          ${sorted.slice(0, 500).map(r => {
+            const c = mockCalcFields(r);
+            return `<tr class="border-b border-gray-50 hover:bg-blue-50/30">
+              <td class="px-2 py-1.5 text-center">${r.기수||'-'}</td>
+              <td class="px-2 py-1.5 text-center">${r.실시년월||'-'}</td>
+              <td class="px-2 py-1.5 text-center">${r.응시학년||'-'}</td>
+              <td class="px-2 py-1.5 text-center">${r.반||'-'}</td>
+              <td class="px-2 py-1.5 text-center">${r.번호||'-'}</td>
+              <td class="px-2 py-1.5 font-semibold">${r.이름}</td>
+              <td class="px-2 py-1.5 text-center font-mono">${r.국어_등급 ?? '-'}</td>
+              <td class="px-2 py-1.5 text-center font-mono">${r.수학_등급 ?? '-'}</td>
+              <td class="px-2 py-1.5 text-center font-mono">${r.영어_등급 ?? '-'}</td>
+              <td class="px-2 py-1.5 text-center font-mono">${r.탐1_등급 ?? '-'}</td>
+              <td class="px-2 py-1.5 text-center font-mono">${r.탐2_등급 ?? '-'}</td>
+              <td class="px-2 py-1.5 text-center font-mono">${r.한국사_등급 ?? '-'}</td>
+              <td class="px-2 py-1.5 text-center font-mono text-blue-600">${gd(c.탐평균)}</td>
+              <td class="px-2 py-1.5 text-center font-mono">${gd(c.합2)}</td>
+              <td class="px-2 py-1.5 text-center font-mono">${gd(c.합3)}</td>
+              <td class="px-2 py-1.5 text-center font-mono">${gd(c.합4)}</td>
+              <td class="px-2 py-1.5 text-center font-mono">${gd(c.합5)}</td>
+              <td class="px-2 py-1.5 text-center font-mono font-semibold text-purple-700">${gd(c.등급평균)}</td>
+              <td class="px-2 py-1.5 text-center"><button onclick="editMockRecord(${r.id})" class="text-xs text-blue-600 hover:underline">수정</button> <button onclick="removeMockRecord(${r.id})" class="text-xs text-red-500 hover:underline">삭제</button></td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table>
+      ${sorted.length > 500 ? `<div class="p-3 text-center text-xs text-gray-400">상위 500건만 표시됩니다. 필터로 좁혀주세요.</div>` : ''}
+    </div>`;
+}
+
+async function removeMockRecord(id) {
+  if (!confirm('이 성적 기록을 삭제하시겠습니까?')) return;
+  await deleteMockExam(id);
+  allMockExams = await getAllMockExams();
+  renderMock(document.getElementById('main-content'));
+}
+function editMockRecord(id) {
+  const r = allMockExams.find(x => x.id === id);
+  if (!r) return;
+  pendingMockManualEdit = { ...r };
+  mockTab = 'manual';
+  renderMock(document.getElementById('main-content'));
+}
+
+// ─── UPLOAD ───
+function renderMockUpload(body) {
+  if (pendingMockExam) { renderMockUploadPreview(body); return; }
+  body.innerHTML = `
+    <div class="card p-6 space-y-4">
+      <div class="space-y-2">
+        <label class="block text-sm font-semibold text-gray-700">1. 엑셀 파일 선택 (양식 A/B 자동 감지)</label>
+        <input type="file" accept=".xlsx,.xls,.csv" onchange="handleMockFileSelect(event)" class="block text-sm">
+        <p class="text-xs text-gray-500">지원 양식: 통합양식(2줄 병합 헤더) / 가채점 RAW(1줄 헤더)</p>
+      </div>
+    </div>`;
+}
+async function handleMockFileSelect(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  try {
+    const wb = await readFileAsWorkbook(file);
+    const parsed = parseMockExamWorkbook(wb);
+    if (!parsed || !parsed.records.length) {
+      alert('파일에서 모의고사 데이터를 인식할 수 없습니다. 양식을 확인하세요.');
+      return;
+    }
+    // Default meta from first record
+    const first = parsed.records[0];
+    const rawYear = String(first.학년도_raw || '').match(/\d{4}/)?.[0] || '';
+    const rawGrade = first.학년 || 1;
+    // Try to extract month from filename (e.g., "2024_3", "2026 3월", "03월")
+    let monthFromName = '';
+    const fnameMatch = file.name.match(/(\d{4})[^\d]*(\d{1,2})\s*월/) || file.name.match(/(\d{4})[_\s-](\d{1,2})/);
+    if (fnameMatch) monthFromName = `${fnameMatch[1]}-${String(fnameMatch[2]).padStart(2,'0')}`;
+    pendingMockExam = {
+      fileName: file.name,
+      sheetName: parsed.sheetName,
+      format: parsed.format,
+      records: parsed.records,
+      meta: {
+        기수: rawYear || new Date().getFullYear().toString(),
+        실시년월: monthFromName || '',
+        응시학년: rawGrade || 1,
+      },
+    };
+    renderMock(document.getElementById('main-content'));
+  } catch (err) {
+    alert('파일 읽기 실패: ' + err.message);
+  }
+}
+function renderMockUploadPreview(body) {
+  const p = pendingMockExam;
+  const sample = p.records.slice(0, 10);
+  const subjectSummary = {};
+  p.records.forEach(r => {
+    if (r.탐1_과목_원본) subjectSummary[r.탐1_과목_원본] = (subjectSummary[r.탐1_과목_원본]||0)+1;
+    if (r.탐2_과목_원본) subjectSummary[r.탐2_과목_원본] = (subjectSummary[r.탐2_과목_원본]||0)+1;
+  });
+  body.innerHTML = `
+    <div class="card p-6 space-y-5">
+      <div class="flex items-center justify-between">
+        <div>
+          <h3 class="font-bold text-gray-900">업로드 미리보기</h3>
+          <p class="text-xs text-gray-500">파일: ${p.fileName} / 시트: ${p.sheetName} / 양식: ${p.format} / 인식된 레코드: ${p.records.length}건</p>
+        </div>
+        <button onclick="pendingMockExam=null; renderMock(document.getElementById('main-content'))" class="text-sm text-gray-500 hover:text-gray-700">취소</button>
+      </div>
+      <div class="grid grid-cols-3 gap-3">
+        <div>
+          <label class="block text-xs font-semibold text-gray-600 mb-1">기수 (학년도)</label>
+          <input type="text" value="${p.meta.기수}" oninput="pendingMockExam.meta.기수=this.value" placeholder="2026">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-gray-600 mb-1">실시년월 (YYYY-MM)</label>
+          <input type="text" value="${p.meta.실시년월}" oninput="pendingMockExam.meta.실시년월=this.value" placeholder="2026-03">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-gray-600 mb-1">응시학년</label>
+          <select onchange="pendingMockExam.meta.응시학년=parseInt(this.value)">
+            <option value="1" ${p.meta.응시학년==1?'selected':''}>1학년</option>
+            <option value="2" ${p.meta.응시학년==2?'selected':''}>2학년</option>
+            <option value="3" ${p.meta.응시학년==3?'selected':''}>3학년</option>
+          </select>
+        </div>
+      </div>
+      ${Object.keys(subjectSummary).length ? `<div class="bg-blue-50/50 rounded-xl p-3 text-xs">
+        <div class="font-semibold text-blue-800 mb-1">인식된 탐구 과목</div>
+        <div class="text-gray-700">${Object.entries(subjectSummary).map(([s,n]) => `${s} (${n})`).join(' / ')}</div>
+        <div class="text-[10px] text-gray-500 mt-1">→ 자동으로 "사회탐구" / "과학탐구"로 정규화됩니다.</div>
+      </div>` : ''}
+      <div class="overflow-x-auto border border-gray-200 rounded-xl">
+        <table class="w-full text-xs">
+          <thead class="bg-gray-50"><tr>
+            <th class="px-2 py-1.5">반</th><th class="px-2 py-1.5">번호</th><th class="px-2 py-1.5">이름</th>
+            <th class="px-2 py-1.5">국</th><th class="px-2 py-1.5">수</th><th class="px-2 py-1.5">영</th>
+            <th class="px-2 py-1.5">탐1</th><th class="px-2 py-1.5">탐2</th><th class="px-2 py-1.5">한</th>
+            <th class="px-2 py-1.5">2합</th><th class="px-2 py-1.5">3합</th><th class="px-2 py-1.5">4합</th><th class="px-2 py-1.5">5합</th><th class="px-2 py-1.5">평균</th>
+          </tr></thead>
+          <tbody>
+            ${sample.map(r => { const c = mockCalcFields(r); const gd = v => v == null ? '-' : Number(v).toFixed(v%1?1:0); return `<tr class="border-t border-gray-100">
+              <td class="px-2 py-1 text-center">${r.반||'-'}</td>
+              <td class="px-2 py-1 text-center">${r.번호||'-'}</td>
+              <td class="px-2 py-1">${r.이름}</td>
+              <td class="px-2 py-1 text-center">${r.국어_등급 ?? '-'}</td>
+              <td class="px-2 py-1 text-center">${r.수학_등급 ?? '-'}</td>
+              <td class="px-2 py-1 text-center">${r.영어_등급 ?? '-'}</td>
+              <td class="px-2 py-1 text-center">${r.탐1_등급 ?? '-'}${r.탐1_과목?` <span class="text-[10px] text-gray-400">${r.탐1_과목_원본||r.탐1_과목}</span>`:''}</td>
+              <td class="px-2 py-1 text-center">${r.탐2_등급 ?? '-'}${r.탐2_과목?` <span class="text-[10px] text-gray-400">${r.탐2_과목_원본||r.탐2_과목}</span>`:''}</td>
+              <td class="px-2 py-1 text-center">${r.한국사_등급 ?? '-'}</td>
+              <td class="px-2 py-1 text-center font-mono">${gd(c.합2)}</td>
+              <td class="px-2 py-1 text-center font-mono">${gd(c.합3)}</td>
+              <td class="px-2 py-1 text-center font-mono">${gd(c.합4)}</td>
+              <td class="px-2 py-1 text-center font-mono">${gd(c.합5)}</td>
+              <td class="px-2 py-1 text-center font-mono">${gd(c.등급평균)}</td>
+            </tr>`; }).join('')}
+          </tbody>
+        </table>
+        <div class="p-2 text-center text-[10px] text-gray-400">상위 10개 미리보기 (총 ${p.records.length}건)</div>
+      </div>
+      <div class="flex items-center justify-end gap-2">
+        <button onclick="pendingMockExam=null; renderMock(document.getElementById('main-content'))" class="px-4 py-2 border border-gray-200 rounded-xl text-sm">취소</button>
+        <button onclick="saveMockExamUpload()" class="px-6 py-2 bg-blue-600 text-white rounded-xl text-sm font-medium hover:bg-blue-700">저장 (${p.records.length}건)</button>
+      </div>
+    </div>`;
+}
+async function saveMockExamUpload() {
+  const p = pendingMockExam;
+  if (!p) return;
+  if (!p.meta.기수 || !p.meta.실시년월 || !p.meta.응시학년) {
+    alert('기수, 실시년월, 응시학년을 모두 입력하세요.');
+    return;
+  }
+  const records = p.records.map(r => ({
+    기수: String(p.meta.기수),
+    실시년월: p.meta.실시년월,
+    응시학년: parseInt(p.meta.응시학년),
+    반: r.반,
+    번호: r.번호,
+    이름: r.이름,
+    국어_원점수: r.국어_원점수, 국어_등급: r.국어_등급,
+    수학_원점수: r.수학_원점수, 수학_등급: r.수학_등급,
+    영어_원점수: r.영어_원점수, 영어_등급: r.영어_등급,
+    한국사_원점수: r.한국사_원점수, 한국사_등급: r.한국사_등급,
+    탐1_과목: r.탐1_과목, 탐1_과목_원본: r.탐1_과목_원본, 탐1_원점수: r.탐1_원점수, 탐1_등급: r.탐1_등급,
+    탐2_과목: r.탐2_과목, 탐2_과목_원본: r.탐2_과목_원본, 탐2_원점수: r.탐2_원점수, 탐2_등급: r.탐2_등급,
+  }));
+  const res = await addMockExams(records);
+  allMockExams = await getAllMockExams();
+  pendingMockExam = null;
+  alert(`저장 완료: 새로 추가 ${res.added}건, 기존 갱신 ${res.updated}건`);
+  mockTab = 'list';
+  renderMock(document.getElementById('main-content'));
+}
+
+// ─── MANUAL ENTRY ───
+let pendingMockManualEdit = null;
+function renderMockManual(body) {
+  const r = pendingMockManualEdit || {
+    기수: '', 실시년월: '', 응시학년: 1, 반: '', 번호: '', 이름: '',
+    국어_등급: '', 수학_등급: '', 영어_등급: '', 한국사_등급: '',
+    탐1_과목: '', 탐1_등급: '', 탐2_과목: '', 탐2_등급: '',
+  };
+  const isEdit = pendingMockManualEdit && pendingMockManualEdit.id;
+  body.innerHTML = `
+    <div class="card p-6 space-y-5">
+      <div class="flex items-center justify-between">
+        <h3 class="font-bold text-gray-900">${isEdit ? '성적 수정' : '수동 입력'}</h3>
+        ${isEdit ? `<button onclick="pendingMockManualEdit=null; renderMock(document.getElementById('main-content'))" class="text-sm text-gray-500">취소</button>` : ''}
+      </div>
+      <div class="grid grid-cols-4 gap-3">
+        <div><label class="block text-xs font-semibold text-gray-600 mb-1">기수</label><input type="text" id="mm-기수" value="${r.기수||''}" placeholder="2026"></div>
+        <div><label class="block text-xs font-semibold text-gray-600 mb-1">실시년월</label><input type="text" id="mm-실시년월" value="${r.실시년월||''}" placeholder="2026-03"></div>
+        <div><label class="block text-xs font-semibold text-gray-600 mb-1">응시학년</label><select id="mm-응시학년"><option value="1" ${r.응시학년==1?'selected':''}>1학년</option><option value="2" ${r.응시학년==2?'selected':''}>2학년</option><option value="3" ${r.응시학년==3?'selected':''}>3학년</option></select></div>
+        <div><label class="block text-xs font-semibold text-gray-600 mb-1">이름</label><input type="text" id="mm-이름" value="${r.이름||''}"></div>
+        <div><label class="block text-xs font-semibold text-gray-600 mb-1">반</label><input type="number" id="mm-반" value="${r.반||''}"></div>
+        <div><label class="block text-xs font-semibold text-gray-600 mb-1">번호</label><input type="number" id="mm-번호" value="${r.번호||''}"></div>
+      </div>
+      <div class="grid grid-cols-4 gap-3 pt-3 border-t border-gray-100">
+        <div><label class="block text-xs font-semibold text-gray-600 mb-1">국어 등급</label><input type="number" min="1" max="9" id="mm-국어_등급" value="${r.국어_등급??''}"></div>
+        <div><label class="block text-xs font-semibold text-gray-600 mb-1">수학 등급</label><input type="number" min="1" max="9" id="mm-수학_등급" value="${r.수학_등급??''}"></div>
+        <div><label class="block text-xs font-semibold text-gray-600 mb-1">영어 등급</label><input type="number" min="1" max="9" id="mm-영어_등급" value="${r.영어_등급??''}"></div>
+        <div><label class="block text-xs font-semibold text-gray-600 mb-1">한국사 등급</label><input type="number" min="1" max="9" id="mm-한국사_등급" value="${r.한국사_등급??''}"></div>
+        <div><label class="block text-xs font-semibold text-gray-600 mb-1">탐1 과목</label><input type="text" id="mm-탐1_과목" value="${r.탐1_과목||''}" placeholder="사회/과학/통합사회 등"></div>
+        <div><label class="block text-xs font-semibold text-gray-600 mb-1">탐1 등급</label><input type="number" min="1" max="9" id="mm-탐1_등급" value="${r.탐1_등급??''}"></div>
+        <div><label class="block text-xs font-semibold text-gray-600 mb-1">탐2 과목</label><input type="text" id="mm-탐2_과목" value="${r.탐2_과목||''}"></div>
+        <div><label class="block text-xs font-semibold text-gray-600 mb-1">탐2 등급</label><input type="number" min="1" max="9" id="mm-탐2_등급" value="${r.탐2_등급??''}"></div>
+      </div>
+      <div class="flex justify-end gap-2">
+        <button onclick="saveMockManual(${isEdit ? r.id : 'null'})" class="px-6 py-2 bg-blue-600 text-white rounded-xl text-sm font-medium hover:bg-blue-700">${isEdit?'수정':'저장'}</button>
+      </div>
+    </div>`;
+}
+async function saveMockManual(editId) {
+  const g = id => document.getElementById('mm-' + id).value;
+  const 이름 = g('이름').trim();
+  const 기수 = g('기수').trim();
+  const 실시년월 = g('실시년월').trim();
+  const 응시학년 = parseInt(g('응시학년'));
+  if (!이름 || !기수 || !실시년월) { alert('기수, 실시년월, 이름은 필수입니다.'); return; }
+  const rec = {
+    기수, 실시년월, 응시학년,
+    반: parseScoreNum(g('반')), 번호: parseScoreNum(g('번호')), 이름,
+    국어_등급: parseGradeNum(g('국어_등급')),
+    수학_등급: parseGradeNum(g('수학_등급')),
+    영어_등급: parseGradeNum(g('영어_등급')),
+    한국사_등급: parseGradeNum(g('한국사_등급')),
+    탐1_과목_원본: g('탐1_과목').trim(), 탐1_과목: normalizeSubject(g('탐1_과목')), 탐1_등급: parseGradeNum(g('탐1_등급')),
+    탐2_과목_원본: g('탐2_과목').trim(), 탐2_과목: normalizeSubject(g('탐2_과목')), 탐2_등급: parseGradeNum(g('탐2_등급')),
+  };
+  if (editId) rec.id = editId;
+  rec._dedupe = `${rec.기수}_${rec.실시년월}_${rec.응시학년}_${rec.이름}_${rec.반||''}_${rec.번호||''}`;
+  if (editId) { await updateMockExam(rec); }
+  else { await addMockExams([rec]); }
+  allMockExams = await getAllMockExams();
+  pendingMockManualEdit = null;
+  mockTab = 'list';
+  renderMock(document.getElementById('main-content'));
+}
+
+// ─── ANALYZE ───
+function renderMockAnalyze(body) {
+  if (!allMockExams.length) {
+    body.innerHTML = `<div class="card p-10 text-center text-gray-400">분석할 모의고사 데이터가 없습니다.</div>`;
+    return;
+  }
+  const modes = [
+    { id: 'individual', label: '개인별' },
+    { id: 'school', label: '중학교별' },
+    { id: 'type', label: '전형별' },
+  ];
+  // 개인별 대상 선택지 (이름)
+  const names = [...new Set(allMockExams.map(r => r.이름))].sort();
+  // 중학교 목록 (applicants 데이터에서)
+  const schools = [...new Set(allData.map(r => r['출신중']).filter(Boolean))].sort();
+  // 전형 목록
+  const types = [...new Set(allData.map(r => r['전형구분']).filter(Boolean))].sort();
+  // 실시 월 목록 (비교 대상)
+  const monthsAll = [...new Set(allMockExams.map(r => (r.실시년월||'').split('-')[1]).filter(Boolean))].sort();
+
+  body.innerHTML = `
+    <div class="card p-5 space-y-4">
+      <div class="flex flex-wrap gap-2 items-center">
+        <span class="text-sm text-gray-600 font-semibold">분석 단위:</span>
+        ${modes.map(m => `<button onclick="mockAnalyzeMode='${m.id}'; mockAnalyzeTarget=''; renderMock(document.getElementById('main-content'))" class="px-3 py-1.5 rounded-lg text-sm ${mockAnalyzeMode===m.id?'bg-blue-600 text-white':'bg-gray-100 text-gray-700 hover:bg-gray-200'}">${m.label}</button>`).join('')}
+        <div class="flex-1"></div>
+        <select onchange="mockCompareMonth=this.value; renderMock(document.getElementById('main-content'))">
+          <option value="">실시월 (전체)</option>
+          ${monthsAll.map(m => `<option value="${m}" ${mockCompareMonth===m?'selected':''}>${parseInt(m)}월</option>`).join('')}
+        </select>
+      </div>
+      <div>
+        ${mockAnalyzeMode==='individual' ? `
+          <label class="block text-xs font-semibold text-gray-600 mb-1">학생 선택</label>
+          <select onchange="mockAnalyzeTarget=this.value; renderMock(document.getElementById('main-content'))">
+            <option value="">-- 학생 --</option>
+            ${names.map(n => `<option value="${n}" ${mockAnalyzeTarget===n?'selected':''}>${n}</option>`).join('')}
+          </select>` : ''}
+        ${mockAnalyzeMode==='school' ? `
+          <label class="block text-xs font-semibold text-gray-600 mb-1">출신 중학교 선택</label>
+          <select onchange="mockAnalyzeTarget=this.value; renderMock(document.getElementById('main-content'))">
+            <option value="">-- 전체 보기 --</option>
+            ${schools.map(s => `<option value="${s}" ${mockAnalyzeTarget===s?'selected':''}>${s}</option>`).join('')}
+          </select>` : ''}
+        ${mockAnalyzeMode==='type' ? `
+          <label class="block text-xs font-semibold text-gray-600 mb-1">전형구분 선택</label>
+          <select onchange="mockAnalyzeTarget=this.value; renderMock(document.getElementById('main-content'))">
+            <option value="">-- 전체 보기 --</option>
+            ${types.map(t => `<option value="${t}" ${mockAnalyzeTarget===t?'selected':''}>${t}</option>`).join('')}
+          </select>` : ''}
+      </div>
+      <div id="mock-analyze-result"></div>
+    </div>`;
+
+  const resultEl = document.getElementById('mock-analyze-result');
+  if (mockAnalyzeMode === 'individual') renderMockIndividualAnalysis(resultEl);
+  else if (mockAnalyzeMode === 'school') renderMockSchoolAnalysis(resultEl);
+  else if (mockAnalyzeMode === 'type') renderMockTypeAnalysis(resultEl);
+}
+
+function getAdmittedStudents() {
+  // 합격자 대상
+  return allData.filter(r => r['합불여부'] === '합격');
+}
+function mockRecordsForName(name) {
+  return allMockExams.filter(r => r.이름 === name);
+}
+function mockRecordsForSchool(school) {
+  const names = new Set(getAdmittedStudents().filter(r => r['출신중'] === school).map(r => ({ name: r['성명'], year: r['_학년도'] })).map(o => o.name));
+  // 기수 매칭도 필요하지만 일단 이름으로
+  const admittedByName = {};
+  getAdmittedStudents().filter(r => r['출신중'] === school).forEach(r => { admittedByName[r['성명']] = r['_학년도']; });
+  return allMockExams.filter(r => admittedByName[r.이름] != null);
+}
+function mockRecordsForType(type) {
+  const admittedByName = {};
+  getAdmittedStudents().filter(r => r['전형구분'] === type).forEach(r => { admittedByName[r['성명']] = r['_학년도']; });
+  return allMockExams.filter(r => admittedByName[r.이름] != null);
+}
+
+function aggregateStats(records) {
+  const fields = ['국어_등급','수학_등급','영어_등급','탐1_등급','탐2_등급','한국사_등급'];
+  const stats = {};
+  fields.forEach(f => {
+    const vals = records.map(r => r[f]).filter(v => v != null);
+    stats[f] = vals.length ? vals.reduce((s,v)=>s+v,0) / vals.length : null;
+  });
+  // Composite
+  const calcVals = records.map(mockCalcFields);
+  ['합2','합3','합4','합5','등급평균','탐평균'].forEach(f => {
+    const vs = calcVals.map(c => c[f]).filter(v => v != null);
+    stats[f] = vs.length ? vs.reduce((s,v)=>s+v,0) / vs.length : null;
+  });
+  stats.n = records.length;
+  return stats;
+}
+
+function renderMockIndividualAnalysis(el) {
+  if (!mockAnalyzeTarget) { el.innerHTML = '<div class="text-sm text-gray-400 p-4">학생을 선택하세요.</div>'; return; }
+  const records = mockRecordsForName(mockAnalyzeTarget).sort((a,b) => (a.실시년월||'').localeCompare(b.실시년월||''));
+  if (!records.length) { el.innerHTML = '<div class="text-sm text-gray-400 p-4">데이터가 없습니다.</div>'; return; }
+  const admissionRec = allData.find(r => r['성명'] === mockAnalyzeTarget);
+  const 중 = admissionRec?.['출신중'] || '-';
+  const 전형 = admissionRec?.['전형구분'] || '-';
+  const gd = v => v == null ? '-' : Number(v).toFixed(v%1?2:0);
+
+  // 같은 학년+같은 월 전체(코호트) 평균과 비교
+  const rowsHtml = records.map(r => {
+    const c = mockCalcFields(r);
+    const cohort = allMockExams.filter(x => x.기수 === r.기수 && x.실시년월 === r.실시년월 && x.응시학년 === r.응시학년);
+    const cs = aggregateStats(cohort);
+    return `<tr class="border-b">
+      <td class="px-2 py-1.5">${r.기수}</td>
+      <td class="px-2 py-1.5">${r.실시년월}</td>
+      <td class="px-2 py-1.5">${r.응시학년}</td>
+      <td class="px-2 py-1.5 text-center font-mono">${r.국어_등급 ?? '-'}</td>
+      <td class="px-2 py-1.5 text-center font-mono">${r.수학_등급 ?? '-'}</td>
+      <td class="px-2 py-1.5 text-center font-mono">${r.영어_등급 ?? '-'}</td>
+      <td class="px-2 py-1.5 text-center font-mono">${gd(c.탐평균)}</td>
+      <td class="px-2 py-1.5 text-center font-mono">${r.한국사_등급 ?? '-'}</td>
+      <td class="px-2 py-1.5 text-center font-mono">${gd(c.합2)}</td>
+      <td class="px-2 py-1.5 text-center font-mono">${gd(c.합3)}</td>
+      <td class="px-2 py-1.5 text-center font-mono">${gd(c.합4)}</td>
+      <td class="px-2 py-1.5 text-center font-mono">${gd(c.합5)}</td>
+      <td class="px-2 py-1.5 text-center font-mono font-semibold text-purple-700">${gd(c.등급평균)}</td>
+      <td class="px-2 py-1.5 text-center text-[10px] text-gray-500">기수평균 ${gd(cs.등급평균)}</td>
+    </tr>`;
+  }).join('');
+
+  // 동일 월 전년도 비교 (같은 실시월, 다른 기수)
+  const byMonth = {};
+  records.forEach(r => {
+    const month = (r.실시년월||'').split('-')[1];
+    if (!month) return;
+    if (!byMonth[month]) byMonth[month] = [];
+    byMonth[month].push(r);
+  });
+  let compareHtml = '';
+  Object.entries(byMonth).forEach(([month, rs]) => {
+    // 본인의 전년도 같은 월은 없을 수 있음 → 코호트 비교
+    const cohortByYear = {};
+    allMockExams.forEach(x => {
+      if ((x.실시년월||'').split('-')[1] !== month) return;
+      if (x.응시학년 !== rs[0].응시학년) return;
+      if (!cohortByYear[x.기수]) cohortByYear[x.기수] = [];
+      cohortByYear[x.기수].push(x);
+    });
+    const cohortStats = Object.entries(cohortByYear).map(([y, arr]) => ({ year: y, s: aggregateStats(arr) })).sort((a,b) => a.year.localeCompare(b.year));
+    compareHtml += `<div class="bg-blue-50/50 rounded-xl p-3">
+      <div class="font-semibold text-blue-800 text-sm mb-2">${parseInt(month)}월 기수별 평균 비교 (응시 ${rs[0].응시학년}학년)</div>
+      <table class="w-full text-xs"><thead><tr class="border-b border-blue-200"><th class="text-left py-1">기수</th><th>국</th><th>수</th><th>영</th><th>탐평균</th><th>한</th><th>2합</th><th>3합</th><th>4합</th><th>5합</th><th>평균</th></tr></thead><tbody>
+      ${cohortStats.map(cs => `<tr class="border-b border-blue-100 ${cs.year===rs[0].기수?'bg-blue-100/50 font-semibold':''}"><td class="py-1">${cs.year}${cs.year===rs[0].기수?' (본인)':''}</td><td class="text-center font-mono">${gd(cs.s.국어_등급)}</td><td class="text-center font-mono">${gd(cs.s.수학_등급)}</td><td class="text-center font-mono">${gd(cs.s.영어_등급)}</td><td class="text-center font-mono">${gd(cs.s.탐평균)}</td><td class="text-center font-mono">${gd(cs.s.한국사_등급)}</td><td class="text-center font-mono">${gd(cs.s.합2)}</td><td class="text-center font-mono">${gd(cs.s.합3)}</td><td class="text-center font-mono">${gd(cs.s.합4)}</td><td class="text-center font-mono">${gd(cs.s.합5)}</td><td class="text-center font-mono font-semibold">${gd(cs.s.등급평균)}</td></tr>`).join('')}
+      </tbody></table>
+    </div>`;
+  });
+
+  el.innerHTML = `
+    <div class="space-y-4">
+      <div class="bg-gray-50 rounded-xl p-3 text-sm">
+        <span class="font-semibold">${mockAnalyzeTarget}</span>
+        <span class="text-gray-500 ml-2">출신중: ${중} / 전형: ${전형}</span>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-xs">
+          <thead class="bg-gray-50"><tr><th class="px-2 py-1.5">기수</th><th class="px-2 py-1.5">실시</th><th class="px-2 py-1.5">학년</th><th>국</th><th>수</th><th>영</th><th>탐평균</th><th>한</th><th>2합</th><th>3합</th><th>4합</th><th>5합</th><th>평균</th><th>코호트</th></tr></thead>
+          <tbody>${rowsHtml}</tbody>
+        </table>
+      </div>
+      ${compareHtml}
+    </div>`;
+}
+
+function renderMockSchoolAnalysis(el) {
+  if (!mockAnalyzeTarget) {
+    // 전체 중학교별 평균 표
+    const schools = [...new Set(getAdmittedStudents().map(r => r['출신중']).filter(Boolean))].sort();
+    const rows = schools.map(s => {
+      let records = mockRecordsForSchool(s);
+      if (mockCompareMonth) records = records.filter(r => (r.실시년월||'').split('-')[1] === mockCompareMonth);
+      const stats = aggregateStats(records);
+      return { s, stats };
+    }).filter(x => x.stats.n > 0).sort((a,b) => (a.stats.등급평균 ?? 99) - (b.stats.등급평균 ?? 99));
+    const gd = v => v == null ? '-' : Number(v).toFixed(2);
+    el.innerHTML = `
+      <div class="overflow-x-auto">
+        <table class="w-full text-xs">
+          <thead class="bg-gray-50"><tr><th class="px-2 py-1.5 text-left">중학교</th><th>N</th><th>국</th><th>수</th><th>영</th><th>탐평균</th><th>한</th><th>2합</th><th>3합</th><th>4합</th><th>5합</th><th>평균</th></tr></thead>
+          <tbody>${rows.map(({s, stats}) => `<tr class="border-b hover:bg-blue-50/30 cursor-pointer" onclick="mockAnalyzeTarget='${s.replace(/'/g,"\\'")}'; renderMock(document.getElementById('main-content'))">
+            <td class="px-2 py-1.5 font-semibold">${s}</td><td class="text-center">${stats.n}</td>
+            <td class="text-center font-mono">${gd(stats.국어_등급)}</td>
+            <td class="text-center font-mono">${gd(stats.수학_등급)}</td>
+            <td class="text-center font-mono">${gd(stats.영어_등급)}</td>
+            <td class="text-center font-mono">${gd(stats.탐평균)}</td>
+            <td class="text-center font-mono">${gd(stats.한국사_등급)}</td>
+            <td class="text-center font-mono">${gd(stats.합2)}</td>
+            <td class="text-center font-mono">${gd(stats.합3)}</td>
+            <td class="text-center font-mono">${gd(stats.합4)}</td>
+            <td class="text-center font-mono">${gd(stats.합5)}</td>
+            <td class="text-center font-mono font-semibold text-purple-700">${gd(stats.등급평균)}</td>
+          </tr>`).join('')}</tbody>
+        </table>
+      </div>`;
+    return;
+  }
+  // 특정 중학교 상세: 기수별 + 실시월별 pivot
+  const records = mockRecordsForSchool(mockAnalyzeTarget);
+  if (!records.length) { el.innerHTML = '<div class="text-sm text-gray-400 p-4">이 중학교 출신 합격생의 모의고사 데이터가 없습니다.</div>'; return; }
+  // Group by (기수, 실시년월)
+  const groups = {};
+  records.forEach(r => {
+    const key = `${r.기수}_${r.실시년월}_${r.응시학년}`;
+    if (!groups[key]) groups[key] = { 기수: r.기수, 실시년월: r.실시년월, 응시학년: r.응시학년, records: [] };
+    groups[key].records.push(r);
+  });
+  const rowsArr = Object.values(groups).map(g => ({ ...g, stats: aggregateStats(g.records) })).sort((a,b) => (a.기수+a.실시년월).localeCompare(b.기수+b.실시년월));
+  const gd = v => v == null ? '-' : Number(v).toFixed(2);
+  // 동일월 전년도 비교 테이블
+  const byMonth = {};
+  rowsArr.forEach(g => {
+    const m = (g.실시년월||'').split('-')[1];
+    if (!m) return;
+    if (!byMonth[m]) byMonth[m] = [];
+    byMonth[m].push(g);
+  });
+  const compareHtml = Object.entries(byMonth).map(([m, gs]) => `
+    <div class="bg-blue-50/50 rounded-xl p-3">
+      <div class="font-semibold text-blue-800 text-sm mb-2">${parseInt(m)}월 기수별 비교 (${mockAnalyzeTarget} 출신)</div>
+      <table class="w-full text-xs"><thead><tr class="border-b border-blue-200"><th class="text-left py-1">기수</th><th>학년</th><th>N</th><th>국</th><th>수</th><th>영</th><th>탐평균</th><th>한</th><th>2합</th><th>3합</th><th>4합</th><th>5합</th><th>평균</th></tr></thead><tbody>
+      ${gs.sort((a,b) => a.기수.localeCompare(b.기수)).map(g => `<tr class="border-b border-blue-100"><td class="py-1">${g.기수}</td><td class="text-center">${g.응시학년}</td><td class="text-center">${g.stats.n}</td><td class="text-center font-mono">${gd(g.stats.국어_등급)}</td><td class="text-center font-mono">${gd(g.stats.수학_등급)}</td><td class="text-center font-mono">${gd(g.stats.영어_등급)}</td><td class="text-center font-mono">${gd(g.stats.탐평균)}</td><td class="text-center font-mono">${gd(g.stats.한국사_등급)}</td><td class="text-center font-mono">${gd(g.stats.합2)}</td><td class="text-center font-mono">${gd(g.stats.합3)}</td><td class="text-center font-mono">${gd(g.stats.합4)}</td><td class="text-center font-mono">${gd(g.stats.합5)}</td><td class="text-center font-mono font-semibold">${gd(g.stats.등급평균)}</td></tr>`).join('')}
+      </tbody></table>
+    </div>`).join('');
+  el.innerHTML = `
+    <div class="space-y-4">
+      <div class="bg-gray-50 rounded-xl p-3 text-sm font-semibold">${mockAnalyzeTarget}</div>
+      ${compareHtml}
+    </div>`;
+}
+
+function renderMockTypeAnalysis(el) {
+  if (!mockAnalyzeTarget) {
+    const types = [...new Set(getAdmittedStudents().map(r => r['전형구분']).filter(Boolean))].sort();
+    const rows = types.map(t => {
+      let records = mockRecordsForType(t);
+      if (mockCompareMonth) records = records.filter(r => (r.실시년월||'').split('-')[1] === mockCompareMonth);
+      return { t, stats: aggregateStats(records) };
+    }).filter(x => x.stats.n > 0);
+    const gd = v => v == null ? '-' : Number(v).toFixed(2);
+    el.innerHTML = `
+      <div class="overflow-x-auto">
+        <table class="w-full text-xs">
+          <thead class="bg-gray-50"><tr><th class="px-2 py-1.5 text-left">전형구분</th><th>N</th><th>국</th><th>수</th><th>영</th><th>탐평균</th><th>한</th><th>2합</th><th>3합</th><th>4합</th><th>5합</th><th>평균</th></tr></thead>
+          <tbody>${rows.map(({t, stats}) => `<tr class="border-b hover:bg-blue-50/30 cursor-pointer" onclick="mockAnalyzeTarget='${t.replace(/'/g,"\\'")}'; renderMock(document.getElementById('main-content'))">
+            <td class="px-2 py-1.5 font-semibold">${t}</td><td class="text-center">${stats.n}</td>
+            <td class="text-center font-mono">${gd(stats.국어_등급)}</td>
+            <td class="text-center font-mono">${gd(stats.수학_등급)}</td>
+            <td class="text-center font-mono">${gd(stats.영어_등급)}</td>
+            <td class="text-center font-mono">${gd(stats.탐평균)}</td>
+            <td class="text-center font-mono">${gd(stats.한국사_등급)}</td>
+            <td class="text-center font-mono">${gd(stats.합2)}</td>
+            <td class="text-center font-mono">${gd(stats.합3)}</td>
+            <td class="text-center font-mono">${gd(stats.합4)}</td>
+            <td class="text-center font-mono">${gd(stats.합5)}</td>
+            <td class="text-center font-mono font-semibold text-purple-700">${gd(stats.등급평균)}</td>
+          </tr>`).join('')}</tbody>
+        </table>
+      </div>`;
+    return;
+  }
+  const records = mockRecordsForType(mockAnalyzeTarget);
+  const groups = {};
+  records.forEach(r => {
+    const key = `${r.기수}_${r.실시년월}_${r.응시학년}`;
+    if (!groups[key]) groups[key] = { 기수: r.기수, 실시년월: r.실시년월, 응시학년: r.응시학년, records: [] };
+    groups[key].records.push(r);
+  });
+  const gs = Object.values(groups).map(g => ({ ...g, stats: aggregateStats(g.records) }));
+  const byMonth = {};
+  gs.forEach(g => { const m = (g.실시년월||'').split('-')[1]; if (!m) return; if (!byMonth[m]) byMonth[m] = []; byMonth[m].push(g); });
+  const gd = v => v == null ? '-' : Number(v).toFixed(2);
+  const compareHtml = Object.entries(byMonth).map(([m, arr]) => `
+    <div class="bg-blue-50/50 rounded-xl p-3">
+      <div class="font-semibold text-blue-800 text-sm mb-2">${parseInt(m)}월 기수별 비교 (전형: ${mockAnalyzeTarget})</div>
+      <table class="w-full text-xs"><thead><tr class="border-b border-blue-200"><th class="text-left py-1">기수</th><th>학년</th><th>N</th><th>국</th><th>수</th><th>영</th><th>탐평균</th><th>한</th><th>2합</th><th>3합</th><th>4합</th><th>5합</th><th>평균</th></tr></thead><tbody>
+      ${arr.sort((a,b) => a.기수.localeCompare(b.기수)).map(g => `<tr class="border-b border-blue-100"><td class="py-1">${g.기수}</td><td class="text-center">${g.응시학년}</td><td class="text-center">${g.stats.n}</td><td class="text-center font-mono">${gd(g.stats.국어_등급)}</td><td class="text-center font-mono">${gd(g.stats.수학_등급)}</td><td class="text-center font-mono">${gd(g.stats.영어_등급)}</td><td class="text-center font-mono">${gd(g.stats.탐평균)}</td><td class="text-center font-mono">${gd(g.stats.한국사_등급)}</td><td class="text-center font-mono">${gd(g.stats.합2)}</td><td class="text-center font-mono">${gd(g.stats.합3)}</td><td class="text-center font-mono">${gd(g.stats.합4)}</td><td class="text-center font-mono">${gd(g.stats.합5)}</td><td class="text-center font-mono font-semibold">${gd(g.stats.등급평균)}</td></tr>`).join('')}
+      </tbody></table>
+    </div>`).join('');
+  el.innerHTML = `<div class="space-y-4"><div class="bg-gray-50 rounded-xl p-3 text-sm font-semibold">${mockAnalyzeTarget}</div>${compareHtml}</div>`;
+}
+
+// ══════════════════════════════════════════════
 // INIT
 // ══════════════════════════════════════════════
 (async () => {
   await openDB();
   allData = await getAllApplicants();
+  allMockExams = await getAllMockExams();
   renderNav();
   updateDataCount();
   if (allData.length > 0) navigateTo('dashboard');
