@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Google Sheets 연동 가이드 — 유효숫자 마스터</title>
+<link rel="stylesheet" href="common.css">
+<style>
+.guide{max-width:860px;margin:0 auto;padding:30px 20px}
+.step{background:var(--bg2);border:1px solid var(--bg3);border-radius:var(--r);padding:20px;margin-bottom:16px}
+.step h3{color:var(--pri);margin-bottom:10px}
+.step p,.step li{color:var(--txt);line-height:1.6;font-size:.95rem}
+.step ol,.step ul{margin:8px 0 8px 24px}
+pre{background:var(--bg);border:1px solid var(--bg3);border-radius:8px;padding:14px;overflow-x:auto;font-size:.82rem;color:#a5f3fc;max-height:500px;overflow-y:auto}
+.copy-btn{float:right;padding:4px 12px;font-size:.78rem;background:var(--pri);color:#fff;border:none;border-radius:6px;cursor:pointer;margin-bottom:6px}
+kbd{background:var(--bg3);padding:2px 8px;border-radius:4px;font-family:monospace;font-size:.82rem}
+.warn{background:rgba(245,158,11,.1);border-left:4px solid var(--acc);padding:12px 16px;border-radius:6px;margin:10px 0;color:var(--txt)}
+</style>
+</head>
+<body>
+<div class="top-nav">
+  <div class="brand">📖 Google Sheets 연동 가이드</div>
+  <div class="nav-links">
+    <a href="/teacher.html">← 교사 카운터</a>
+  </div>
+</div>
+
+<div class="guide">
+  <h1>📊 구글 스프레드시트 연동 설정</h1>
+  <h2>여러 교사가 같은 시트에서 학생 정보·수업 기록을 실시간 공유하기</h2>
+
+  <div class="step">
+    <h3>1단계 — 새 스프레드시트 만들기</h3>
+    <ol>
+      <li><a href="https://sheets.new" target="_blank">https://sheets.new</a> 에 접속해 새 시트 생성</li>
+      <li>시트 제목을 <b>"유효숫자 마스터 학급 기록"</b> 등으로 변경</li>
+      <li>여러 교사와 공유하려면 우측 상단 <kbd>공유</kbd> → 공유할 교사 이메일 추가 (편집자 권한)</li>
+    </ol>
+  </div>
+
+  <div class="step">
+    <h3>2단계 — Apps Script 열기</h3>
+    <ol>
+      <li>스프레드시트 상단 메뉴 <kbd>확장 프로그램</kbd> → <kbd>Apps Script</kbd> 클릭</li>
+      <li>새 탭에 코드 편집기가 열림</li>
+      <li>기본 <code>myFunction()</code> 코드를 모두 지우고 아래 스크립트를 복사해 붙여넣기</li>
+    </ol>
+  </div>
+
+  <div class="step">
+    <h3>3단계 — 스크립트 붙여넣기</h3>
+    <button class="copy-btn" onclick="copyScript()">📋 복사</button>
+    <pre id="script-code">// 유효숫자 마스터 — Google Sheets 수신 스크립트
+// 서버가 POST로 보내는 이벤트를 시트에 기록합니다.
+
+function doPost(e) {
+  const data = JSON.parse(e.postData.contents);
+  const event = data.event;
+  const payload = data.payload || {};
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+
+  if (event === 'ping') {
+    return json({ ok: true, msg: 'pong' });
+  }
+
+  if (event === 'student_register') {
+    const sh = getOrCreateSheet(ss, 'Students',
+      ['학번','이름','등록시각','차단']);
+    sh.appendRow([payload.studentId, payload.name, new Date(payload.at), '']);
+  }
+
+  if (event === 'student_delete') {
+    const sh = getOrCreateSheet(ss, 'Students', ['학번','이름','등록시각','차단']);
+    const vals = sh.getRange(2, 1, Math.max(sh.getLastRow()-1,0), 1).getValues();
+    for (let i = 0; i < vals.length; i++) {
+      if (String(vals[i][0]) === String(payload.studentId)) {
+        sh.deleteRow(i + 2); break;
+      }
+    }
+  }
+
+  if (event === 'attendance') {
+    const sh = getOrCreateSheet(ss, 'Attendance',
+      ['날짜','학번','이름','시각']);
+    sh.appendRow([payload.date, payload.studentId, payload.name, new Date(payload.at)]);
+  }
+
+  if (event === 'game') {
+    const sh = getOrCreateSheet(ss, 'Games',
+      ['일시','유형','방이름','학번','이름','점수','정답','총문제','게임모드','난이도','승패']);
+    (payload.players||[]).forEach(p => {
+      sh.appendRow([
+        new Date(payload.at),
+        payload.type,
+        payload.roomLabel||'',
+        p.studentId, p.name, p.score, p.correct, p.total,
+        p.gameMode, p.difficulty, p.result||''
+      ]);
+    });
+  }
+
+  if (event === 'full_sync') {
+    // 학생 마스터 (덮어쓰기)
+    const sh = getOrCreateSheet(ss, 'Students',
+      ['학번','이름','등록시각','총게임','총정답','최고점','최대콤보','차단']);
+    sh.getRange(2, 1, Math.max(sh.getLastRow()-1, 1), sh.getLastColumn()).clearContent();
+    const rows = (payload.students||[]).map(s => [
+      s.studentId, s.name, new Date(s.joinedAt||0),
+      s.stats?.totalGames||0, s.stats?.totalCorrect||0,
+      s.stats?.bestScore||0, s.stats?.maxStreak||0,
+      s.blocked ? 'Y' : ''
+    ]);
+    if (rows.length) sh.getRange(2, 1, rows.length, rows[0].length).setValues(rows);
+
+    // 점수판
+    const lb = payload.leaderboards || {};
+    ['single','multi','battle'].forEach(t => {
+      const sh2 = getOrCreateSheet(ss, 'LB_'+t,
+        ['순위','학번','이름','점수','정답','총문제','최대콤보','게임모드','난이도','일시']);
+      sh2.getRange(2, 1, Math.max(sh2.getLastRow()-1, 1), sh2.getLastColumn()).clearContent();
+      const list = (lb[t]||[]).map((e,i) => [
+        i+1, e.studentId, e.name, e.score, e.correct, e.total, e.maxStreak,
+        e.gameMode, e.difficulty, new Date(e.at)
+      ]);
+      if (list.length) sh2.getRange(2, 1, list.length, list[0].length).setValues(list);
+    });
+  }
+
+  return json({ ok: true });
+}
+
+function doGet() {
+  return json({ ok: true, msg: '유효숫자 마스터 수신 엔드포인트' });
+}
+
+function getOrCreateSheet(ss, name, headers) {
+  let sh = ss.getSheetByName(name);
+  if (!sh) {
+    sh = ss.insertSheet(name);
+    sh.getRange(1, 1, 1, headers.length).setValues([headers]).setFontWeight('bold');
+    sh.setFrozenRows(1);
+  }
+  return sh;
+}
+
+function json(obj) {
+  return ContentService.createTextOutput(JSON.stringify(obj))
+    .setMimeType(ContentService.MimeType.JSON);
+}</pre>
+  </div>
+
+  <div class="step">
+    <h3>4단계 — 웹앱으로 배포</h3>
+    <ol>
+      <li>상단 <kbd>배포</kbd> → <kbd>새 배포</kbd> 클릭</li>
+      <li>유형: <b>웹 앱</b> 선택</li>
+      <li>설명: "유효숫자 마스터 수신" 등 아무거나 입력</li>
+      <li><b>다음 사용자로 실행:</b> "나 (본인 계정)"</li>
+      <li><b>액세스 권한:</b> <b>"모든 사용자"</b> (Google 로그인 없이 서버가 POST할 수 있도록)</li>
+      <li><kbd>배포</kbd> 클릭 → Google이 권한 승인 요청 → 허용</li>
+      <li>완료 후 표시되는 <b>웹 앱 URL</b> 복사 (<code>https://script.google.com/macros/s/.../exec</code>)</li>
+    </ol>
+    <div class="warn">
+      ⚠️ "승인되지 않은 앱" 경고가 나오면 <b>고급 → 안전하지 않은 페이지로 이동</b>을 눌러 계속하세요.
+      본인이 만든 스크립트이므로 안전합니다.
+    </div>
+  </div>
+
+  <div class="step">
+    <h3>5단계 — 서버에 URL 등록</h3>
+    <ol>
+      <li><a href="/teacher.html">교사 카운터</a> → <kbd>💾 데이터/시트</kbd> 탭</li>
+      <li>"Apps Script 웹앱 URL" 입력란에 복사한 URL 붙여넣기</li>
+      <li><kbd>💾 저장</kbd> → <kbd>🔌 연결 테스트</kbd> 순으로 클릭</li>
+      <li>"✅ 응답 200" 뜨면 성공!</li>
+      <li>첫 동기화: <kbd>⬆️ 전체 데이터 동기화</kbd>로 기존 데이터를 시트에 한 번에 밀어넣기</li>
+    </ol>
+  </div>
+
+  <div class="step">
+    <h3>✅ 이후 자동 동작</h3>
+    <ul>
+      <li><b>학생 로그인</b>할 때마다 시트의 <code>Students</code>·<code>Attendance</code>에 자동 기록</li>
+      <li><b>게임 종료</b>할 때마다 <code>Games</code> 시트에 모든 플레이어 결과 자동 추가</li>
+      <li>학생 삭제 시 <code>Students</code> 시트에서도 해당 행 제거</li>
+      <li>교사가 <kbd>⬆️ 전체 데이터 동기화</kbd> 누르면 언제든 전체 스냅샷 덮어쓰기</li>
+    </ul>
+  </div>
+
+  <div class="step">
+    <h3>🔒 프라이버시 & 보안</h3>
+    <ul>
+      <li>저장 항목은 <b>학번과 이름</b>만 (최소 개인정보)</li>
+      <li>시트 접근은 Google 공유 설정으로 교사 계정만 허용</li>
+      <li>웹앱 URL은 비밀 — 유출 시 재배포해서 URL 교체 가능</li>
+      <li>로컬 JSON 파일도 항상 병행 저장 (시트 장애 시 복원 가능)</li>
+    </ul>
+  </div>
+</div>
+
+<script>
+function copyScript() {
+  const txt = document.getElementById('script-code').textContent;
+  navigator.clipboard.writeText(txt).then(() => {
+    alert('✅ 스크립트가 클립보드에 복사되었습니다. Apps Script 편집기에 붙여넣으세요.');
+  });
+}
+</script>
+</body>
+</html>

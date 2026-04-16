@@ -1,0 +1,650 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>유효숫자 마스터 — 교사 카운터</title>
+<link rel="stylesheet" href="common.css">
+<style>
+.login-wrap{max-width:400px;margin:80px auto;text-align:center}
+.counter-wrap{padding:20px}
+.dash-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px}
+@media(max-width:960px){.dash-grid{grid-template-columns:1fr}}
+.panel{background:var(--bg2);border:1px solid var(--bg3);border-radius:var(--r);padding:18px}
+.panel h3{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
+.stat-row{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:14px}
+.stat{flex:1;min-width:120px;background:var(--bg2);padding:12px 16px;border-radius:var(--r);border:1px solid var(--bg3)}
+.stat .lbl{font-size:.78rem;color:var(--txt2);text-transform:uppercase}
+.stat .val{font-size:1.8rem;font-weight:800;color:var(--acc)}
+.room-card{background:var(--bg);border:1px solid var(--bg3);border-radius:var(--r);padding:14px;margin-bottom:10px;transition:all .15s}
+.room-card.pending{border-color:var(--acc);background:rgba(245,158,11,.08)}
+.room-card.active{border-color:var(--sec)}
+.room-card .head{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;gap:10px;flex-wrap:wrap}
+.room-card .meta{font-size:.82rem;color:var(--txt2);margin-bottom:8px}
+.room-card .players{font-size:.85rem;color:var(--txt);margin-bottom:10px}
+.room-card .btns{display:flex;gap:8px;flex-wrap:wrap}
+.student-row{display:flex;justify-content:space-between;align-items:center;padding:10px 14px;background:var(--bg);border-radius:8px;margin-bottom:6px;border:1px solid var(--bg3)}
+.student-row .dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--err);margin-right:8px}
+.student-row .dot.online{background:var(--sec);box-shadow:0 0 8px var(--sec)}
+.modal-back{position:fixed;inset:0;background:rgba(0,0,0,.65);display:none;align-items:center;justify-content:center;z-index:100;padding:20px}
+.modal-back.show{display:flex}
+.modal{background:var(--bg2);border:1px solid var(--bg3);border-radius:var(--r);padding:24px;max-width:560px;width:100%;max-height:90vh;overflow-y:auto}
+.modal h3{margin-bottom:16px;font-size:1.25rem}
+.modal .grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.modal .grid > div{min-width:0}
+.modal label{display:block;font-size:.82rem;color:var(--txt2);margin-bottom:4px;font-weight:600}
+.modal select,.modal input{width:100%;box-sizing:border-box;max-width:100%}
+.modal .full{grid-column:1/-1}
+.modal .actions{display:flex;gap:10px;justify-content:flex-end;margin-top:18px}
+.type-pick{display:flex;gap:8px;margin-bottom:14px}
+.type-pick button{flex:1;padding:14px 8px;background:var(--bg);border:2px solid var(--bg3);color:var(--txt);border-radius:var(--r);cursor:pointer;font-weight:600;font-size:.9rem}
+.type-pick button.sel{border-color:var(--pri);background:rgba(99,102,241,.15)}
+</style>
+</head>
+<body>
+
+<!-- Login -->
+<div id="login" style="display:none">
+  <div class="login-wrap">
+    <div style="font-size:4rem">👨‍🏫</div>
+    <h1>교사 카운터</h1>
+    <h2>관리 비밀번호 입력</h2>
+    <input type="password" id="in-pw" placeholder="비밀번호" style="width:100%;margin-bottom:10px;text-align:center">
+    <button class="btn btn-pri btn-lg" style="width:100%" onclick="login()">로그인</button>
+    <div id="login-err" class="err-msg"></div>
+    <div style="margin-top:20px;color:var(--txt2);font-size:.82rem">
+      <a href="/">← 학생 로비로</a>
+    </div>
+  </div>
+</div>
+
+<!-- Counter Dashboard -->
+<div id="counter" style="display:none">
+  <div class="top-nav">
+    <div class="brand">🔬 유효숫자 마스터 — 교사 카운터</div>
+    <div class="nav-links">
+      <a href="#" onclick="showTab('dash')" id="nav-dash">🖥 카운터</a>
+      <a href="#" onclick="showTab('students')" id="nav-students">👤 학생 관리</a>
+      <a href="#" onclick="showTab('data')" id="nav-data">💾 데이터/시트</a>
+      <a href="/leaderboard.html">🏆 점수판</a>
+      <a href="#" onclick="changePassword()">🔑 비밀번호</a>
+    </div>
+    <div class="user-box">
+      <button class="btn btn-ghost btn-sm" onclick="logout()">로그아웃</button>
+    </div>
+  </div>
+  <div class="counter-wrap wrap">
+    <div class="stat-row">
+      <div class="stat"><div class="lbl">접속자</div><div class="val" id="st-students">0</div></div>
+      <div class="stat"><div class="lbl">활성 방</div><div class="val" id="st-rooms">0</div></div>
+      <div class="stat"><div class="lbl">승인 대기</div><div class="val" id="st-pending" style="color:var(--acc)">0</div></div>
+      <div class="stat"><div class="lbl">진행 중 게임</div><div class="val" id="st-active" style="color:var(--sec)">0</div></div>
+    </div>
+
+    <!-- 방 만들기 모달 -->
+    <div id="create-modal" class="modal-back">
+      <div class="modal">
+        <h3>🆕 방 만들기</h3>
+        <div class="type-pick">
+          <button type="button" data-type="single" onclick="pickType('single')">🎯 싱글<br><span style="font-size:.75rem;color:var(--txt2);font-weight:400">1명</span></button>
+          <button type="button" data-type="multi" onclick="pickType('multi')">👥 멀티<br><span style="font-size:.75rem;color:var(--txt2);font-weight:400">2~35명</span></button>
+          <button type="button" data-type="battle" onclick="pickType('battle')">⚔️ 대전<br><span style="font-size:.75rem;color:var(--txt2);font-weight:400">2~6명</span></button>
+        </div>
+        <div class="grid">
+          <div>
+            <label>게임 종류</label>
+            <select id="m-gm">
+              <option value="1">🔢 개수 세기</option>
+              <option value="2">🎯 유효숫자 찾기</option>
+              <option value="3">📏 측정값 읽기</option>
+            </select>
+          </div>
+          <div>
+            <label>난이도</label>
+            <select id="m-diff">
+              <option value="easy">쉬움</option>
+              <option value="medium" selected>보통</option>
+              <option value="hard">어려움</option>
+              <option value="mixed">혼합</option>
+            </select>
+          </div>
+          <div>
+            <label>문제 수 <span style="color:var(--txt2);font-weight:400">(1~100)</span></label>
+            <input type="number" id="m-qc" min="1" max="100" value="10">
+          </div>
+          <div>
+            <label>문제당 시간 <span style="color:var(--txt2);font-weight:400">(5~300초)</span></label>
+            <input type="number" id="m-qt" min="5" max="300" value="30">
+          </div>
+          <div>
+            <label>문제간 시간 <span style="color:var(--txt2);font-weight:400">(1~30초)</span></label>
+            <input type="number" id="m-rt" min="1" max="30" value="3">
+          </div>
+          <div id="m-cap-wrap">
+            <label>정원 <span id="m-cap-range" style="color:var(--txt2);font-weight:400"></span></label>
+            <input type="number" id="m-cap" min="2" max="35" value="10">
+          </div>
+          <div class="full">
+            <label>방 이름 (선택)</label>
+            <input type="text" id="m-label" placeholder="예: 3반 1조" maxlength="30" value="교사 방">
+          </div>
+        </div>
+        <div id="m-err" class="err-msg"></div>
+        <div class="actions">
+          <button class="btn btn-ghost" onclick="closeCreateModal()">취소</button>
+          <button class="btn btn-pri" onclick="submitCreateRoom()">✅ 방 만들기</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="tab-dash">
+      <div class="dash-grid">
+        <div class="panel">
+          <h3>🚪 방 관리
+            <button class="btn btn-pri btn-sm" onclick="createRoomDialog()">+ 방 직접 만들기</button>
+            <label id="auto-approve-wrap" style="display:inline-flex;align-items:center;gap:6px;margin-left:10px;font-size:.88rem;font-weight:600;cursor:pointer">
+              <input type="checkbox" id="auto-approve-tog" onchange="toggleAutoApprove()" style="width:18px;height:18px;cursor:pointer">
+              <span id="auto-approve-label" style="color:var(--txt2)">🔁 자동 승인</span>
+            </label>
+          </h3>
+          <div id="auto-approve-hint" style="color:var(--txt2);font-size:.82rem;margin-bottom:10px;display:none">
+            ✅ <b style="color:var(--sec)">자동 승인 ON</b> — 학생이 만드는 모든 방이 즉시 승인됩니다.
+          </div>
+          <div id="rooms-area"></div>
+        </div>
+        <div class="panel">
+          <h3>👥 접속 학생</h3>
+          <div id="students-area"></div>
+        </div>
+      </div>
+    </div>
+
+    <div id="tab-students" style="display:none">
+      <div class="panel">
+        <h3>👤 학생 명단 <button class="btn btn-ghost btn-sm" onclick="loadStudentsDb()">🔄 새로고침</button></h3>
+        <div class="filter-row" style="display:flex;gap:10px;margin-bottom:12px;flex-wrap:wrap">
+          <input type="text" id="stu-search" placeholder="학번 또는 이름 검색" style="flex:1;min-width:200px" oninput="renderStudentsDb()">
+          <button class="btn btn-sec btn-sm" onclick="downloadCsv('students')">📥 학생 명단 CSV</button>
+          <button class="btn btn-sec btn-sm" onclick="downloadCsv('attendance')">📅 오늘 출결 CSV</button>
+        </div>
+        <div id="students-db-area"></div>
+      </div>
+    </div>
+
+    <div id="tab-data" style="display:none">
+      <div class="panel">
+        <h3>💾 내보내기 / 백업</h3>
+        <p style="color:var(--txt2);font-size:.88rem;margin-bottom:12px">
+          학생 정보·출결·점수판을 CSV로 다운로드하거나, 전체 데이터를 JSON 백업 파일로 저장할 수 있습니다.
+        </p>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn btn-pri btn-sm" onclick="downloadCsv('students')">👤 학생 명단</button>
+          <button class="btn btn-pri btn-sm" onclick="downloadCsv('attendance')">📅 오늘 출결</button>
+          <button class="btn btn-pri btn-sm" onclick="downloadCsv('leaderboard','single')">🎯 싱글 점수판</button>
+          <button class="btn btn-pri btn-sm" onclick="downloadCsv('leaderboard','multi')">👥 멀티 점수판</button>
+          <button class="btn btn-pri btn-sm" onclick="downloadCsv('leaderboard','battle')">⚔️ 대전 점수판</button>
+          <button class="btn btn-acc btn-sm" onclick="downloadBackup()">🗄 전체 백업 (JSON)</button>
+        </div>
+      </div>
+      <div class="panel" style="margin-top:16px;border:1px solid var(--err)">
+        <h3 style="color:var(--err)">⚠️ 점수판 초기화</h3>
+        <p style="color:var(--txt2);font-size:.88rem;margin-bottom:12px">
+          점수판 기록을 모드별로 삭제합니다. <b style="color:var(--err)">복구 불가능</b>하니 먼저 CSV로 내려받아 두는 것을 추천해요.
+        </p>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn btn-ghost btn-sm" onclick="clearLb('single')">🎯 싱글 리셋</button>
+          <button class="btn btn-ghost btn-sm" onclick="clearLb('multi')">👥 멀티 리셋</button>
+          <button class="btn btn-ghost btn-sm" onclick="clearLb('battle')">⚔️ 대전 리셋</button>
+          <button class="btn btn-acc btn-sm" onclick="clearLb('all')">💥 전체 리셋</button>
+        </div>
+        <div id="clear-lb-status" style="margin-top:10px;color:var(--txt2);font-size:.85rem"></div>
+      </div>
+      <div class="panel" style="margin-top:16px">
+        <h3>📊 구글 스프레드시트 연동</h3>
+        <p style="color:var(--txt2);font-size:.88rem;margin-bottom:12px">
+          여러 교사가 같은 스프레드시트에서 학생 정보·수업 기록을 실시간으로 공유하려면 Google Apps Script 웹앱을 배포하고 URL을 등록하세요.
+          <br><a href="/apps-script-guide.html" target="_blank" style="color:var(--pri)">📖 설치 방법 보기</a>
+        </p>
+        <div style="margin-bottom:10px">
+          <label style="display:block;font-size:.85rem;color:var(--txt2);margin-bottom:4px">Apps Script 웹앱 URL</label>
+          <input type="text" id="sheets-url" placeholder="https://script.google.com/macros/s/AKfy.../exec" style="width:100%">
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn btn-pri btn-sm" onclick="saveSheetsUrl()">💾 저장</button>
+          <button class="btn btn-sec btn-sm" onclick="testSheets()">🔌 연결 테스트</button>
+          <button class="btn btn-acc btn-sm" onclick="pushAllSheets()">⬆️ 전체 데이터 동기화</button>
+          <button class="btn btn-ghost btn-sm" onclick="clearSheetsUrl()">🗑 해제</button>
+        </div>
+        <div id="sheets-status" style="margin-top:10px;color:var(--txt2);font-size:.85rem"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="common.js"></script>
+<script>
+let pollTimer = null;
+
+function show(id) {
+  document.getElementById('login').style.display = 'none';
+  document.getElementById('counter').style.display = 'none';
+  document.getElementById(id).style.display = 'block';
+}
+
+async function teacherApi(path, opts = {}) {
+  const headers = { 'Content-Type': 'application/json' };
+  const t = localStorage.getItem('sigfig-teacher-token');
+  if (t) headers['Authorization'] = 'Bearer ' + t;
+  const r = await fetch(path, {
+    method: opts.method || 'GET', headers,
+    body: opts.body ? JSON.stringify(opts.body) : undefined,
+  });
+  return r.json();
+}
+
+async function init() {
+  const t = localStorage.getItem('sigfig-teacher-token');
+  if (!t) { show('login'); return; }
+  const ov = await teacherApi('/api/teacher/overview');
+  if (ov.error) { localStorage.removeItem('sigfig-teacher-token'); show('login'); return; }
+  show('counter');
+  refresh(ov);
+  loadAutoApprove();
+  pollTimer = setInterval(() => refresh(), 1500);
+}
+
+async function login() {
+  const password = document.getElementById('in-pw').value;
+  if (!password) return;
+  const r = await fetch('/api/teacher/login', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ password }) });
+  const j = await r.json();
+  if (j.error) { document.getElementById('login-err').textContent = j.error; return; }
+  localStorage.setItem('sigfig-teacher-token', j.token);
+  init();
+}
+
+async function logout() {
+  await teacherApi('/api/teacher/logout', { method: 'POST' });
+  localStorage.removeItem('sigfig-teacher-token');
+  if (pollTimer) clearInterval(pollTimer);
+  show('login');
+}
+
+async function refresh(ov) {
+  if (!ov) ov = await teacherApi('/api/teacher/overview');
+  if (ov.error) return;
+  const rooms = ov.rooms || [], students = ov.students || [];
+  document.getElementById('st-students').textContent = students.filter(s => s.online).length;
+  document.getElementById('st-rooms').textContent = rooms.length;
+  document.getElementById('st-pending').textContent = rooms.filter(r => !r.approved).length;
+  document.getElementById('st-active').textContent = rooms.filter(r => r.phase === 'question' || r.phase === 'reveal').length;
+
+  const typeEmo = { single:'🎯', multi:'👥', battle:'⚔️' };
+  const gmLabel = { 1:'개수', 2:'찾기', 3:'측정' };
+  const diffLabel = { easy:'쉬움', medium:'보통', hard:'어려움', mixed:'혼합' };
+  const phaseLabel = { lobby:'대기실', question:'문제 중', reveal:'정답 공개', results:'종료' };
+
+  document.getElementById('rooms-area').innerHTML = rooms.length === 0
+    ? '<div class="empty">활성 방이 없어요</div>'
+    : rooms.map(r => {
+      const pendCls = !r.approved ? 'pending' : (r.phase === 'question' || r.phase === 'reveal' ? 'active' : '');
+      return `<div class="room-card ${pendCls}">
+        <div class="head">
+          <div>
+            <b>${typeEmo[r.type]||''} ${r.label || '방 #' + r.code}</b>
+            <span class="badge pri">${r.code}</span>
+            ${!r.approved ? '<span class="badge acc">⏳ 승인대기</span>' : ''}
+            ${r.phase !== 'lobby' ? `<span class="badge ok">${phaseLabel[r.phase]}</span>` : ''}
+          </div>
+        </div>
+        <div class="meta">${gmLabel[r.gameMode]} · ${diffLabel[r.difficulty]} · ${r.questionCount}문제 · 방장: ${r.ownerName||'-'} · ${r.playerCount}/${r.capacity}명 ${r.phase !== 'lobby' ? ` · 진행 ${r.qIndex+1}/${r.total}` : ''}</div>
+        ${r.players.length ? `<div class="players">참여자: ${r.players.map(p => `${p.name}(${p.score}점)`).join(', ')}</div>` : ''}
+        <div class="btns">
+          ${!r.approved ? `<button class="btn btn-sec btn-sm" onclick="approveRoom('${r.code}',true)">✅ 승인</button>` : ''}
+          ${r.approved && r.phase === 'lobby' ? `<button class="btn btn-ghost btn-sm" onclick="approveRoom('${r.code}',false)">↩ 승인 취소</button>` : ''}
+          ${r.phase === 'question' || r.phase === 'reveal' ? `<button class="btn btn-err btn-sm" onclick="stopRoom('${r.code}')">⏹ 강제 종료</button>` : ''}
+          <button class="btn btn-err btn-sm" onclick="closeRoom('${r.code}')">🗑 방 삭제</button>
+          <a class="btn btn-ghost btn-sm" href="/room.html?code=${r.code}&watch=1" target="_blank">👁 관전</a>
+        </div>
+      </div>`;
+    }).join('');
+
+  document.getElementById('students-area').innerHTML = students.length === 0
+    ? '<div class="empty">접속한 학생이 없어요</div>'
+    : students.map(s => `<div class="student-row">
+        <div><span class="dot ${s.online?'online':''}"></span><b>${s.name}</b> <span style="color:var(--txt2);font-size:.82rem">${s.studentId}</span> ${s.currentRoom ? `<span class="badge pri">방 ${s.currentRoom}</span>` : ''}</div>
+        <button class="btn btn-err btn-sm" onclick="kickStudent('${s.studentId}')">⛔ 강퇴</button>
+      </div>`).join('');
+}
+
+async function loadAutoApprove() {
+  const r = await teacherApi('/api/teacher/auto-approve');
+  if (r && r.enabled !== undefined) applyAutoApproveUI(r.enabled);
+}
+function applyAutoApproveUI(enabled) {
+  const t = document.getElementById('auto-approve-tog');
+  const l = document.getElementById('auto-approve-label');
+  const h = document.getElementById('auto-approve-hint');
+  if (t) t.checked = !!enabled;
+  if (l) { l.textContent = enabled ? '🔁 자동 승인 ON' : '🔁 자동 승인 OFF'; l.style.color = enabled ? 'var(--sec)' : 'var(--txt2)'; }
+  if (h) h.style.display = enabled ? 'block' : 'none';
+}
+async function toggleAutoApprove() {
+  const enabled = document.getElementById('auto-approve-tog').checked;
+  const r = await teacherApi('/api/teacher/auto-approve', { method: 'POST', body: { enabled } });
+  if (r.error) { alert(r.error); document.getElementById('auto-approve-tog').checked = !enabled; return; }
+  applyAutoApproveUI(r.enabled);
+  if (r.approvedPending > 0) {
+    // 작은 토스트 대신 간단한 상태 메시지
+    const h = document.getElementById('auto-approve-hint');
+    if (h) h.innerHTML = `✅ <b style="color:var(--sec)">자동 승인 ON</b> — 대기 중이던 ${r.approvedPending}개 방을 일괄 승인했습니다.`;
+  }
+  refresh();
+}
+
+async function approveRoom(code, approved) {
+  const r = await teacherApi('/api/teacher/room/approve', { method: 'POST', body: { code, approved } });
+  if (r.error) alert(r.error);
+  refresh();
+}
+async function stopRoom(code) {
+  if (!confirm('이 게임을 강제 종료하시겠습니까?')) return;
+  await teacherApi('/api/teacher/room/stop', { method: 'POST', body: { code } });
+  refresh();
+}
+async function closeRoom(code) {
+  if (!confirm('이 방을 삭제하시겠습니까?')) return;
+  await teacherApi('/api/teacher/room/close', { method: 'POST', body: { code } });
+  refresh();
+}
+async function kickStudent(studentId) {
+  if (!confirm(`학생 ${studentId}를 강퇴하시겠습니까?`)) return;
+  await teacherApi('/api/teacher/kick', { method: 'POST', body: { studentId } });
+  refresh();
+}
+
+async function changePassword() {
+  const pw = prompt('새 비밀번호 (4자 이상):');
+  if (!pw || pw.length < 4) return;
+  const r = await teacherApi('/api/teacher/password', { method: 'POST', body: { newPassword: pw } });
+  if (r.error) alert(r.error);
+  else alert('비밀번호가 변경되었습니다.');
+}
+
+let createType = 'multi';
+function createRoomDialog() {
+  pickType('multi');
+  document.getElementById('m-err').textContent = '';
+  document.getElementById('create-modal').classList.add('show');
+}
+function closeCreateModal() {
+  document.getElementById('create-modal').classList.remove('show');
+}
+function pickType(type) {
+  createType = type;
+  document.querySelectorAll('.type-pick button').forEach(b => b.classList.toggle('sel', b.dataset.type === type));
+  const capWrap = document.getElementById('m-cap-wrap');
+  const capInput = document.getElementById('m-cap');
+  const capRange = document.getElementById('m-cap-range');
+  if (type === 'single') {
+    capWrap.style.display = 'none';
+  } else if (type === 'multi') {
+    capWrap.style.display = 'block';
+    capInput.min = 2; capInput.max = 35; capInput.value = 10;
+    capRange.textContent = '(2~35명)';
+  } else {
+    capWrap.style.display = 'block';
+    capInput.min = 2; capInput.max = 6; capInput.value = 4;
+    capRange.textContent = '(2~6명)';
+  }
+}
+async function submitCreateRoom() {
+  const qc = parseInt(document.getElementById('m-qc').value);
+  const qt = parseInt(document.getElementById('m-qt').value);
+  const rt = parseInt(document.getElementById('m-rt').value);
+  if (!(qc >= 1 && qc <= 100)) { document.getElementById('m-err').textContent = '문제 수는 1~100 사이여야 합니다.'; return; }
+  if (!(qt >= 5 && qt <= 300)) { document.getElementById('m-err').textContent = '문제당 시간은 5~300초 사이여야 합니다.'; return; }
+  if (!(rt >= 1 && rt <= 30)) { document.getElementById('m-err').textContent = '문제간 시간은 1~30초 사이여야 합니다.'; return; }
+  const config = {
+    gameMode: parseInt(document.getElementById('m-gm').value),
+    difficulty: document.getElementById('m-diff').value,
+    questionCount: qc,
+    questionTime: qt,
+    revealTime: rt,
+    capacity: parseInt(document.getElementById('m-cap').value) || 4,
+    label: document.getElementById('m-label').value.trim(),
+  };
+  const max = createType === 'multi' ? 35 : (createType === 'battle' ? 6 : 1);
+  const min = createType === 'single' ? 1 : 2;
+  if (createType !== 'single' && (config.capacity < min || config.capacity > max)) {
+    document.getElementById('m-err').textContent = `정원은 ${min}~${max}명 사이여야 합니다.`;
+    return;
+  }
+  const r = await teacherApi('/api/room', { method: 'POST', body: { type: createType, config } });
+  if (r.error) { document.getElementById('m-err').textContent = r.error; return; }
+  closeCreateModal();
+  refresh();
+}
+
+// ============ 탭 전환 ============
+let currentTab = 'dash';
+function showTab(t) {
+  currentTab = t;
+  ['dash','students','data'].forEach(k => {
+    document.getElementById('tab-'+k).style.display = k === t ? 'block' : 'none';
+    const nav = document.getElementById('nav-'+k);
+    if (nav) nav.style.color = k === t ? 'var(--pri)' : 'var(--txt2)';
+  });
+  if (t === 'students') loadStudentsDb();
+  if (t === 'data') loadSheetsConfig();
+}
+
+// ============ 학생 마스터 DB ============
+let studentsDbCache = [];
+async function loadStudentsDb() {
+  const r = await teacherApi('/api/teacher/students');
+  if (r.error) return;
+  studentsDbCache = r.students || [];
+  renderStudentsDb();
+}
+function renderStudentsDb() {
+  const q = document.getElementById('stu-search').value.trim().toLowerCase();
+  const filtered = studentsDbCache.filter(s => !q || s.studentId.toLowerCase().includes(q) || s.name.toLowerCase().includes(q));
+  const el = document.getElementById('students-db-area');
+  if (!filtered.length) { el.innerHTML = '<div class="empty">등록된 학생이 없어요</div>'; return; }
+  el.innerHTML = `<div style="color:var(--txt2);font-size:.82rem;margin-bottom:8px">총 ${filtered.length}명 · 클릭하면 상세 전적</div>
+    <table><thead><tr>
+      <th>학번</th><th>이름</th><th>상태</th><th>게임</th><th>누적점수</th><th>⚔️ 승-패</th><th>승률</th><th>최고점</th><th>관리</th>
+    </tr></thead><tbody>
+    ${filtered.map(s => {
+      const st = s.stats || {};
+      const bg = st.battleGames || 0;
+      const bw = st.battleWins || 0;
+      const bl = st.battleLosses || 0;
+      const wr = bg > 0 ? Math.round(bw / bg * 100) : 0;
+      return `<tr style="cursor:pointer" onclick="showStudentStats('${s.studentId}','${(s.name||'').replace(/'/g,"\\'")}')">
+        <td><b>${s.studentId}</b></td>
+        <td>${s.name}</td>
+        <td>${s.online?'<span class="badge ok">🟢 접속</span>':'<span class="badge">오프</span>'} ${s.blocked?'<span class="badge no">🚫 차단</span>':''}</td>
+        <td>${st.totalGames||0}</td>
+        <td style="font-weight:700;color:var(--sec)">${(st.totalScore||0).toLocaleString()}</td>
+        <td><span style="color:var(--sec)">${bw}</span>-<span style="color:var(--err)">${bl}</span></td>
+        <td style="font-weight:700;color:var(--acc)">${bg>0?wr+'%':'-'}</td>
+        <td>${st.bestScore||0}</td>
+        <td style="white-space:nowrap" onclick="event.stopPropagation()">
+          <button class="btn btn-ghost btn-sm" onclick="showStudentStats('${s.studentId}','${(s.name||'').replace(/'/g,"\\'")}')">📊</button>
+          <button class="btn btn-ghost btn-sm" onclick="renameStudent('${s.studentId}','${(s.name||'').replace(/'/g,"\\'")}')">✏️</button>
+          <button class="btn btn-ghost btn-sm" onclick="toggleBlock('${s.studentId}',${!s.blocked})">${s.blocked?'✅':'🚫'}</button>
+          <button class="btn btn-err btn-sm" onclick="deleteStudent('${s.studentId}')">🗑</button>
+        </td>
+      </tr>`;
+    }).join('')}
+    </tbody></table>
+    <!-- 상세 전적 모달 -->
+    <div id="tch-stats-modal" class="modal-back" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:500;align-items:center;justify-content:center">
+      <div class="modal" style="background:var(--bg2);border-radius:var(--r);padding:24px;max-width:680px;width:92%;max-height:88vh;overflow:auto">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+          <h3 id="tch-stats-title" style="margin:0"></h3>
+          <button class="btn btn-ghost btn-sm" onclick="closeStudentStats()">✖ 닫기</button>
+        </div>
+        <div id="tch-stats-body"></div>
+      </div>
+    </div>`;
+}
+async function showStudentStats(studentId, name) {
+  const m = document.getElementById('tch-stats-modal');
+  m.style.display = 'flex';
+  document.getElementById('tch-stats-title').textContent = `📊 ${name} (${studentId})의 전적`;
+  document.getElementById('tch-stats-body').innerHTML = '<div class="empty">불러오는 중...</div>';
+  const r = await fetch('/api/student/stats?studentId=' + encodeURIComponent(studentId)).then(r=>r.json());
+  if (r.error) { document.getElementById('tch-stats-body').innerHTML = `<div class="empty">${r.error}</div>`; return; }
+  const s = r.stats;
+  const gm = { 1:'🔢 개수', 2:'🎯 찾기', 3:'📏 측정', 4:'➕ 덧/뺄' };
+  const diff = { easy:'쉬움', medium:'보통', hard:'어려움', mixed:'혼합' };
+  const tpEmo = { single:'🎯', multi:'👥', battle:'⚔️' };
+  const recentRows = r.recent.length ? r.recent.map(e => {
+    const wl = e._type === 'battle' ? (e.result === 'win' ? '<span class="badge ok">승</span>' : '<span class="badge no">패</span>') : '';
+    const dt = e.at ? new Date(e.at) : null;
+    const dts = dt ? `${dt.getMonth()+1}/${dt.getDate()} ${String(dt.getHours()).padStart(2,'0')}:${String(dt.getMinutes()).padStart(2,'0')}` : '-';
+    return `<tr><td>${tpEmo[e._type]||''}</td><td><b>${e.score}점</b></td><td>${wl}</td><td>${e.correct}/${e.total}</td><td>${gm[e.gameMode]||''}</td><td>${diff[e.difficulty]||''}</td><td style="color:var(--txt2);font-size:.78rem">${dts}</td></tr>`;
+  }).join('') : '<tr><td colspan="7" style="text-align:center;color:var(--txt2);padding:14px">기록 없음</td></tr>';
+  document.getElementById('tch-stats-body').innerHTML = `
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px;margin-bottom:14px">
+      <div style="padding:10px;background:var(--bg);border-radius:8px;text-align:center"><div style="color:var(--txt2);font-size:.78rem">총 게임</div><div style="font-size:1.4rem;font-weight:800;color:var(--acc)">${s.totalGames}</div></div>
+      <div style="padding:10px;background:var(--bg);border-radius:8px;text-align:center"><div style="color:var(--txt2);font-size:.78rem">누적 점수</div><div style="font-size:1.4rem;font-weight:800;color:var(--sec)">${s.totalScore.toLocaleString()}</div></div>
+      <div style="padding:10px;background:var(--bg);border-radius:8px;text-align:center"><div style="color:var(--txt2);font-size:.78rem">최고 점수</div><div style="font-size:1.4rem;font-weight:800">${s.bestScore}</div></div>
+      <div style="padding:10px;background:var(--bg);border-radius:8px;text-align:center"><div style="color:var(--txt2);font-size:.78rem">정답률</div><div style="font-size:1.4rem;font-weight:800;color:var(--pri)">${r.accuracy}%</div></div>
+      <div style="padding:10px;background:var(--bg);border-radius:8px;text-align:center"><div style="color:var(--txt2);font-size:.78rem">최대 콤보</div><div style="font-size:1.4rem;font-weight:800">${s.maxStreak}</div></div>
+    </div>
+    <h4 style="margin:10px 0 6px">⚔️ 대전 전적</h4>
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:14px">
+      <div style="padding:8px;background:var(--bg);border-radius:6px;text-align:center"><div style="color:var(--txt2);font-size:.72rem">대전</div><div style="font-weight:800">${s.battleGames}</div></div>
+      <div style="padding:8px;background:var(--bg);border-radius:6px;text-align:center;border:1px solid var(--sec)"><div style="color:var(--txt2);font-size:.72rem">승</div><div style="font-weight:800;color:var(--sec)">${s.battleWins}</div></div>
+      <div style="padding:8px;background:var(--bg);border-radius:6px;text-align:center;border:1px solid var(--err)"><div style="color:var(--txt2);font-size:.72rem">패</div><div style="font-weight:800;color:var(--err)">${s.battleLosses}</div></div>
+      <div style="padding:8px;background:var(--bg);border-radius:6px;text-align:center;border:1px solid var(--acc)"><div style="color:var(--txt2);font-size:.72rem">승률</div><div style="font-weight:800;color:var(--acc)">${r.winRate}%</div></div>
+    </div>
+    <h4 style="margin:10px 0 6px">🎮 모드별</h4>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:14px">
+      <div style="padding:8px;background:var(--bg);border-radius:6px;text-align:center"><div style="color:var(--txt2);font-size:.72rem">🎯 싱글</div><div style="font-weight:800">${s.singleGames}</div></div>
+      <div style="padding:8px;background:var(--bg);border-radius:6px;text-align:center"><div style="color:var(--txt2);font-size:.72rem">👥 멀티</div><div style="font-weight:800">${s.multiGames}</div></div>
+      <div style="padding:8px;background:var(--bg);border-radius:6px;text-align:center"><div style="color:var(--txt2);font-size:.72rem">⚔️ 대전</div><div style="font-weight:800">${s.battleGames}</div></div>
+    </div>
+    <h4 style="margin:10px 0 6px">📜 최근 기록 (최대 10개)</h4>
+    <table style="width:100%;font-size:.85rem"><thead><tr><th>모드</th><th>점수</th><th>승패</th><th>정답</th><th>게임</th><th>난이도</th><th>일시</th></tr></thead><tbody>${recentRows}</tbody></table>
+  `;
+}
+function closeStudentStats() { document.getElementById('tch-stats-modal').style.display = 'none'; }
+function fmtDate(ts) {
+  if (!ts) return '-';
+  const d = new Date(ts);
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+async function deleteStudent(sid) {
+  if (!confirm(`학번 ${sid}의 모든 정보를 삭제하시겠습니까?\n(플레이 이력은 점수판에 남습니다)`)) return;
+  const r = await teacherApi('/api/teacher/student/delete', { method: 'POST', body: { studentId: sid } });
+  if (r.error) alert(r.error);
+  loadStudentsDb();
+}
+async function toggleBlock(sid, blocked) {
+  const r = await teacherApi('/api/teacher/student/block', { method: 'POST', body: { studentId: sid, blocked } });
+  if (r.error) alert(r.error);
+  loadStudentsDb();
+}
+async function renameStudent(sid, oldName) {
+  const name = prompt(`학번 ${sid}의 이름 수정:`, oldName);
+  if (!name || name === oldName) return;
+  const r = await teacherApi('/api/teacher/student/rename', { method: 'POST', body: { studentId: sid, name } });
+  if (r.error) alert(r.error);
+  loadStudentsDb();
+}
+
+// ============ CSV / 백업 다운로드 ============
+async function clearLb(type) {
+  const labels = { single: '싱글', multi: '멀티', battle: '대전', all: '전체' };
+  if (!confirm(`⚠️ ${labels[type]} 점수판을 정말 초기화할까요?\n\n복구할 수 없습니다. 필요하면 먼저 CSV로 내려받으세요.`)) return;
+  if (type === 'all' && !confirm('한 번 더 확인: 싱글·멀티·대전 점수판을 모두 삭제합니다. 계속하시겠습니까?')) return;
+  const t = localStorage.getItem('sigfig-teacher-token');
+  const targets = type === 'all' ? ['single','multi','battle'] : [type];
+  const status = document.getElementById('clear-lb-status');
+  let okCount = 0;
+  for (const tp of targets) {
+    const r = await fetch('/api/leaderboard/clear', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + t },
+      body: JSON.stringify({ type: tp }),
+    }).then(r => r.json()).catch(() => ({ error: '네트워크 오류' }));
+    if (r && r.ok) okCount++;
+    else { status.innerHTML = `<span style="color:var(--err)">❌ ${tp} 초기화 실패: ${r.error||'알 수 없음'}</span>`; return; }
+  }
+  status.innerHTML = `<span style="color:var(--sec)">✅ ${labels[type]} 점수판 초기화 완료 (${okCount}개 리스트)</span>`;
+  setTimeout(() => { status.innerHTML = ''; }, 5000);
+}
+
+async function downloadCsv(kind, type) {
+  const t = localStorage.getItem('sigfig-teacher-token');
+  let url = `/api/teacher/export?kind=${kind}`;
+  if (type) url += `&type=${type}`;
+  const r = await fetch(url, { headers: { 'Authorization': 'Bearer ' + t } });
+  if (!r.ok) { alert('다운로드 실패: ' + r.status); return; }
+  const blob = await r.blob();
+  const cd = r.headers.get('content-disposition') || '';
+  const m = cd.match(/filename="([^"]+)"/);
+  const filename = m ? m[1] : `${kind}.csv`;
+  triggerDownload(blob, filename);
+}
+async function downloadBackup() {
+  const t = localStorage.getItem('sigfig-teacher-token');
+  const r = await fetch('/api/teacher/backup', { headers: { 'Authorization': 'Bearer ' + t } });
+  if (!r.ok) { alert('백업 실패'); return; }
+  const blob = await r.blob();
+  triggerDownload(blob, `sigfig_backup_${new Date().toISOString().slice(0,10)}.json`);
+}
+function triggerDownload(blob, filename) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  document.body.appendChild(a); a.click();
+  setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+}
+
+// ============ 구글 시트 연동 ============
+async function loadSheetsConfig() {
+  const r = await teacherApi('/api/teacher/sheets');
+  if (r.sheetsUrl !== undefined) {
+    document.getElementById('sheets-url').value = r.sheetsUrl || '';
+    document.getElementById('sheets-status').textContent = r.sheetsUrl ? '✅ 연동 URL 저장됨' : '⚠️ 미설정';
+  }
+}
+async function saveSheetsUrl() {
+  const url = document.getElementById('sheets-url').value.trim();
+  const r = await teacherApi('/api/teacher/sheets', { method: 'POST', body: { sheetsUrl: url } });
+  const el = document.getElementById('sheets-status');
+  if (r.error) el.textContent = '❌ ' + r.error;
+  else el.textContent = '✅ 저장 완료';
+}
+async function clearSheetsUrl() {
+  document.getElementById('sheets-url').value = '';
+  await saveSheetsUrl();
+}
+async function testSheets() {
+  document.getElementById('sheets-status').textContent = '⏳ 연결 테스트 중...';
+  const r = await teacherApi('/api/teacher/sheets/test', { method: 'POST' });
+  const el = document.getElementById('sheets-status');
+  if (r.error) el.textContent = '❌ ' + r.error;
+  else el.textContent = `✅ 응답 ${r.status} — ${String(r.body||'').slice(0,120)}`;
+}
+async function pushAllSheets() {
+  if (!confirm('현재 학생·출결·점수판 전체를 구글 시트로 전송하시겠습니까?')) return;
+  document.getElementById('sheets-status').textContent = '⏳ 전송 중...';
+  const r = await teacherApi('/api/teacher/sheets/push-all', { method: 'POST' });
+  const el = document.getElementById('sheets-status');
+  if (r.error) el.textContent = '❌ ' + r.error;
+  else el.textContent = `✅ 전송 완료 (HTTP ${r.status})`;
+}
+
+document.getElementById('in-pw').addEventListener('keydown', e => { if (e.key === 'Enter') login(); });
+
+init();
+</script>
+</body>
+</html>

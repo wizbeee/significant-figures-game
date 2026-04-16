@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>유효숫자 마스터 — 점수판</title>
+<link rel="stylesheet" href="common.css">
+<style>
+.tabs{display:flex;gap:6px;margin:20px 0;flex-wrap:wrap}
+.tabs button{padding:12px 22px;background:var(--bg2);color:var(--txt2);border:1px solid var(--bg3);border-radius:var(--r);cursor:pointer;font-weight:600;font-size:.95rem;transition:all .2s}
+.tabs button:hover{border-color:var(--pri)}
+.tabs button.active{background:linear-gradient(135deg,var(--pri),var(--pri2));color:#fff;border-color:var(--pri)}
+.lb-table{background:var(--bg2);border-radius:var(--r);overflow:hidden}
+.lb-table th{background:var(--bg3)}
+.lb-table td .rk{font-size:1.3rem;font-weight:800;color:var(--acc);min-width:40px;display:inline-block;text-align:center}
+.lb-table tr:nth-child(1) td{background:rgba(245,158,11,.1)}
+.lb-table tr:nth-child(2) td{background:rgba(148,163,184,.08)}
+.lb-table tr:nth-child(3) td{background:rgba(205,127,50,.08)}
+.score-cell{font-weight:800;color:var(--acc);font-size:1.05rem}
+.filter-row{display:flex;gap:10px;align-items:center;margin-bottom:12px;flex-wrap:wrap;color:var(--txt2);font-size:.88rem}
+.filter-row select{padding:6px 10px;font-size:.88rem}
+.admin-banner{background:rgba(245,158,11,.1);border:1px solid var(--acc);border-radius:8px;padding:8px 14px;margin-bottom:12px;font-size:.88rem;color:var(--acc);display:flex;gap:10px;align-items:center}
+.row-actions{display:flex;gap:4px}
+.row-actions button{padding:4px 9px;font-size:.78rem;border-radius:5px;border:1px solid var(--bg3);background:var(--bg3);color:var(--txt);cursor:pointer}
+.row-actions button:hover{border-color:var(--pri)}
+.row-actions button.del:hover{border-color:var(--err);color:var(--err)}
+.edit-cell input,.edit-cell select{padding:3px 6px;font-size:.85rem;width:100%;box-sizing:border-box}
+.lb-table input[type=checkbox]{width:16px;height:16px;cursor:pointer}
+.bulk-bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px;padding:8px 12px;background:var(--bg2);border:1px dashed var(--bg3);border-radius:8px;font-size:.88rem}
+.bulk-bar .sel-count{color:var(--acc);font-weight:700}
+.bulk-bar button{padding:6px 12px;font-size:.85rem;border-radius:6px;border:1px solid var(--bg3);background:var(--bg3);color:var(--txt);cursor:pointer;font-weight:600}
+.bulk-bar button:hover{border-color:var(--pri)}
+.bulk-bar button.danger{border-color:var(--err);color:var(--err)}
+.bulk-bar button.danger:hover{background:var(--err);color:#fff}
+.bulk-bar button:disabled{opacity:.4;cursor:not-allowed}
+</style>
+</head>
+<body>
+<div class="top-nav">
+  <div class="brand">🏆 유효숫자 마스터 점수판</div>
+  <div class="nav-links">
+    <a href="/">🏠 로비</a>
+    <a href="#" onclick="load()">🔄 새로고침</a>
+  </div>
+  <div class="user-box"></div>
+</div>
+
+<div class="wrap">
+  <h1>🏆 점수판</h1>
+  <h2>싱글 / 멀티 / 대전 기록을 확인하세요</h2>
+
+  <div class="tabs">
+    <button data-type="single" class="active" onclick="switchTab('single')">🎯 싱글 플레이</button>
+    <button data-type="multi" onclick="switchTab('multi')">👥 멀티 플레이</button>
+    <button data-type="battle" onclick="switchTab('battle')">⚔️ 대전 플레이</button>
+  </div>
+
+  <div id="admin-banner" class="admin-banner" style="display:none">
+    🔐 <b>교사 관리 모드</b> — 체크박스로 여러 기록을 선택해 일괄 삭제하거나, 행별 <b>✏️</b>/<b>🗑</b>로 개별 편집할 수 있어요.
+    <button class="btn btn-ghost btn-sm" style="margin-left:auto" onclick="logoutAdmin()">관리 종료</button>
+  </div>
+  <div id="bulk-bar" class="bulk-bar" style="display:none">
+    <span>선택:</span><span class="sel-count" id="sel-count">0</span><span>건</span>
+    <button id="bulk-del-btn" class="danger" onclick="bulkDelete()" disabled>🗑 선택 삭제</button>
+    <button onclick="selectAll(true)">전체 선택</button>
+    <button onclick="selectAll(false)">선택 해제</button>
+    <span style="flex:1"></span>
+    <button class="danger" onclick="resetCurrent()">⚠️ 현재 탭 초기화</button>
+  </div>
+  <div class="filter-row">
+    <label>게임 필터:</label>
+    <select id="flt-gm">
+      <option value="all">전체</option>
+      <option value="1">🔢 개수 세기</option>
+      <option value="2">🎯 유효숫자 찾기</option>
+      <option value="3">📏 측정값 읽기</option>
+    </select>
+    <label>난이도:</label>
+    <select id="flt-diff">
+      <option value="all">전체</option>
+      <option value="easy">쉬움</option>
+      <option value="medium">보통</option>
+      <option value="hard">어려움</option>
+      <option value="mixed">혼합</option>
+    </select>
+    <span id="count-label" style="margin-left:auto"></span>
+  </div>
+
+  <div id="lb-area"></div>
+</div>
+
+<script src="common.js"></script>
+<script>
+let currentType = 'single';
+let entries = [];
+let editingIdx = -1;  // 원본 배열 인덱스 (필터 전)
+let selected = new Set();  // "at|studentId" 키 집합
+const gmLabel = { 1:'🔢 개수', 2:'🎯 찾기', 3:'📏 측정', 4:'➕ 덧셈/뺄셈' };
+const diffLabel = { easy:'쉬움', medium:'보통', hard:'어려움', mixed:'혼합' };
+
+function isAdmin() { return !!localStorage.getItem('sigfig-teacher-token'); }
+
+async function load() {
+  const r = await api('/api/leaderboard?type=' + currentType);
+  entries = r.entries || [];
+  const admin = isAdmin();
+  document.getElementById('admin-banner').style.display = admin ? 'flex' : 'none';
+  document.getElementById('bulk-bar').style.display = admin ? 'flex' : 'none';
+  // 존재하지 않는 키는 선택에서 제거
+  const validKeys = new Set(entries.map(e => e.at + '|' + e.studentId));
+  for (const k of Array.from(selected)) if (!validKeys.has(k)) selected.delete(k);
+  render();
+}
+
+function toggleSelect(key, on) {
+  if (on) selected.add(key); else selected.delete(key);
+  updateSelCount();
+}
+function selectAll(on) {
+  const gm = document.getElementById('flt-gm').value;
+  const diff = document.getElementById('flt-diff').value;
+  entries.filter(e => {
+    if (gm !== 'all' && e.gameMode !== parseInt(gm)) return false;
+    if (diff !== 'all' && e.difficulty !== diff) return false;
+    return true;
+  }).forEach(e => {
+    const k = e.at + '|' + e.studentId;
+    if (on) selected.add(k); else selected.delete(k);
+  });
+  render();
+}
+function updateSelCount() {
+  const n = selected.size;
+  document.getElementById('sel-count').textContent = n;
+  document.getElementById('bulk-del-btn').disabled = n === 0;
+  const cb = document.getElementById('cb-all');
+  if (cb) {
+    // 현재 필터에 보이는 행 기준으로 체크
+    const gm = document.getElementById('flt-gm').value;
+    const diff = document.getElementById('flt-diff').value;
+    const visible = entries.filter(e => {
+      if (gm !== 'all' && e.gameMode !== parseInt(gm)) return false;
+      if (diff !== 'all' && e.difficulty !== diff) return false;
+      return true;
+    });
+    cb.checked = visible.length > 0 && visible.every(e => selected.has(e.at + '|' + e.studentId));
+  }
+}
+
+async function bulkDelete() {
+  if (selected.size === 0) return;
+  if (!confirm(`선택한 ${selected.size}건의 기록을 정말 삭제할까요?\n이 작업은 되돌릴 수 없어요.`)) return;
+  const keys = Array.from(selected).map(k => {
+    const [at, studentId] = k.split('|');
+    return { at: parseInt(at), studentId };
+  });
+  const r = await teacherReq('/api/leaderboard/entry/bulk-delete', { type: currentType, keys });
+  if (r.error) { alert('삭제 실패: ' + r.error); return; }
+  alert(`${r.removed}건 삭제 완료`);
+  selected.clear();
+  load();
+}
+
+async function resetCurrent() {
+  const label = { single: '싱글', multi: '멀티', battle: '대전' }[currentType];
+  if (!confirm(`⚠️ 현재 "${label}" 점수판의 모든 기록을 초기화할까요?\n이 작업은 되돌릴 수 없어요.`)) return;
+  if (!confirm(`정말 확실하신가요? "${label}" 점수판이 완전히 비워집니다.`)) return;
+  const r = await teacherReq('/api/leaderboard/clear', { type: currentType });
+  if (r.error) { alert('초기화 실패: ' + r.error); return; }
+  selected.clear();
+  load();
+}
+
+function logoutAdmin() {
+  if (!confirm('관리 모드를 종료할까요? (교사 로그인 상태도 해제됩니다)')) return;
+  localStorage.removeItem('sigfig-teacher-token');
+  editingIdx = -1;
+  load();
+}
+
+async function teacherReq(path, body) {
+  const t = localStorage.getItem('sigfig-teacher-token');
+  const r = await fetch(path, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + t },
+    body: JSON.stringify(body),
+  }).then(r => r.json()).catch(() => ({ error: '네트워크 오류' }));
+  return r;
+}
+
+async function deleteEntry(at, sid) {
+  const e = entries.find(x => x.at === at && x.studentId === sid);
+  if (!e) return;
+  if (!confirm(`정말 삭제할까요?\n\n${e.name} (${e.studentId}) · ${e.score}점`)) return;
+  const r = await teacherReq('/api/leaderboard/entry/delete', { type: currentType, at, studentId: sid });
+  if (r.error) { alert('삭제 실패: ' + r.error); return; }
+  load();
+}
+
+function startEdit(at, sid) { editingIdx = at + '|' + sid; render(); }
+function cancelEdit() { editingIdx = -1; render(); }
+
+async function saveEdit(at, sid) {
+  const e = entries.find(x => x.at === at && x.studentId === sid);
+  if (!e) return;
+  const getVal = id => document.getElementById(id)?.value;
+  const patch = {
+    name: getVal('ed-name'),
+    studentId: getVal('ed-sid'),
+    score: parseInt(getVal('ed-score')),
+    correct: parseInt(getVal('ed-correct')),
+    total: parseInt(getVal('ed-total')),
+    maxStreak: parseInt(getVal('ed-streak')),
+  };
+  if (currentType === 'battle') patch.result = getVal('ed-result');
+  const r = await teacherReq('/api/leaderboard/entry/update', { type: currentType, at, studentId: sid, patch });
+  if (r.error) { alert('수정 실패: ' + r.error); return; }
+  editingIdx = -1;
+  load();
+}
+
+function render() {
+  const gm = document.getElementById('flt-gm').value;
+  const diff = document.getElementById('flt-diff').value;
+  let filtered = entries.filter(e => {
+    if (gm !== 'all' && e.gameMode !== parseInt(gm)) return false;
+    if (diff !== 'all' && e.difficulty !== diff) return false;
+    return true;
+  });
+  filtered.sort((a, b) => b.score - a.score);
+  document.getElementById('count-label').textContent = `총 ${filtered.length}건 기록`;
+
+  if (filtered.length === 0) {
+    document.getElementById('lb-area').innerHTML = '<div class="empty">아직 기록이 없어요. 첫 기록의 주인공이 되어보세요!</div>';
+    return;
+  }
+
+  const admin = isAdmin();
+  const adminHead = admin ? '<th>관리</th>' : '';
+  const selHead = admin ? '<th style="width:36px"><input type="checkbox" id="cb-all" onchange="selectAll(this.checked)"></th>' : '';
+  const selCell = (e) => {
+    if (!admin) return '';
+    const k = e.at + '|' + e.studentId;
+    return `<td><input type="checkbox" ${selected.has(k)?'checked':''} onchange="toggleSelect('${k}', this.checked)"></td>`;
+  };
+  const actionCell = (e) => {
+    if (!admin) return '';
+    const key = e.at + '|' + e.studentId;
+    if (editingIdx === key) {
+      return `<td><div class="row-actions">
+        <button onclick="saveEdit(${e.at},'${e.studentId}')">💾</button>
+        <button onclick="cancelEdit()">✖</button>
+      </div></td>`;
+    }
+    return `<td><div class="row-actions">
+      <button onclick="startEdit(${e.at},'${e.studentId}')">✏️</button>
+      <button class="del" onclick="deleteEntry(${e.at},'${e.studentId}')">🗑</button>
+    </div></td>`;
+  };
+  const isEditing = (e) => admin && editingIdx === (e.at + '|' + e.studentId);
+
+  let colsHead, rowRenderer;
+  if (currentType === 'single') {
+    colsHead = `<tr>${selHead}<th>순위</th><th>이름 (학번)</th><th>점수</th><th>정답</th><th>최대 콤보</th><th>게임</th><th>난이도</th><th>일시</th>${adminHead}</tr>`;
+    rowRenderer = (e, i) => isEditing(e) ? `<tr>
+      ${selCell(e)}<td><span class="rk">${i+1}</span></td>
+      <td class="edit-cell"><input id="ed-name" value="${e.name}"> <input id="ed-sid" value="${e.studentId}" style="margin-top:3px"></td>
+      <td class="edit-cell"><input id="ed-score" type="number" value="${e.score}"></td>
+      <td class="edit-cell"><input id="ed-correct" type="number" value="${e.correct}" style="width:48%"> / <input id="ed-total" type="number" value="${e.total}" style="width:48%"></td>
+      <td class="edit-cell"><input id="ed-streak" type="number" value="${e.maxStreak}"></td>
+      <td>${gmLabel[e.gameMode]||''}</td>
+      <td>${diffLabel[e.difficulty]||''}</td>
+      <td style="color:var(--txt2);font-size:.82rem">${formatDate(e.at)}</td>
+      ${actionCell(e)}
+    </tr>` : `<tr>
+      ${selCell(e)}<td><span class="rk">${i+1}</span></td>
+      <td><b>${e.name}</b> <span style="color:var(--txt2);font-size:.82rem">${e.studentId}</span></td>
+      <td class="score-cell">${e.score}점</td>
+      <td>${e.correct}/${e.total}</td>
+      <td>${e.maxStreak}회</td>
+      <td>${gmLabel[e.gameMode]||''}</td>
+      <td>${diffLabel[e.difficulty]||''}</td>
+      <td style="color:var(--txt2);font-size:.82rem">${formatDate(e.at)}</td>
+      ${actionCell(e)}
+    </tr>`;
+  } else if (currentType === 'multi') {
+    colsHead = `<tr>${selHead}<th>순위</th><th>이름 (학번)</th><th>점수</th><th>정답</th><th>방 이름</th><th>참여자</th><th>게임</th><th>난이도</th><th>일시</th>${adminHead}</tr>`;
+    rowRenderer = (e, i) => isEditing(e) ? `<tr>
+      ${selCell(e)}<td><span class="rk">${i+1}</span></td>
+      <td class="edit-cell"><input id="ed-name" value="${e.name}"> <input id="ed-sid" value="${e.studentId}" style="margin-top:3px"></td>
+      <td class="edit-cell"><input id="ed-score" type="number" value="${e.score}"></td>
+      <td class="edit-cell"><input id="ed-correct" type="number" value="${e.correct}" style="width:48%"> / <input id="ed-total" type="number" value="${e.total}" style="width:48%"></td>
+      <td>${e.roomLabel || '-'}</td>
+      <td>${e.playerCount||'-'}명</td>
+      <td>${gmLabel[e.gameMode]||''}</td>
+      <td>${diffLabel[e.difficulty]||''}</td>
+      <td style="color:var(--txt2);font-size:.82rem">${formatDate(e.at)}</td>
+      ${actionCell(e)}
+      <input type="hidden" id="ed-streak" value="${e.maxStreak}">
+    </tr>` : `<tr>
+      ${selCell(e)}<td><span class="rk">${i+1}</span></td>
+      <td><b>${e.name}</b> <span style="color:var(--txt2);font-size:.82rem">${e.studentId}</span></td>
+      <td class="score-cell">${e.score}점</td>
+      <td>${e.correct}/${e.total}</td>
+      <td>${e.roomLabel || '-'}</td>
+      <td>${e.playerCount||'-'}명</td>
+      <td>${gmLabel[e.gameMode]||''}</td>
+      <td>${diffLabel[e.difficulty]||''}</td>
+      <td style="color:var(--txt2);font-size:.82rem">${formatDate(e.at)}</td>
+      ${actionCell(e)}
+    </tr>`;
+  } else {
+    colsHead = `<tr>${selHead}<th>순위</th><th>이름 (학번)</th><th>점수</th><th>승패</th><th>정답</th><th>참여자</th><th>게임</th><th>난이도</th><th>일시</th>${adminHead}</tr>`;
+    rowRenderer = (e, i) => isEditing(e) ? `<tr>
+      ${selCell(e)}<td><span class="rk">${i+1}</span></td>
+      <td class="edit-cell"><input id="ed-name" value="${e.name}"> <input id="ed-sid" value="${e.studentId}" style="margin-top:3px"></td>
+      <td class="edit-cell"><input id="ed-score" type="number" value="${e.score}"></td>
+      <td class="edit-cell"><select id="ed-result"><option value="win" ${e.result==='win'?'selected':''}>승</option><option value="lose" ${e.result==='lose'?'selected':''}>패</option></select></td>
+      <td class="edit-cell"><input id="ed-correct" type="number" value="${e.correct}" style="width:48%"> / <input id="ed-total" type="number" value="${e.total}" style="width:48%"></td>
+      <td>${e.playerCount||'-'}명</td>
+      <td>${gmLabel[e.gameMode]||''}</td>
+      <td>${diffLabel[e.difficulty]||''}</td>
+      <td style="color:var(--txt2);font-size:.82rem">${formatDate(e.at)}</td>
+      ${actionCell(e)}
+      <input type="hidden" id="ed-streak" value="${e.maxStreak}">
+    </tr>` : `<tr>
+      ${selCell(e)}<td><span class="rk">${i+1}</span></td>
+      <td><b>${e.name}</b> <span style="color:var(--txt2);font-size:.82rem">${e.studentId}</span></td>
+      <td class="score-cell">${e.score}점</td>
+      <td>${e.result === 'win' ? '<span class="badge ok">승</span>' : '<span class="badge no">패</span>'}</td>
+      <td>${e.correct}/${e.total}</td>
+      <td>${e.playerCount||'-'}명</td>
+      <td>${gmLabel[e.gameMode]||''}</td>
+      <td>${diffLabel[e.difficulty]||''}</td>
+      <td style="color:var(--txt2);font-size:.82rem">${formatDate(e.at)}</td>
+      ${actionCell(e)}
+    </tr>`;
+  }
+  document.getElementById('lb-area').innerHTML = `<table class="lb-table"><thead>${colsHead}</thead><tbody>${filtered.slice(0, 100).map(rowRenderer).join('')}</tbody></table>`;
+  updateSelCount();
+}
+
+function formatDate(ts) {
+  if (!ts) return '-';
+  const d = new Date(ts);
+  return `${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+}
+
+function switchTab(type) {
+  currentType = type;
+  document.querySelectorAll('.tabs button').forEach(b => b.classList.toggle('active', b.dataset.type === type));
+  load();
+}
+
+document.getElementById('flt-gm').addEventListener('change', render);
+document.getElementById('flt-diff').addEventListener('change', render);
+load();
+setInterval(() => { if (editingIdx === -1 && selected.size === 0) load(); }, 5000);
+</script>
+</body>
+</html>

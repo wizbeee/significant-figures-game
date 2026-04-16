@@ -2,6 +2,6 @@
 *.task
 *.py
 requirements.txt
-server.js
 입학전형위원_전자서명/
 .claude/
+data/

@@ -1,0 +1,694 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>유효숫자 마스터 — 게임</title>
+<link rel="stylesheet" href="common.css">
+<style>
+.game-hdr{display:flex;justify-content:space-between;align-items:center;padding:14px 22px;background:var(--bg2);border-bottom:1px solid var(--bg3);flex-wrap:wrap;gap:10px}
+.game-hdr .info{display:flex;gap:14px;align-items:center;flex-wrap:wrap}
+.badge.big{font-size:.92rem;padding:5px 14px}
+.lobby-view{max-width:800px;margin:30px auto;text-align:center;padding:20px}
+.code-big{font-size:2.8rem;font-weight:800;letter-spacing:8px;color:var(--acc);margin:10px 0}
+.players-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin:20px 0}
+.player-tile{background:var(--bg2);border:1px solid var(--bg3);border-radius:var(--r);padding:14px;text-align:center}
+.player-tile.me{border-color:var(--pri);background:rgba(99,102,241,.1)}
+.player-tile .emo{font-size:1.8rem;margin-bottom:4px}
+.player-tile .nm{font-weight:700}
+.player-tile .sid{font-size:.78rem;color:var(--txt2)}
+.q-view{max-width:900px;margin:20px auto;padding:20px}
+.q-label{text-align:center;color:var(--txt2);font-size:1rem;margin-bottom:12px}
+.q-box{display:flex;flex-direction:column;align-items:center;margin:20px 0}
+.ans-row{display:flex;gap:10px;align-items:center;margin:8px 0;width:100%;max-width:440px}
+.ans-row label{min-width:110px;text-align:right;color:var(--txt2)}
+.ans-row .ans-inp{flex:1}
+.live-board{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:8px;margin-top:24px}
+.live-row{display:flex;justify-content:space-between;align-items:center;padding:10px 14px;background:var(--bg2);border-radius:8px;border-left:4px solid var(--bg3)}
+.live-row.answered{border-left-color:var(--sec)}
+.live-row.me{background:rgba(99,102,241,.15)}
+.live-row .nm{font-weight:600;font-size:.92rem}
+.live-row .sc{font-weight:800;color:var(--acc)}
+.reveal-box{text-align:center;padding:30px 20px;background:var(--bg2);border-radius:var(--r);margin:15px 0}
+.reveal-ans{font-size:2.2rem;font-weight:700;color:var(--acc);margin:10px 0}
+.reveal-ans .sig{color:var(--sec)}
+.reveal-ans .nosig{color:var(--txt2)}
+.results-view{max-width:700px;margin:40px auto;text-align:center;padding:20px}
+.res-row{display:flex;justify-content:space-between;align-items:center;padding:15px 20px;background:var(--bg2);border-radius:var(--r);margin-bottom:8px}
+.res-row.first{border:2px solid var(--acc);background:rgba(245,158,11,.1)}
+.res-row.me{border:2px solid var(--pri)}
+.res-row .rank{font-size:1.8rem;min-width:45px}
+.res-row .col{flex:1;text-align:left}
+.res-row .sc{font-weight:800;font-size:1.3rem;color:var(--acc)}
+.timer-display{font-size:1.5rem;font-weight:800;padding:4px 16px;border-radius:8px;background:var(--bg3);min-width:70px;text-align:center}
+.timer-display.urgent{background:rgba(239,68,68,.2);color:var(--err);animation:pulse .5s infinite}
+.pending-banner{background:rgba(245,158,11,.15);border:2px solid var(--acc);padding:20px;border-radius:var(--r);text-align:center;margin:20px 0}
+/* 콤보 / HP / 학급통계 배지 */
+.combo-badge{padding:4px 14px;border-radius:99px;font-weight:800;font-size:.88rem;background:linear-gradient(135deg,#f97316,#dc2626);color:#fff;box-shadow:0 0 12px rgba(249,115,22,.5);animation:pulse .9s infinite}
+.combo-badge.hyper{background:linear-gradient(135deg,#a855f7,#6366f1);box-shadow:0 0 14px rgba(168,85,247,.6)}
+.combo-badge.legend{background:linear-gradient(135deg,#06b6d4,#10b981);box-shadow:0 0 18px rgba(6,182,212,.7)}
+.hp-badge{padding:4px 12px;border-radius:99px;font-weight:800;font-size:.88rem;background:rgba(239,68,68,.15);color:#fca5a5;border:1px solid #ef4444}
+.class-badge{padding:4px 12px;border-radius:99px;font-weight:700;font-size:.85rem;background:rgba(16,185,129,.15);color:var(--sec);border:1px solid var(--sec)}
+/* 점수 팝 애니메이션 */
+@keyframes scorePop{0%{transform:translate(-50%,0) scale(.8);opacity:0}15%{opacity:1;transform:translate(-50%,-10px) scale(1.3)}100%{transform:translate(-50%,-80px) scale(1);opacity:0}}
+.score-pop{position:fixed;font-size:2.4rem;font-weight:900;color:var(--acc);pointer-events:none;z-index:1000;text-shadow:0 2px 12px rgba(0,0,0,.6);animation:scorePop 1.4s ease-out forwards}
+.score-pop.combo{color:#f97316}
+.score-pop.hyper{color:#a855f7}
+.score-pop.legend{color:#06b6d4}
+/* 측정 가이드 */
+.meas-guide{background:rgba(99,102,241,.08);border:1px solid var(--pri);border-radius:10px;padding:12px 16px;margin:10px 0;font-size:.88rem;color:var(--txt)}
+.meas-guide summary{cursor:pointer;font-weight:700;color:var(--pri);list-style:none}
+.meas-guide summary::before{content:'▶ ';font-size:.75rem}
+.meas-guide[open] summary::before{content:'▼ '}
+.meas-guide ul{margin:10px 0 0 20px;line-height:1.7;color:var(--txt2)}
+.meas-guide b{color:var(--acc)}
+/* 정답 공개 개선 */
+.reveal-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;max-width:640px;margin:14px auto}
+.reveal-grid .cell{background:var(--bg);padding:14px;border-radius:10px;border:2px solid var(--bg3);text-align:center}
+.reveal-grid .cell.ok{border-color:var(--sec);background:rgba(16,185,129,.08)}
+.reveal-grid .cell.no{border-color:var(--err);background:rgba(239,68,68,.08)}
+.reveal-grid .cell .lab{color:var(--txt2);font-size:.82rem;margin-bottom:6px}
+.reveal-grid .cell .val{font-size:1.4rem;font-weight:800;font-family:'Courier New',monospace}
+.reveal-grid .cell.ok .val{color:var(--sec)}
+.reveal-grid .cell.no .val{color:var(--err)}
+.explain-box{max-width:640px;margin:14px auto;padding:14px 18px;background:var(--bg);border-left:4px solid var(--pri);border-radius:8px;color:var(--txt2);font-size:.92rem;line-height:1.6;text-align:left}
+.explain-box b{color:var(--txt)}
+.explain-box .tag{display:inline-block;padding:2px 8px;margin:0 2px;border-radius:4px;font-weight:700}
+.explain-box .tag.sig{background:rgba(16,185,129,.2);color:var(--sec)}
+.explain-box .tag.nosig{background:rgba(148,163,184,.15);color:var(--txt2)}
+.digit-box.reveal-digs{pointer-events:none;font-size:2.2rem}
+.dg.leading{background:rgba(148,163,184,.1);border-color:var(--txt2);color:var(--txt2)}
+.dg.middle{background:rgba(16,185,129,.2);border-color:var(--sec);color:var(--sec)}
+.dg.trailing-nd{background:rgba(148,163,184,.1);border-color:var(--txt2);color:var(--txt2);opacity:.7}
+.dg.trailing-d{background:rgba(16,185,129,.2);border-color:var(--sec);color:var(--sec)}
+.dg.nonzero{background:rgba(16,185,129,.2);border-color:var(--sec);color:var(--sec)}
+.eliminated-overlay{position:fixed;inset:0;background:rgba(0,0,0,.7);display:flex;align-items:center;justify-content:center;z-index:500;flex-direction:column;gap:10px}
+.eliminated-overlay .big{font-size:5rem}
+.eliminated-overlay h1{color:var(--err)}
+/* gameMode 4 덧셈/뺄셈 */
+.addsub-display{font-size:2.4rem;font-weight:800;font-family:'Courier New',monospace;letter-spacing:2px;background:var(--bg2);border:2px solid var(--bg3);border-radius:12px;padding:22px 28px;margin:10px 0;color:var(--acc);text-align:center;min-width:320px}
+.addsub-hint{color:var(--txt2);font-size:.86rem;margin:6px auto 12px;max-width:520px;line-height:1.55;background:rgba(99,102,241,.05);border-left:3px solid var(--pri);padding:8px 14px;border-radius:6px}
+.addsub-guide{margin:10px auto;max-width:560px}
+.addsub-guide summary{cursor:pointer;font-weight:700;color:var(--pri);padding:6px 0}
+.addsub-guide ul{margin:6px 0 0 20px;color:var(--txt2);font-size:.86rem;line-height:1.7}
+.addsub-guide code{background:var(--bg3);padding:1px 6px;border-radius:4px;color:var(--acc)}
+/* 학급 팀보드 */
+.team-board{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;margin-top:14px}
+.team-card{background:var(--bg2);border:2px solid var(--bg3);border-radius:10px;padding:12px 14px}
+.team-card.first{border-color:var(--acc);background:rgba(245,158,11,.08)}
+.team-card h4{margin:0 0 6px;color:var(--acc)}
+.team-card .mem{font-size:.82rem;color:var(--txt2);margin-top:4px}
+/* 제한시간 싱글 타이머 */
+.timed-clock{padding:6px 16px;border-radius:99px;font-weight:800;font-size:.95rem;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff}
+.timed-clock.urgent{background:linear-gradient(135deg,#ef4444,#dc2626);animation:pulse .7s infinite}
+</style>
+</head>
+<body>
+<div id="app"></div>
+
+<script src="common.js"></script>
+<script>
+const S = { code: null, state: null, pollTimer: null, submittedQIdx: -1, me: null, lastSig: null, lastPhase: null, guideSeen: false };
+const params = new URLSearchParams(location.search);
+S.code = params.get('code');
+
+async function init() {
+  const token = localStorage.getItem('sigfig-token');
+  if (!token) { location.href = '/'; return; }
+  const me = await api('/api/me');
+  if (me.error) { localStorage.removeItem('sigfig-token'); location.href = '/'; return; }
+  S.me = me;
+  if (!S.code) { location.href = '/'; return; }
+  startPolling();
+}
+
+function startPolling() {
+  if (S.pollTimer) clearInterval(S.pollTimer);
+  poll();
+  S.pollTimer = setInterval(poll, 1200);
+}
+
+async function poll() {
+  const r = await api('/api/state?code=' + S.code);
+  if (r.error) {
+    clearInterval(S.pollTimer);
+    document.getElementById('app').innerHTML = `<div class="lobby-view"><h1>❌ ${r.error}</h1><button class="btn btn-pri" onclick="location.href='/'">로비로</button></div>`;
+    return;
+  }
+  const prevPhase = S.state?.phase, prevQ = S.state?.qIndex;
+  S.state = r;
+  if ((prevPhase === 'reveal' && r.phase === 'question') || (prevQ !== undefined && r.qIndex !== prevQ)) {
+    S.submittedQIdx = -1;
+  }
+  // 입력 중이면서 문제가 안 바뀌었으면 보드만 부분 갱신 (input 보호)
+  const typing = document.activeElement && document.activeElement.tagName === 'INPUT' && !document.activeElement.disabled;
+  const samePQ = prevPhase === r.phase && prevQ === r.qIndex;
+  if (typing && samePQ && (r.phase === 'question')) {
+    updateTimerAndBoard();
+    return;
+  }
+  render();
+}
+
+function myPlayer() { return S.state?.players.find(p => p.studentId === S.me.studentId); }
+
+function render() {
+  const s = S.state;
+  const phaseChanged = S.lastPhase !== s.phase;
+  if (phaseChanged) { S.lastSig = null; S.lastQSig = null; }
+  if (s.phase === 'lobby') renderLobby(phaseChanged);
+  else if (s.phase === 'question') renderQuestion(phaseChanged);
+  else if (s.phase === 'reveal') renderReveal(phaseChanged);
+  else if (s.phase === 'waiting') renderWaiting(phaseChanged);
+  else if (s.phase === 'results') renderResults(phaseChanged);
+  S.lastPhase = s.phase;
+}
+
+function comboClass(streak) {
+  if (streak >= 10) return 'legend';
+  if (streak >= 5) return 'hyper';
+  return '';
+}
+function comboLabel(streak) {
+  if (streak >= 10) return `💎 LEGEND x${streak}`;
+  if (streak >= 5) return `⚡ HYPER x${streak}`;
+  if (streak >= 3) return `🔥 FEVER x${streak}`;
+  if (streak >= 2) return `🔥 x${streak}`;
+  return '';
+}
+function renderHeader() {
+  const s = S.state;
+  const typeEmo = { single:'🎯', multi:'👥', battle:'⚔️' }[s.type];
+  const multiLbl = { class:'학급협동', team:'조별협동', individual:'개인별' }[s.config.multiMode || 'class'];
+  const battleLbl = s.config.battleMode === 'speed' ? '속도전' : '서바이벌';
+  const singleLbl = s.config.singleMode === 'timed' ? `시간제(${s.config.timeLimit}s)` : '문제수';
+  const typeLbl = s.type === 'multi' ? `멀티(${multiLbl})` : s.type === 'battle' ? `대전(${battleLbl})` : `싱글(${singleLbl})`;
+  const gmLabel = { 1:'개수 세기', 2:'유효숫자 찾기', 3:'측정값 읽기', 4:'덧셈/뺄셈' }[s.config.gameMode];
+  const p = myPlayer();
+  const remaining = s.phase === 'question' ? Math.max(0, Math.ceil((s.currentQStart + s.config.questionTime * 1000 - s.serverNow) / 1000)) : 0;
+  const comboHtml = (p && p.streak >= 2) ? `<span class="combo-badge ${comboClass(p.streak)}" id="my-combo-badge">${comboLabel(p.streak)}</span>` : '';
+  const useHP = s.type === 'battle' && s.config.battleMode === 'survival';
+  const hpMax = s.config.hpStart || 3;
+  const hpHtml = (useHP && p) ? `<span class="hp-badge" id="my-hp-badge">${p.eliminated ? '💀 탈락' : '❤️'.repeat(p.hp) + '🖤'.repeat(Math.max(0,hpMax-p.hp))}</span>` : '';
+  const classHtml = (s.type === 'multi' && s.classStats) ? `<span class="class-badge">👥 학급 ${s.classStats.correct}/${s.classStats.total}${s.classStats.combo>=2?' · 🔥x'+s.classStats.combo:''}</span>` : '';
+  const teamHtml = (s.type === 'multi' && s.config.multiMode === 'team' && p) ? `<span class="class-badge">🛡 ${p.team+1}조</span>` : '';
+  const timedHtml = (s.type === 'single' && s.config.singleMode === 'timed' && s.timedRemaining !== undefined && s.phase !== 'lobby' && s.phase !== 'results') ? `<span class="timed-clock ${s.timedRemaining<=10?'urgent':''}" id="my-timed-clock">⏱ ${s.timedRemaining}초 남음</span>` : '';
+  return `<div class="game-hdr">
+    <div class="info">
+      <span class="badge big">${typeEmo} ${typeLbl}</span>
+      <span class="badge">${gmLabel}</span>
+      <span class="badge">방 ${s.code}</span>
+      ${s.phase !== 'lobby' && s.phase !== 'results' && s.config.singleMode !== 'timed' ? `<span class="badge acc">문제 ${s.qIndex+1}/${s.total}</span>` : ''}
+      ${s.config.singleMode === 'timed' && s.phase !== 'lobby' && s.phase !== 'results' ? `<span class="badge acc">✅ ${p?.correct||0}개 정답</span>` : ''}
+      ${p ? `<span class="badge ok" id="my-score-badge">⭐ ${p.score}점</span>` : ''}
+      ${hpHtml}
+      ${comboHtml}
+      ${classHtml}
+      ${teamHtml}
+      ${timedHtml}
+    </div>
+    <div class="info">
+      ${s.phase === 'question' ? `<div class="timer-display ${remaining<=5?'urgent':''}">${remaining}초</div>` : ''}
+      <button class="btn btn-ghost btn-sm" onclick="leaveRoom()">🚪 나가기</button>
+    </div>
+  </div>`;
+}
+function showScorePop(points, streak) {
+  const el = document.createElement('div');
+  let cls = '';
+  if (streak >= 10) cls = 'legend'; else if (streak >= 5) cls = 'hyper'; else if (streak >= 3) cls = 'combo';
+  el.className = 'score-pop ' + cls;
+  el.textContent = '+' + points + (streak >= 3 ? (streak >= 10 ? ' 💎' : streak >= 5 ? ' ⚡' : ' 🔥') : '');
+  el.style.left = '50%';
+  el.style.top = '35%';
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 1400);
+}
+
+async function leaveRoom() {
+  if (!confirm('방에서 나가시겠습니까?')) return;
+  await api('/api/room/leave', { method: 'POST' });
+  location.href = '/';
+}
+
+function renderLobby(phaseChanged) {
+  const s = S.state;
+  const isOwner = s.ownerId === S.me.studentId;
+  const canStart = isOwner && s.type !== 'single' && s.approved && s.players.length >= (s.type === 'battle' ? 2 : 1);
+  // 변경 감지: 플레이어 상태·승인·방장이 바뀔 때만 재렌더
+  const sig = JSON.stringify({
+    approved: s.approved,
+    ownerId: s.ownerId,
+    cap: s.config.capacity,
+    label: s.config.label,
+    players: s.players.map(p => p.studentId + ':' + p.name + (p.isOwner?'*':'')),
+    canStart,
+  });
+  if (!phaseChanged && sig === S.lastSig) return;
+  S.lastSig = sig;
+  document.getElementById('app').innerHTML = `
+    ${renderHeader()}
+    <div class="lobby-view ${phaseChanged?'fade-in':''}">
+      <h1>${s.config.label || '게임 대기실'}</h1>
+      <div class="code-big">${s.code}</div>
+      ${!s.approved ? `
+        <div class="pending-banner">
+          <div style="font-size:2rem;margin-bottom:6px">⏳</div>
+          <h3>교사 승인 대기 중</h3>
+          <p style="color:var(--txt2);margin-top:6px">교사가 카운터에서 이 방을 승인하면 시작할 수 있어요.</p>
+        </div>
+      ` : `<div class="badge ok big">✅ 교사 승인 완료</div>`}
+      <h3 style="margin-top:24px">참여자 (${s.players.length}/${s.config.capacity})</h3>
+      <div class="players-grid">
+        ${s.players.map(p => `<div class="player-tile ${p.studentId === S.me.studentId ? 'me' : ''}">
+          <div class="emo">${p.isOwner ? '👑' : '🎓'}</div>
+          <div class="nm">${p.name}</div>
+          <div class="sid">${p.studentId}</div>
+        </div>`).join('')}
+        ${Array.from({length: s.config.capacity - s.players.length}).map(() => '<div class="player-tile" style="opacity:.3"><div class="emo">⌛</div><div class="nm">대기</div></div>').join('')}
+      </div>
+      <div style="margin-top:20px;color:var(--txt2);font-size:.9rem">
+        ${s.config.gameMode===1?'🔢 개수 세기':s.config.gameMode===2?'🎯 유효숫자 찾기':'📏 측정값 읽기'}
+        · ${({easy:'쉬움',medium:'보통',hard:'어려움',mixed:'혼합'})[s.config.difficulty]}
+        · ${s.config.questionCount}문제 · ${s.config.questionTime}초/문제
+      </div>
+      ${s.type === 'single' ? `<p style="color:var(--txt2);margin-top:14px">승인되면 자동으로 시작됩니다.</p>` : ''}
+      ${isOwner && s.type !== 'single' ? `
+        <button class="btn btn-pri btn-lg" style="margin-top:20px" ${canStart?'':'disabled'} onclick="startGame()">
+          ${canStart ? '🚀 게임 시작!' : (s.approved ? `${s.type === 'battle' ? '2명 이상' : '1명 이상'} 필요` : '승인 대기 중')}
+        </button>
+      ` : (s.type !== 'single' ? `<p style="color:var(--txt2);margin-top:14px">방장이 시작을 누를 때까지 기다리세요.</p>` : '')}
+    </div>
+  `;
+}
+
+async function startGame() {
+  const r = await api('/api/room/start', { method: 'POST', body: { code: S.code } });
+  if (r.error) alert(r.error);
+}
+
+function updateTimerAndBoard() {
+  const s = S.state;
+  if (!s) return;
+  if (s.phase === 'question') {
+    const remaining = Math.max(0, Math.ceil((s.currentQStart + s.config.questionTime * 1000 - s.serverNow) / 1000));
+    const td = document.querySelector('.timer-display');
+    if (td) { td.textContent = remaining + '초'; td.classList.toggle('urgent', remaining <= 5); }
+  }
+  // 제한시간 싱글 클럭
+  if (s.type === 'single' && s.config.singleMode === 'timed' && s.timedRemaining !== undefined) {
+    const tc = document.getElementById('my-timed-clock');
+    if (tc) { tc.textContent = '⏱ ' + s.timedRemaining + '초 남음'; tc.classList.toggle('urgent', s.timedRemaining <= 10); }
+  }
+  // 점수 배지
+  const p = myPlayer();
+  const sb = document.getElementById('my-score-badge');
+  if (sb && p) sb.textContent = '⭐ ' + p.score + '점';
+  // 콤보 배지
+  const cb = document.getElementById('my-combo-badge');
+  if (cb && p) { if (p.streak >= 2) { cb.textContent = comboLabel(p.streak); cb.className = 'combo-badge ' + comboClass(p.streak); } else cb.textContent = ''; }
+  // HP 배지
+  const hb = document.getElementById('my-hp-badge');
+  if (hb && p && s.type === 'battle' && s.config.battleMode === 'survival') {
+    const hpMax = s.config.hpStart || 3;
+    hb.innerHTML = p.eliminated ? '💀 탈락' : '❤️'.repeat(p.hp) + '🖤'.repeat(Math.max(0, hpMax - p.hp));
+  }
+  // 라이브 보드 — DOM 부분 갱신 (input 건드리지 않음)
+  const board = document.getElementById('live-board');
+  if (board && s.players) {
+    s.players.forEach(p => {
+      const row = board.querySelector('[data-sid="' + p.studentId + '"]');
+      if (!row) return;
+      const sc = row.querySelector('.sc');
+      const nm = row.querySelector('.nm');
+      if (s.type === 'multi') {
+        const pp = p.pPhase || 'question';
+        const icon = pp==='done' ? '🏁' : pp==='reveal' ? '🔎' : '📘';
+        const prog = pp==='done' ? '완료' : `${(p.pIdx||0)+1}/${s.config.questionCount}`;
+        row.classList.toggle('answered', pp === 'done');
+        if (nm) nm.innerHTML = `${icon} ${p.name} <span style="color:var(--txt2);font-size:.8rem">(${prog})</span>`;
+        if (sc) sc.textContent = p.score;
+      } else {
+        row.classList.toggle('answered', !!p.answered);
+        if (nm) nm.textContent = (p.answered?'✅':'⏳') + ' ' + p.name;
+        if (sc) sc.textContent = p.score;
+      }
+    });
+  }
+}
+
+function renderQuestion(phaseChanged) {
+  const s = S.state, q = s.question;
+  const already = S.submittedQIdx === s.qIndex || myPlayer()?.answered;
+  // 핵심: 문제 자체가 바뀔 때만 전체 재렌더. 다른 학생 상태만 바뀌면 보드만 부분 갱신
+  const qSig = 'q:' + s.qIndex + ':' + already;
+  if (!phaseChanged && qSig === S.lastQSig) { updateTimerAndBoard(); return; }
+  S.lastQSig = qSig;
+  let body = '';
+  if (q.gameMode === 1) {
+    body = `
+      <div class="num-display">${q.num}</div>
+      <div class="q-label" style="margin-top:16px">유효숫자는 몇 개?</div>
+      <div class="ans-row" style="justify-content:center">
+        <input type="number" class="ans-inp" id="ans-count" min="1" max="20" placeholder="?" ${already?'disabled':'autofocus'}>
+        <button class="btn btn-pri" onclick="submitAns()" ${already?'disabled':''}>제출</button>
+      </div>
+    `;
+  } else if (q.gameMode === 4) {
+    const opLabel = q.op === '+' ? '덧셈' : '뺄셈';
+    const kindLabel = q.kind === 'sci' ? '과학적 표기법 (예: 3.47×10³)' : '일반 표기 (예: 3.47)';
+    body = `
+      <div class="q-label">다음 ${opLabel}을 <b>유효숫자 규칙</b>에 맞게 계산하세요</div>
+      <details class="addsub-guide" ${S.guideSeen?'':'open'}>
+        <summary>📖 덧셈·뺄셈 유효숫자 규칙 (클릭)</summary>
+        <ul>
+          <li>덧셈·뺄셈 결과는 <b>소수점 아래 자릿수가 가장 적은 수</b>에 맞춰 반올림한다.</li>
+          <li>예: <code>12.34 + 5.6 = 17.94 → 17.9</code> (소수 1자리로)</li>
+          <li>과학적 표기법: 두 수의 지수를 먼저 맞추고 가수끼리 더한 뒤, 가수의 소수 자릿수에 맞춘다.</li>
+          <li>입력 형식: 일반은 <code>17.9</code>, 과학 표기는 <code>3.47×10³</code>, <code>3.47x10^3</code>, <code>3.47e3</code> 모두 OK</li>
+        </ul>
+      </details>
+      <div class="addsub-display">${q.display} = ?</div>
+      <div class="addsub-hint">형식: <b>${kindLabel}</b> — 정답 형식(소수 자릿수/유효숫자)도 함께 채점됩니다.</div>
+      <div class="ans-row" style="justify-content:center">
+        <input type="text" class="ans-inp" id="ans-addsub" placeholder="${q.kind==='sci'?'예: 3.47×10³ 또는 3.47e3':'예: 17.9'}" ${already?'disabled':'autofocus'}>
+        <button class="btn btn-pri" onclick="submitAns()" ${already?'disabled':''}>제출</button>
+      </div>
+    `;
+    S.guideSeen = true;
+  } else if (q.gameMode === 2) {
+    let digs = '<div class="digit-box">';
+    q.digs.forEach((d, i) => {
+      if (d.pt) digs += `<div class="dg pt">.</div>`;
+      else digs += `<div class="dg" data-i="${i}" onclick="togDig(this)">${d.c}</div>`;
+    });
+    digs += '</div>';
+    body = `<div class="q-label">유효숫자를 모두 클릭하세요</div>${digs}<button class="btn btn-pri btn-lg" onclick="submitAns()" ${already?'disabled':''}>제출</button>`;
+  } else {
+    const m = q.meas;
+    const cW = Math.min(460, window.innerWidth - 40), cH = m.type === 'ruler' ? 190 : 310;
+    const instName = m.type==='ruler'?'자':m.type==='cylinder'?'눈금실린더':'온도계';
+    const instRule = m.type==='ruler'?'최소눈금 1mm (0.1cm) → 0.01cm까지 어림':m.type==='cylinder'?'최소눈금 1mL → 0.1mL까지 어림':'최소눈금 1°C → 0.1°C까지 어림';
+    const example = m.type==='ruler'?'예) 3.47 cm':m.type==='cylinder'?'예) 24.5 mL':'예) 28.3 °C';
+    body = `
+      <div class="q-label">빨간 화살표/선이 가리키는 <b>측정값</b>과 <b>유효숫자 개수</b>를 입력하세요</div>
+      <details class="meas-guide" ${S.guideSeen?'':'open'}>
+        <summary>📖 측정값 읽기 규칙 (클릭하여 접기/펼치기)</summary>
+        <ul>
+          <li>측정값은 <b>최소눈금까지 정확히</b> 읽고, 그 아래 <b>한 자리를 어림</b>해서 적는다.</li>
+          <li>📏 <b>자</b>: 최소눈금 1mm (=0.1cm) → <b>0.01cm</b>까지 (예: 3.47 cm)</li>
+          <li>🧪 <b>눈금실린더</b>: 최소눈금 1mL → <b>0.1mL</b>까지 (예: 24.5 mL)</li>
+          <li>🌡 <b>온도계</b>: 최소눈금 1°C → <b>0.1°C</b>까지 (예: 28.3 °C)</li>
+          <li>유효숫자는 측정값에 적은 <b>모든 숫자의 개수</b>예요. (예: 3.47 → 3개, 24.5 → 3개)</li>
+          <li>빨간 화살표/선 위치를 자 눈금 사이에서 비율로 어림하세요.</li>
+        </ul>
+      </details>
+      <canvas id="cv" class="inst-canvas" width="${cW}" height="${cH}"></canvas>
+      <div style="color:var(--txt2);font-size:.85rem;margin-top:6px">${instName} — ${instRule} · ${example}</div>
+      <div class="ans-row"><label>측정값 (${m.unit}):</label><input type="text" class="ans-inp" id="ans-meas" placeholder="예: 3.47" ${already?'disabled':''}></div>
+      <div class="ans-row"><label>유효숫자 개수:</label><input type="number" class="ans-inp" id="ans-sf" min="1" max="20" placeholder="?" ${already?'disabled':''}></div>
+      <button class="btn btn-pri btn-lg" onclick="submitAns()" ${already?'disabled':''}>제출</button>
+    `;
+    S.guideSeen = true;
+  }
+  document.getElementById('app').innerHTML = `
+    ${renderHeader()}
+    <div class="q-view fade-in">
+      <div class="q-box">${body}</div>
+      ${already ? '<div class="fb ok">✅ 답안 제출 완료 — 다른 학생 기다리는 중...</div>' : ''}
+      <div class="live-board" id="live-board">
+        ${s.players.map(p => {
+          if (s.type === 'multi') {
+            const pp = p.pPhase || 'question';
+            const icon = pp==='done' ? '🏁' : pp==='reveal' ? '🔎' : '📘';
+            const prog = pp==='done' ? '완료' : `${(p.pIdx||0)+1}/${s.config.questionCount}`;
+            return `<div class="live-row ${pp==='done'?'answered':''} ${p.studentId===S.me.studentId?'me':''}" data-sid="${p.studentId}">
+              <span class="nm">${icon} ${p.name} <span style="color:var(--txt2);font-size:.8rem">(${prog})</span></span>
+              <span class="sc">${p.score}</span>
+            </div>`;
+          }
+          return `<div class="live-row ${p.answered?'answered':''} ${p.studentId===S.me.studentId?'me':''}" data-sid="${p.studentId}">
+            <span class="nm">${p.answered?'✅':'⏳'} ${p.name}</span>
+            <span class="sc">${p.score}</span>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>
+  `;
+  if (q.gameMode === 3 && !already) drawInst(document.getElementById('cv'), q.meas);
+  else if (q.gameMode === 3) drawInst(document.getElementById('cv'), q.meas);
+  if (!already) {
+    const first = document.querySelector('.ans-inp');
+    if (first) {
+      first.focus();
+      first.onkeydown = e => { if (e.key === 'Enter') {
+        if (q.gameMode === 3 && first.id === 'ans-meas') document.getElementById('ans-sf').focus();
+        else submitAns();
+      }};
+    }
+    const sfInp = document.getElementById('ans-sf');
+    if (sfInp) sfInp.onkeydown = e => { if (e.key === 'Enter') submitAns(); };
+  }
+}
+
+function togDig(el) { el.classList.toggle('sel'); }
+
+async function submitAns() {
+  const s = S.state, q = s.question;
+  if (S.submittedQIdx === s.qIndex) return;
+  S.submittedQIdx = s.qIndex;
+  let answer = {};
+  if (q.gameMode === 1) answer.count = document.getElementById('ans-count').value;
+  else if (q.gameMode === 2) answer.selected = Array.from(document.querySelectorAll('.dg.sel')).map(el => parseInt(el.dataset.i));
+  else if (q.gameMode === 4) answer.result = document.getElementById('ans-addsub').value;
+  else { answer.meas = document.getElementById('ans-meas').value; answer.sf = document.getElementById('ans-sf').value; }
+  const r = await api('/api/answer', { method: 'POST', body: { code: S.code, answer } });
+  if (r && r.ok && r.points) {
+    const p = myPlayer();
+    showScorePop(r.points, (p?.streak || 0) + 1);
+  }
+  poll();
+}
+
+function explainMode1(num, count, scientific) {
+  if (scientific) {
+    const mant = num.split('×')[0];
+    return `과학적 표기법 <b>${num}</b>의 유효숫자는 <b>가수(mantissa) 부분 ${mant}</b>의 숫자만 세요. <br>→ 모두 <b class="tag sig">${count}개</b> (10의 거듭제곱은 숫자의 크기만 나타내므로 <b>세지 않아요</b>)`;
+  }
+  const a = analyze(num);
+  const hasDot = num.includes('.');
+  const nd = a.digs.filter(d => !d.pt);
+  let fNZ = nd.findIndex(d => d.c !== '0');
+  let lNZ = -1;
+  for (let i = nd.length - 1; i >= 0; i--) if (nd[i].c !== '0') { lNZ = i; break; }
+  const parts = [];
+  if (fNZ > 0) parts.push(`앞쪽 0 <b>${fNZ}개</b>는 자리만 나타내므로 <b class="tag nosig">무효</b>`);
+  parts.push(`<b>${lNZ - fNZ + 1}개</b>의 숫자(첫 0이 아닌 숫자~마지막 0이 아닌 숫자)는 <b class="tag sig">유효</b>`);
+  const trailingZeros = nd.length - 1 - lNZ;
+  if (trailingZeros > 0) {
+    if (hasDot) parts.push(`뒤쪽 0 <b>${trailingZeros}개</b>는 소수점이 있으므로 <b class="tag sig">유효</b>`);
+    else parts.push(`뒤쪽 0 <b>${trailingZeros}개</b>는 소수점이 없으므로 <b class="tag nosig">무효</b>`);
+  }
+  return `<b>${num}</b>의 유효숫자: ${parts.join(' · ')}<br>→ 합계 <b class="tag sig">${count}개</b>`;
+}
+
+function colorDigsHtml(num) {
+  const a = analyze(num);
+  const nd = a.digs.filter(d => !d.pt);
+  let fNZ = -1, lNZ = -1;
+  for (let i = 0; i < nd.length; i++) if (nd[i].c !== '0') { if (fNZ<0) fNZ=i; lNZ=i; }
+  const hasDot = num.includes('.');
+  let ni = 0;
+  return '<div class="digit-box reveal-digs">' + a.digs.map(d => {
+    if (d.pt) return '<div class="dg pt">.</div>';
+    const idx = ni++;
+    let cls;
+    if (fNZ < 0) cls = 'leading';
+    else if (idx < fNZ) cls = 'leading';
+    else if (idx > lNZ) cls = hasDot ? 'trailing-d' : 'trailing-nd';
+    else if (d.c === '0') cls = 'middle';
+    else cls = 'nonzero';
+    return `<div class="dg ${cls}">${d.c}</div>`;
+  }).join('') + '</div>';
+}
+
+function renderReveal(phaseChanged) {
+  const s = S.state, q = s.question;
+  const me = myPlayer();
+  const myAns = me?.lastAnswer;
+  const sig = 'r:' + s.qIndex + ':' + s.players.map(p=>p.studentId+':'+p.score+':'+(p.lastAnswer?.ok?'1':'0')).join(',');
+  if (!phaseChanged && sig === S.lastSig) return;
+  S.lastSig = sig;
+
+  // 내 답 vs 정답 + 설명
+  let myShown = '—', correctShown = '', explanation = '';
+  if (q.gameMode === 1) {
+    correctShown = `${q.num} → ${q.count}개`;
+    if (myAns?.submitted) myShown = (myAns.submitted.count || '—') + '개';
+    explanation = explainMode1(q.num, q.count, q.scientific);
+  } else if (q.gameMode === 2) {
+    const a = analyze(q.num);
+    correctShown = `${a.count}개`;
+    const sel = new Set((myAns?.submitted?.selected) || []);
+    const mySel = a.digs.filter((d,i) => !d.pt && sel.has(i)).length;
+    myShown = `${mySel}개 선택`;
+    explanation = `${colorDigsHtml(q.num)}<div style="margin-top:8px">정답은 <b class="tag sig">${a.count}개</b>의 유효숫자. ${explainMode1(q.num, a.count, false)}</div>`;
+  } else if (q.gameMode === 4) {
+    correctShown = q.answer || '-';
+    if (myAns?.submitted) myShown = myAns.submitted.result || '—';
+    const opLbl = q.op === '+' ? '더한' : '뺀';
+    if (q.kind === 'plain') {
+      explanation = `<b>${q.display}</b>을 ${opLbl} 결과는 <b class="tag sig">${q.answer}</b>입니다.<br>덧셈·뺄셈은 <b>소수점 아래 자릿수가 가장 적은 수</b>에 맞춰 반올림해요 → 소수 ${q.dpResult}자리.`;
+    } else {
+      explanation = `<b>${q.display}</b>을 ${opLbl} 결과는 <b class="tag sig">${q.answer}</b>입니다.<br>과학적 표기법에서는 <b>지수를 맞춘 뒤</b> 가수끼리 계산하고, 가수의 소수 자릿수(${q.mantDP}자리)에 맞춰 반올림합니다.`;
+    }
+  } else {
+    const m = q.meas;
+    correctShown = `${m.dv} ${m.unit} · 유효숫자 ${m.sf}개`;
+    if (myAns?.submitted) myShown = `${myAns.submitted.meas||'—'} ${m.unit} · ${myAns.submitted.sf||'—'}개`;
+    const tolerance = m.type === 'ruler' ? '±0.03 cm' : '±0.2';
+    explanation = `📏 <b>${m.dv} ${m.unit}</b>가 정답입니다 (허용 오차 ${tolerance}). 유효숫자는 적은 모든 숫자를 세요 → <b class="tag sig">${m.sf}개</b>. 최소눈금보다 한 자리 더 어림해서 읽는 것이 핵심이에요.`;
+  }
+
+  const verdict = myAns?.ok ? `<div class="fb ok" style="max-width:640px;margin:10px auto">✅ 정답! +${myAns.points}점${myAns.classBonus?` (+학급 보너스 ${myAns.classBonus})`:''}${me?.streak>=2?` · 🔥 콤보 x${me.streak}`:''}</div>`
+    : myAns?.timeout ? `<div class="fb no" style="max-width:640px;margin:10px auto">⏰ 시간 초과</div>`
+    : myAns ? `<div class="fb no" style="max-width:640px;margin:10px auto">❌ 오답${(s.type==='battle'&&s.config.battleMode==='survival')?` · HP -1 (남은 ❤️ ${me?.hp||0})`:''}</div>`
+    : '';
+
+  const sorted = s.players.slice().sort((a,b) => b.score - a.score);
+  document.getElementById('app').innerHTML = `
+    ${renderHeader()}
+    <div class="q-view fade-in">
+      ${verdict}
+      <div class="reveal-box">
+        <div style="color:var(--txt2);margin-bottom:8px;font-size:.9rem">📌 정답 공개</div>
+        <div class="reveal-grid">
+          <div class="cell ${myAns?.ok?'ok':'no'}">
+            <div class="lab">내 답</div>
+            <div class="val">${myShown}</div>
+          </div>
+          <div class="cell ok">
+            <div class="lab">정답</div>
+            <div class="val">${correctShown}</div>
+          </div>
+        </div>
+        <div class="explain-box">${explanation}</div>
+      </div>
+      ${s.type === 'multi' && s.config.multiMode === 'team' && s.teamStats ? `
+        <h3 style="text-align:center;margin-top:20px">🛡 조별 순위</h3>
+        <div class="team-board">
+          ${s.teamStats.map((t,i) => `<div class="team-card ${i===0?'first':''}">
+            <h4>${['🥇','🥈','🥉'][i]||'🏅'} ${t.team+1}조 <span style="float:right;font-size:1.1rem">${t.score}점</span></h4>
+            <div>정답 ${t.correct}/${t.total}</div>
+            <div class="mem">${t.members.map(m => m.name+'('+m.score+')').join(' · ')}</div>
+          </div>`).join('')}
+        </div>
+      ` : ''}
+      <h3 style="text-align:center;margin-top:20px">🏆 현재 순위</h3>
+      <div class="live-board">
+        ${sorted.map((p,i) => {
+          const medal = ['🥇','🥈','🥉'][i]||'🏅';
+          const elim = p.eliminated ? '💀' : '';
+          const hp = (s.type==='battle'&&!p.eliminated) ? (' '+ '❤️'.repeat(p.hp||0)) : '';
+          const sign = p.lastAnswer?.ok?('+'+p.lastAnswer.points):'❌';
+          return `<div class="live-row ${p.studentId===S.me.studentId?'me':''}" style="border-left-color:${p.lastAnswer?.ok?'var(--sec)':'var(--err)'};${p.eliminated?'opacity:.5':''}">
+            <span class="nm">${medal} ${elim} ${p.name} ${sign}${hp}</span>
+            <span class="sc">${p.score}</span>
+          </div>`;
+        }).join('')}
+      </div>
+      <div style="text-align:center;margin-top:16px;color:var(--txt2)">${s.config.revealTime}초 후 다음 문제로...</div>
+    </div>
+  `;
+}
+
+function renderWaiting(phaseChanged) {
+  const s = S.state;
+  const qc = s.config.questionCount;
+  const sig = 'w:' + s.players.map(p => p.studentId+':'+(p.pIdx||0)+':'+(p.pPhase||'')).join(',');
+  if (!phaseChanged && sig === S.lastSig) return;
+  S.lastSig = sig;
+  const me = myPlayer();
+  const othersDoing = s.players.filter(p => (p.pPhase || 'done') !== 'done').length;
+  document.getElementById('app').innerHTML = `
+    ${renderHeader()}
+    <div class="q-view fade-in">
+      <div class="q-box" style="text-align:center">
+        <h2 style="color:var(--ok);margin:0 0 10px">🎉 문제 풀이 완료!</h2>
+        <p style="color:var(--txt2)">내 점수: <b style="color:var(--acc);font-size:1.3rem">${me?.score||0}점</b> · 정답 ${me?.correct||0}/${qc}</p>
+        <p style="color:var(--txt2);margin-top:14px">남은 ${othersDoing}명이 마치면 결과가 발표됩니다. 잠시만 기다려 주세요!</p>
+      </div>
+      <div class="live-board">
+        ${s.players.slice().sort((a,b)=>b.score-a.score).map(p => {
+          const done = (p.pPhase || 'done') === 'done';
+          const prog = done ? '✅ 완료' : `📘 ${(p.pIdx||0)+1}/${qc}`;
+          return `<div class="live-row ${done?'answered':''} ${p.studentId===S.me.studentId?'me':''}" data-sid="${p.studentId}">
+            <span class="nm">${prog} ${p.name}</span>
+            <span class="sc">${p.score}점</span>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>
+  `;
+}
+
+function renderResults(phaseChanged) {
+  const s = S.state;
+  if (!phaseChanged && S.lastSig === 'done') return;
+  S.lastSig = 'done';
+  const sorted = s.players.slice().sort((a,b) => b.score - a.score);
+  const myRank = sorted.findIndex(p => p.studentId === S.me.studentId) + 1;
+  document.getElementById('app').innerHTML = `
+    ${renderHeader()}
+    <div class="results-view fade-in">
+      <div style="font-size:4rem">🏆</div>
+      <h1>게임 종료!</h1>
+      ${myRank ? `<h2>당신의 순위: <b style="color:var(--acc)">${myRank}위</b></h2>` : ''}
+      ${sorted.map((p,i) => {
+        const em = i===0?'🥇':i===1?'🥈':i===2?'🥉':'🏅';
+        const acc = p.correct + p.wrong > 0 ? Math.round(p.correct/(p.correct+p.wrong)*100) : 0;
+        const isMe = p.studentId === S.me.studentId;
+        return `<div class="res-row ${i===0?'first':''} ${isMe?'me':''}">
+          <span class="rank">${em}</span>
+          <div class="col">
+            <div style="font-weight:700">${p.name} <span style="color:var(--txt2);font-size:.85rem">${p.studentId}</span></div>
+            <div style="color:var(--txt2);font-size:.85rem">정답 ${p.correct}개 · 정답률 ${acc}% · 최대 콤보 ${p.maxStreak}</div>
+          </div>
+          <span class="sc">${p.score}점</span>
+        </div>`;
+      }).join('')}
+      <div style="margin-top:24px">
+        <button class="btn btn-pri btn-lg" onclick="location.href='/'">🏠 로비로</button>
+        <button class="btn btn-sec btn-lg" onclick="showMyStatsInline()">📊 내 전적 보기</button>
+        <a class="btn btn-ghost btn-lg" href="/leaderboard.html">🏆 점수판 보기</a>
+      </div>
+      <div id="inline-stats" style="margin-top:20px"></div>
+    </div>
+  `;
+  clearInterval(S.pollTimer);
+}
+
+async function showMyStatsInline() {
+  const el = document.getElementById('inline-stats');
+  el.innerHTML = '<div class="empty">불러오는 중...</div>';
+  const r = await fetch('/api/student/stats?studentId=' + encodeURIComponent(S.me.studentId)).then(r=>r.json());
+  if (r.error) { el.innerHTML = `<div class="empty">${r.error}</div>`; return; }
+  const s = r.stats;
+  el.innerHTML = `
+    <div style="background:var(--bg2);padding:18px;border-radius:var(--r);margin-top:10px;text-align:left">
+      <h3 style="margin-top:0;text-align:center">📊 누적 전적</h3>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:8px">
+        <div style="text-align:center;padding:8px"><div style="color:var(--txt2);font-size:.78rem">총 게임</div><div style="font-size:1.4rem;font-weight:800">${s.totalGames}</div></div>
+        <div style="text-align:center;padding:8px"><div style="color:var(--txt2);font-size:.78rem">누적 점수</div><div style="font-size:1.4rem;font-weight:800;color:var(--sec)">${s.totalScore.toLocaleString()}</div></div>
+        <div style="text-align:center;padding:8px"><div style="color:var(--txt2);font-size:.78rem">정답률</div><div style="font-size:1.4rem;font-weight:800;color:var(--pri)">${r.accuracy}%</div></div>
+        <div style="text-align:center;padding:8px"><div style="color:var(--txt2);font-size:.78rem">⚔️ 승-패</div><div style="font-size:1.4rem;font-weight:800"><span style="color:var(--sec)">${s.battleWins}</span>-<span style="color:var(--err)">${s.battleLosses}</span></div></div>
+        <div style="text-align:center;padding:8px"><div style="color:var(--txt2);font-size:.78rem">승률</div><div style="font-size:1.4rem;font-weight:800;color:var(--acc)">${r.winRate}%</div></div>
+      </div>
+    </div>
+  `;
+}
+
+init();
+</script>
+</body>
+</html>

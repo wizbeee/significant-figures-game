@@ -1,0 +1,505 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>유효숫자 마스터 — 로비</title>
+<link rel="stylesheet" href="common.css">
+<style>
+.login-wrap{max-width:420px;margin:60px auto;text-align:center}
+.login-wrap .icon{font-size:4rem;margin-bottom:14px}
+.login-wrap input{width:100%;margin-bottom:10px;text-align:center;font-size:1.05rem}
+.mode-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:18px;margin-top:24px}
+.mode-card{text-align:center;padding:28px 20px}
+.mode-card .icon{font-size:3rem;margin-bottom:10px}
+.mode-card p{color:var(--txt2);font-size:.87rem;margin-top:6px;line-height:1.4}
+.room-list{margin-top:28px}
+.room-row{display:flex;justify-content:space-between;align-items:center;padding:14px 16px;background:var(--bg2);border:1px solid var(--bg3);border-radius:var(--r);margin-bottom:8px;transition:all .15s}
+.room-row:hover{border-color:var(--pri)}
+.room-row .info{display:flex;flex-direction:column;gap:4px}
+.room-row .title{font-weight:600}
+.room-row .meta{font-size:.82rem;color:var(--txt2)}
+.create-form{background:var(--bg2);padding:20px;border-radius:var(--r);margin-top:20px}
+.create-form .grid{grid-template-columns:repeat(auto-fit,minmax(140px,1fr));margin:10px 0}
+.create-form label{display:block;font-size:.85rem;color:var(--txt2);margin-bottom:4px}
+.create-form select{width:100%}
+.section-tab{display:flex;gap:0;border-bottom:1px solid var(--bg3);margin-top:24px}
+.section-tab button{padding:12px 24px;background:transparent;color:var(--txt2);border:none;cursor:pointer;font-weight:600;border-bottom:2px solid transparent;font-size:.95rem}
+.section-tab button.active{color:var(--pri);border-bottom-color:var(--pri)}
+.section-tab button:hover{color:var(--txt)}
+.lb-wrap{margin-top:36px}
+.lb-tabs{display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap}
+.lb-tabs button{padding:9px 18px;background:var(--bg2);color:var(--txt2);border:1px solid var(--bg3);border-radius:var(--r);cursor:pointer;font-weight:600;font-size:.88rem;transition:all .2s}
+.lb-tabs button:hover{border-color:var(--pri)}
+.lb-tabs button.active{background:linear-gradient(135deg,var(--pri),var(--pri2));color:#fff;border-color:var(--pri)}
+.lb-table-wrap{background:var(--bg2);border-radius:var(--r);overflow:hidden;border:1px solid var(--bg3)}
+.lb-table-wrap table{font-size:.88rem}
+.lb-table-wrap th{background:var(--bg3);font-size:.78rem}
+.lb-table-wrap td{padding:8px 12px}
+.lb-table-wrap tr:nth-child(1) td{background:rgba(245,158,11,.1)}
+.lb-table-wrap tr:nth-child(2) td{background:rgba(148,163,184,.08)}
+.lb-table-wrap tr:nth-child(3) td{background:rgba(205,127,50,.08)}
+.rk{font-weight:800;color:var(--acc)}
+.score-cell{font-weight:800;color:var(--acc)}
+</style>
+</head>
+<body>
+
+<!-- Login screen -->
+<div id="login" class="fade-in" style="display:none">
+  <div class="login-wrap">
+    <div class="icon">🔬</div>
+    <h1>유효숫자 마스터</h1>
+    <h2>학번과 이름을 입력하세요</h2>
+    <input id="in-sid" type="text" placeholder="학번" maxlength="10" autocomplete="off">
+    <input id="in-name" type="text" placeholder="이름" maxlength="12" autocomplete="off">
+    <button class="btn btn-pri btn-lg" style="width:100%" onclick="login()">🚀 입장</button>
+    <div id="login-err" class="err-msg"></div>
+    <div style="margin-top:24px;color:var(--txt2);font-size:.85rem">
+      <a href="/leaderboard.html">🏆 점수판 보기</a>
+    </div>
+  </div>
+</div>
+
+<!-- Lobby screen -->
+<div id="lobby" style="display:none">
+  <div class="top-nav">
+    <div class="brand">🔬 유효숫자 마스터</div>
+    <div class="nav-links">
+      <a href="#" onclick="showMyStats();return false">📊 내 전적</a>
+      <a href="/leaderboard.html">🏆 점수판</a>
+      <a href="#" onclick="refresh()">🔄 새로고침</a>
+    </div>
+    <div class="user-box">
+      <span id="me-label"></span>
+      <button class="btn btn-ghost btn-sm" onclick="logout()">로그아웃</button>
+    </div>
+  </div>
+
+  <!-- 전적 모달 -->
+  <div id="stats-modal" class="modal-back" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:500;align-items:center;justify-content:center">
+    <div class="modal" style="background:var(--bg2);border-radius:var(--r);padding:28px;max-width:640px;width:92%;max-height:88vh;overflow:auto">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+        <h2 id="stats-title" style="margin:0">📊 내 전적</h2>
+        <button class="btn btn-ghost btn-sm" onclick="closeStatsModal()">✖ 닫기</button>
+      </div>
+      <div id="stats-body"></div>
+    </div>
+  </div>
+
+  <div class="wrap">
+    <h1>🎮 게임 로비</h1>
+    <h2>혼자 연습하거나, 방을 만들어 친구와 함께 도전하세요</h2>
+
+    <div class="mode-grid">
+      <div class="card mode-card">
+        <div class="icon">🎯</div>
+        <h3>싱글 플레이</h3>
+        <p><b>혼자 차분히 연습</b><br>실력 쌓기에 최적.<br>싱글 점수판 기록.</p>
+        <button class="btn btn-pri" style="margin-top:12px" onclick="showCreate('single')">시작하기 →</button>
+      </div>
+      <div class="card mode-card">
+        <div class="icon">👥</div>
+        <h3>멀티 — 학급 협동</h3>
+        <p><b>최대 35명 함께!</b><br>🔥 전원 정답 시 <b>학급 콤보 +50점</b><br>학급 정답률·콤보 실시간 표시</p>
+        <button class="btn btn-sec" style="margin-top:12px" onclick="showCreate('multi')">협동방 만들기 →</button>
+      </div>
+      <div class="card mode-card">
+        <div class="icon">⚔️</div>
+        <h3>대전 — HP 서바이벌</h3>
+        <p><b>HP 3개로 시작!</b><br>오답/시간초과 = ❤️-1<br>HP 0 → 💀 <b>탈락</b><br>마지막 생존자 또는 최고 점수 승!</p>
+        <button class="btn btn-acc" style="margin-top:12px" onclick="showCreate('battle')">대전장 만들기 →</button>
+      </div>
+    </div>
+
+    <!-- Create room form -->
+    <div id="create-form" class="create-form fade-in" style="display:none">
+      <h3 id="create-title">방 만들기</h3>
+      <div class="grid">
+        <div><label>게임 종류</label>
+          <select id="cfg-gm" onchange="onGmChange()">
+            <option value="1">🔢 개수 세기</option>
+            <option value="2">🎯 유효숫자 찾기</option>
+            <option value="3">📏 측정값 읽기</option>
+            <option value="4">➕ 유효숫자 덧셈/뺄셈</option>
+          </select>
+        </div>
+        <div id="cfg-addsub-wrap" style="display:none"><label>덧셈/뺄셈 세부</label>
+          <select id="cfg-addsub">
+            <option value="mixed">🎲 모두 혼합</option>
+            <option value="plainOnly">🔢 일반 표기만</option>
+            <option value="sciOnly">🔬 과학적 표기만</option>
+            <option value="sameDP">📍 소수자릿수 같음</option>
+            <option value="diffDP">📍 소수자릿수 다름</option>
+            <option value="sameExp">🔬 지수 같음</option>
+            <option value="diffExp">🔬 지수 다름</option>
+          </select>
+        </div>
+        <div><label>난이도</label>
+          <select id="cfg-diff">
+            <option value="easy">쉬움</option>
+            <option value="medium" selected>보통</option>
+            <option value="hard">어려움</option>
+            <option value="mixed">혼합</option>
+          </select>
+        </div>
+        <!-- 싱글: count vs timed 선택 -->
+        <div id="cfg-single-mode-wrap" style="display:none"><label>싱글 모드</label>
+          <select id="cfg-single-mode" onchange="onSingleModeChange()">
+            <option value="count">🎯 문제 수 기반 (빨리 끝내기)</option>
+            <option value="timed">⏱ 제한시간 내 (많이 맞히기)</option>
+          </select>
+        </div>
+        <div id="cfg-qc-wrap"><label>문제 수</label>
+          <select id="cfg-qc">
+            <option value="10">10문제</option>
+            <option value="20">20문제</option>
+            <option value="30">30문제</option>
+            <option value="50">50문제</option>
+            <option value="100">100문제</option>
+          </select>
+        </div>
+        <div id="cfg-timelimit-wrap" style="display:none"><label>제한시간</label>
+          <select id="cfg-timelimit">
+            <option value="30">30초</option>
+            <option value="60" selected>1분</option>
+            <option value="120">2분</option>
+            <option value="180">3분</option>
+            <option value="300">5분</option>
+            <option value="600">10분</option>
+          </select>
+        </div>
+        <div><label>문제당 시간 <span style="color:var(--txt2);font-size:.78rem">(5~300초)</span></label>
+          <input type="number" id="cfg-qt" min="5" max="300" value="30">
+        </div>
+        <div><label>문제간 시간 <span style="color:var(--txt2);font-size:.78rem">(1~30초)</span></label>
+          <input type="number" id="cfg-rt" min="1" max="30" value="3">
+        </div>
+        <!-- 멀티 모드 -->
+        <div id="cfg-multi-mode-wrap" style="display:none"><label>멀티 방식</label>
+          <select id="cfg-multi-mode" onchange="onMultiModeChange()">
+            <option value="class">👥 학급 협동 (전원 콤보)</option>
+            <option value="team">🛡 조별 협동</option>
+            <option value="individual">👤 개인별 경쟁</option>
+          </select>
+        </div>
+        <div id="cfg-team-count-wrap" style="display:none"><label>조 수</label>
+          <select id="cfg-team-count">
+            <option value="2">2조</option>
+            <option value="3">3조</option>
+            <option value="4" selected>4조</option>
+            <option value="5">5조</option>
+            <option value="6">6조</option>
+            <option value="8">8조</option>
+          </select>
+        </div>
+        <!-- 대전 모드 -->
+        <div id="cfg-battle-mode-wrap" style="display:none"><label>대전 방식</label>
+          <select id="cfg-battle-mode" onchange="onBattleModeChange()">
+            <option value="survival">❤️ 서바이벌 (HP)</option>
+            <option value="speed">⚡ 속도전 (선착순)</option>
+          </select>
+        </div>
+        <div id="cfg-hp-wrap" style="display:none"><label>시작 HP</label>
+          <select id="cfg-hp">
+            <option value="1">❤ 1개 (원샷)</option>
+            <option value="2">❤❤ 2개</option>
+            <option value="3" selected>❤❤❤ 3개</option>
+            <option value="5">❤×5</option>
+            <option value="8">❤×8</option>
+            <option value="10">❤×10</option>
+          </select>
+        </div>
+        <div id="cfg-cap-wrap"><label>정원 <span id="cfg-cap-range" style="color:var(--txt2);font-size:.78rem"></span></label>
+          <input type="number" id="cfg-cap" min="2" max="35" value="4">
+        </div>
+        <div id="cfg-label-wrap"><label>방 이름 (선택)</label>
+          <input id="cfg-label" type="text" placeholder="예: 3반 1조" maxlength="30">
+        </div>
+      </div>
+      <div class="row" style="margin-top:14px;justify-content:flex-end">
+        <button class="btn btn-ghost" onclick="hideCreate()">취소</button>
+        <button class="btn btn-pri" onclick="createRoom()">✅ 방 만들기</button>
+      </div>
+      <div id="create-err" class="err-msg"></div>
+      <div style="margin-top:10px;color:var(--txt2);font-size:.85rem">
+        ⚠️ 방을 만들면 <b>교사 승인 대기</b> 상태가 됩니다. 교사가 승인하면 시작할 수 있어요.
+      </div>
+    </div>
+
+    <!-- Active rooms -->
+    <div class="section-tab">
+      <button class="active">🚪 활성 방 (다른 친구들)</button>
+    </div>
+    <div id="room-list" class="room-list"></div>
+
+    <!-- 점수판 -->
+    <div class="lb-wrap">
+      <h2 style="margin-bottom:12px">🏆 점수판 TOP 10</h2>
+      <div class="lb-tabs">
+        <button data-lb="single" class="active" onclick="switchLb('single')">🎯 싱글</button>
+        <button data-lb="multi" onclick="switchLb('multi')">👥 멀티</button>
+        <button data-lb="battle" onclick="switchLb('battle')">⚔️ 대전</button>
+        <a href="/leaderboard.html" class="btn btn-ghost btn-sm" style="margin-left:auto">전체 점수판 →</a>
+      </div>
+      <div id="lb-mini" class="lb-table-wrap"></div>
+    </div>
+  </div>
+</div>
+
+<script src="common.js"></script>
+<script>
+let selectedType = null;
+let pollTimer = null;
+let currentLb = 'single';
+
+function show(id) {
+  document.getElementById('login').style.display = 'none';
+  document.getElementById('lobby').style.display = 'none';
+  document.getElementById(id).style.display = 'block';
+}
+
+async function init() {
+  const token = localStorage.getItem('sigfig-token');
+  if (!token) { show('login'); return; }
+  const me = await api('/api/me');
+  if (me.error) {
+    localStorage.removeItem('sigfig-token');
+    show('login');
+    return;
+  }
+  document.getElementById('me-label').textContent = `👤 ${me.name} (${me.studentId})`;
+  // 이미 방에 있으면 자동 이동
+  if (me.currentRoom) {
+    location.href = '/room.html?code=' + me.currentRoom;
+    return;
+  }
+  show('lobby');
+  refresh();
+  loadLb();
+  pollTimer = setInterval(() => { refresh(); loadLb(); }, 3000);
+}
+
+function switchLb(t) {
+  currentLb = t;
+  document.querySelectorAll('.lb-tabs button[data-lb]').forEach(b => b.classList.toggle('active', b.dataset.lb === t));
+  loadLb();
+}
+
+const _gmLbl = { 1:'🔢', 2:'🎯', 3:'📏' };
+const _diffLbl = { easy:'쉬움', medium:'보통', hard:'어려움', mixed:'혼합' };
+async function loadLb() {
+  const r = await api('/api/leaderboard?type=' + currentLb);
+  const list = (r.entries || []).slice().sort((a,b) => b.score - a.score).slice(0, 10);
+  const el = document.getElementById('lb-mini');
+  if (!list.length) { el.innerHTML = '<div class="empty">아직 기록이 없어요</div>'; return; }
+  const extraHead = currentLb === 'battle' ? '<th>승패</th>' : '';
+  const rows = list.map((e, i) => {
+    const extra = currentLb === 'battle' ? `<td>${e.result==='win'?'<span class="badge ok">승</span>':'<span class="badge no">패</span>'}</td>` : '';
+    return `<tr>
+      <td><span class="rk">${i+1}</span></td>
+      <td><b>${e.name}</b> <span style="color:var(--txt2);font-size:.78rem">${e.studentId}</span></td>
+      <td class="score-cell">${e.score}점</td>
+      <td>${e.correct}/${e.total}</td>
+      ${extra}
+      <td>${_gmLbl[e.gameMode]||''} ${_diffLbl[e.difficulty]||''}</td>
+    </tr>`;
+  }).join('');
+  el.innerHTML = `<table><thead><tr><th>순위</th><th>이름(학번)</th><th>점수</th><th>정답</th>${extraHead}<th>게임</th></tr></thead><tbody>${rows}</tbody></table>`;
+}
+
+async function login() {
+  const studentId = document.getElementById('in-sid').value.trim();
+  const name = document.getElementById('in-name').value.trim();
+  if (!studentId || !name) { document.getElementById('login-err').textContent = '학번과 이름을 모두 입력하세요.'; return; }
+  const r = await api('/api/student/login', { method: 'POST', body: { studentId, name } });
+  if (r.error) { document.getElementById('login-err').textContent = r.error; return; }
+  localStorage.setItem('sigfig-token', r.token);
+  localStorage.setItem('sigfig-studentId', r.studentId);
+  localStorage.setItem('sigfig-name', r.name);
+  init();
+}
+
+async function showMyStats() {
+  const me = await api('/api/me');
+  if (me.error) { alert('로그인 필요'); return; }
+  showStatsForStudent(me.studentId, me.name);
+}
+async function showStatsForStudent(studentId, displayName) {
+  const m = document.getElementById('stats-modal');
+  m.style.display = 'flex';
+  document.getElementById('stats-title').textContent = `📊 ${displayName || studentId}의 전적`;
+  document.getElementById('stats-body').innerHTML = '<div class="empty">불러오는 중...</div>';
+  const r = await fetch('/api/student/stats?studentId=' + encodeURIComponent(studentId)).then(r=>r.json());
+  if (r.error) { document.getElementById('stats-body').innerHTML = `<div class="empty">${r.error}</div>`; return; }
+  const s = r.stats;
+  const gm = { 1:'🔢 개수', 2:'🎯 찾기', 3:'📏 측정', 4:'➕ 덧/뺄' };
+  const diff = { easy:'쉬움', medium:'보통', hard:'어려움', mixed:'혼합' };
+  const tpEmo = { single:'🎯', multi:'👥', battle:'⚔️' };
+  const recentRows = r.recent.length ? r.recent.map(e => {
+    const wl = e._type === 'battle' ? (e.result === 'win' ? '<span class="badge ok">승</span>' : '<span class="badge no">패</span>') : '';
+    const dt = e.at ? new Date(e.at) : null;
+    const dts = dt ? `${dt.getMonth()+1}/${dt.getDate()} ${String(dt.getHours()).padStart(2,'0')}:${String(dt.getMinutes()).padStart(2,'0')}` : '-';
+    return `<tr>
+      <td>${tpEmo[e._type]||''}</td>
+      <td><b>${e.score}점</b></td>
+      <td>${wl}</td>
+      <td>${e.correct}/${e.total}</td>
+      <td>${gm[e.gameMode]||''}</td>
+      <td>${diff[e.difficulty]||''}</td>
+      <td style="color:var(--txt2);font-size:.78rem">${dts}</td>
+    </tr>`;
+  }).join('') : '<tr><td colspan="7" style="text-align:center;color:var(--txt2);padding:16px">아직 기록이 없어요</td></tr>';
+  document.getElementById('stats-body').innerHTML = `
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:16px">
+      <div class="card" style="padding:12px;text-align:center"><div style="color:var(--txt2);font-size:.78rem">총 게임</div><div style="font-size:1.6rem;font-weight:800;color:var(--acc)">${s.totalGames}</div></div>
+      <div class="card" style="padding:12px;text-align:center"><div style="color:var(--txt2);font-size:.78rem">누적 점수</div><div style="font-size:1.6rem;font-weight:800;color:var(--sec)">${s.totalScore.toLocaleString()}</div></div>
+      <div class="card" style="padding:12px;text-align:center"><div style="color:var(--txt2);font-size:.78rem">최고 점수</div><div style="font-size:1.6rem;font-weight:800;color:var(--acc)">${s.bestScore}</div></div>
+      <div class="card" style="padding:12px;text-align:center"><div style="color:var(--txt2);font-size:.78rem">정답률</div><div style="font-size:1.6rem;font-weight:800;color:var(--pri)">${r.accuracy}%</div></div>
+      <div class="card" style="padding:12px;text-align:center"><div style="color:var(--txt2);font-size:.78rem">최대 콤보</div><div style="font-size:1.6rem;font-weight:800">${s.maxStreak}</div></div>
+    </div>
+    <h3 style="margin:14px 0 8px">⚔️ 대전 전적</h3>
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:16px">
+      <div class="card" style="padding:10px;text-align:center"><div style="color:var(--txt2);font-size:.78rem">대전 수</div><div style="font-size:1.3rem;font-weight:800">${s.battleGames}</div></div>
+      <div class="card" style="padding:10px;text-align:center;border:1px solid var(--sec)"><div style="color:var(--txt2);font-size:.78rem">승</div><div style="font-size:1.3rem;font-weight:800;color:var(--sec)">${s.battleWins}</div></div>
+      <div class="card" style="padding:10px;text-align:center;border:1px solid var(--err)"><div style="color:var(--txt2);font-size:.78rem">패</div><div style="font-size:1.3rem;font-weight:800;color:var(--err)">${s.battleLosses}</div></div>
+      <div class="card" style="padding:10px;text-align:center;border:1px solid var(--acc)"><div style="color:var(--txt2);font-size:.78rem">승률</div><div style="font-size:1.3rem;font-weight:800;color:var(--acc)">${r.winRate}%</div></div>
+    </div>
+    <h3 style="margin:14px 0 8px">🎮 모드별 플레이</h3>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:16px">
+      <div class="card" style="padding:10px;text-align:center"><div style="color:var(--txt2);font-size:.78rem">🎯 싱글</div><div style="font-size:1.3rem;font-weight:800">${s.singleGames}</div></div>
+      <div class="card" style="padding:10px;text-align:center"><div style="color:var(--txt2);font-size:.78rem">👥 멀티</div><div style="font-size:1.3rem;font-weight:800">${s.multiGames}</div></div>
+      <div class="card" style="padding:10px;text-align:center"><div style="color:var(--txt2);font-size:.78rem">⚔️ 대전</div><div style="font-size:1.3rem;font-weight:800">${s.battleGames}</div></div>
+    </div>
+    <h3 style="margin:14px 0 8px">📜 최근 기록 (최대 10개)</h3>
+    <div style="background:var(--bg);border-radius:8px;overflow:hidden">
+      <table style="width:100%;font-size:.86rem"><thead><tr><th>모드</th><th>점수</th><th>승패</th><th>정답</th><th>게임</th><th>난이도</th><th>일시</th></tr></thead><tbody>${recentRows}</tbody></table>
+    </div>
+  `;
+}
+function closeStatsModal() { document.getElementById('stats-modal').style.display = 'none'; }
+
+async function logout() {
+  await api('/api/student/logout', { method: 'POST' });
+  localStorage.removeItem('sigfig-token');
+  location.reload();
+}
+
+async function refresh() {
+  const r = await api('/api/rooms');
+  if (r.error) return;
+  const listEl = document.getElementById('room-list');
+  if (!r.rooms.length) {
+    listEl.innerHTML = '<div class="empty">아직 열린 방이 없어요. 위에서 방을 만들어보세요!</div>';
+    return;
+  }
+  const typeEmoji = { single:'🎯', multi:'👥', battle:'⚔️' };
+  const gmLabel = { 1:'개수 세기', 2:'유효숫자 찾기', 3:'측정값 읽기' };
+  const diffLabel = { easy:'쉬움', medium:'보통', hard:'어려움', mixed:'혼합' };
+  const phaseLabel = { lobby:'대기 중', question:'진행 중', reveal:'진행 중', results:'종료' };
+  listEl.innerHTML = r.rooms.map(rm => {
+    const canJoin = rm.phase === 'lobby' && rm.playerCount < rm.capacity;
+    return `<div class="room-row">
+      <div class="info">
+        <div class="title">${typeEmoji[rm.type]||''} ${rm.label || '방 #' + rm.code} <span class="badge pri">${rm.code}</span> ${rm.approved ? '' : '<span class="badge acc">⏳ 승인대기</span>'}</div>
+        <div class="meta">${gmLabel[rm.gameMode]} · ${diffLabel[rm.difficulty]} · ${rm.questionCount}문제 · 방장: ${rm.ownerName||'-'} · ${rm.playerCount}/${rm.capacity}명 · ${phaseLabel[rm.phase]||rm.phase}</div>
+      </div>
+      <div>
+        <button class="btn ${canJoin?'btn-pri':'btn-ghost'} btn-sm" ${canJoin?'':'disabled'} onclick="joinRoom('${rm.code}')">${canJoin?'참여하기':'입장 불가'}</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function showCreate(type) {
+  selectedType = type;
+  const titles = { single: '🎯 싱글 플레이 설정', multi: '👥 멀티 플레이 방 만들기', battle: '⚔️ 대전장 만들기' };
+  document.getElementById('create-title').textContent = titles[type];
+  document.getElementById('create-form').style.display = 'block';
+  document.getElementById('cfg-cap-wrap').style.display = type === 'single' ? 'none' : 'block';
+  document.getElementById('cfg-label-wrap').style.display = type === 'single' ? 'none' : 'block';
+  // 타입별 옵션 토글
+  document.getElementById('cfg-single-mode-wrap').style.display = type === 'single' ? 'block' : 'none';
+  document.getElementById('cfg-multi-mode-wrap').style.display = type === 'multi' ? 'block' : 'none';
+  document.getElementById('cfg-battle-mode-wrap').style.display = type === 'battle' ? 'block' : 'none';
+  onSingleModeChange();
+  onMultiModeChange();
+  onBattleModeChange();
+  const capInput = document.getElementById('cfg-cap');
+  const capRange = document.getElementById('cfg-cap-range');
+  if (type === 'battle') {
+    capInput.min = 2; capInput.max = 10; capInput.value = 6;
+    capRange.textContent = '(2~10명)';
+  } else if (type === 'multi') {
+    capInput.min = 2; capInput.max = 35; capInput.value = 10;
+    capRange.textContent = '(2~35명)';
+  }
+  document.getElementById('create-form').scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+function onGmChange() {
+  const gm = document.getElementById('cfg-gm').value;
+  document.getElementById('cfg-addsub-wrap').style.display = gm === '4' ? 'block' : 'none';
+}
+function onSingleModeChange() {
+  if (selectedType !== 'single') {
+    document.getElementById('cfg-qc-wrap').style.display = 'block';
+    document.getElementById('cfg-timelimit-wrap').style.display = 'none';
+    return;
+  }
+  const m = document.getElementById('cfg-single-mode').value;
+  document.getElementById('cfg-qc-wrap').style.display = m === 'count' ? 'block' : 'none';
+  document.getElementById('cfg-timelimit-wrap').style.display = m === 'timed' ? 'block' : 'none';
+}
+function onMultiModeChange() {
+  const m = document.getElementById('cfg-multi-mode').value;
+  document.getElementById('cfg-team-count-wrap').style.display = (selectedType === 'multi' && m === 'team') ? 'block' : 'none';
+}
+function onBattleModeChange() {
+  const m = document.getElementById('cfg-battle-mode').value;
+  document.getElementById('cfg-hp-wrap').style.display = (selectedType === 'battle' && m === 'survival') ? 'block' : 'none';
+}
+function hideCreate() {
+  document.getElementById('create-form').style.display = 'none';
+  selectedType = null;
+}
+async function createRoom() {
+  if (!selectedType) return;
+  const qc = parseInt(document.getElementById('cfg-qc').value);
+  const qt = parseInt(document.getElementById('cfg-qt').value);
+  const rt = parseInt(document.getElementById('cfg-rt').value);
+  if (!(qc >= 1 && qc <= 100)) { document.getElementById('create-err').textContent = '문제 수는 1~100 사이여야 합니다.'; return; }
+  if (!(qt >= 5 && qt <= 300)) { document.getElementById('create-err').textContent = '문제당 시간은 5~300초 사이여야 합니다.'; return; }
+  if (!(rt >= 1 && rt <= 30)) { document.getElementById('create-err').textContent = '문제간 시간은 1~30초 사이여야 합니다.'; return; }
+  const config = {
+    gameMode: parseInt(document.getElementById('cfg-gm').value),
+    difficulty: document.getElementById('cfg-diff').value,
+    questionCount: qc,
+    questionTime: qt,
+    revealTime: rt,
+    capacity: parseInt(document.getElementById('cfg-cap').value),
+    label: document.getElementById('cfg-label').value.trim(),
+    addSubMode: document.getElementById('cfg-addsub').value,
+    singleMode: document.getElementById('cfg-single-mode').value,
+    timeLimit: parseInt(document.getElementById('cfg-timelimit').value),
+    multiMode: document.getElementById('cfg-multi-mode').value,
+    teamCount: parseInt(document.getElementById('cfg-team-count').value),
+    battleMode: document.getElementById('cfg-battle-mode').value,
+    hpStart: parseInt(document.getElementById('cfg-hp').value),
+  };
+  const r = await api('/api/room', { method: 'POST', body: { type: selectedType, config } });
+  if (r.error) { document.getElementById('create-err').textContent = r.error; return; }
+  location.href = '/room.html?code=' + r.code;
+}
+async function joinRoom(code) {
+  const r = await api('/api/room/join', { method: 'POST', body: { code } });
+  if (r.error) { alert(r.error); return; }
+  location.href = '/room.html?code=' + code;
+}
+
+document.getElementById('in-sid').addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('in-name').focus(); });
+document.getElementById('in-name').addEventListener('keydown', e => { if (e.key === 'Enter') login(); });
+
+init();
+</script>
+</body>
+</html>
