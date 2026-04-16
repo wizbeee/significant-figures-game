@@ -1,0 +1,1797 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>분석 - 퍼스널 컬러 분석 서비스</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/qrious@4.0.2/dist/qrious.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.2/html2pdf.bundle.min.js"></script>
+  <link href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css" rel="stylesheet">
+  <style>
+    * { font-family: 'Pretendard Variable', 'Pretendard', -apple-system, sans-serif; }
+    body { background: #0a0a0f; color: #e4e4e7; overflow-x: hidden; }
+
+    .mesh-gradient {
+      position: fixed; inset: 0; z-index: 0;
+      background:
+        radial-gradient(ellipse at 15% 15%, rgba(88, 28, 135, 0.2) 0%, transparent 50%),
+        radial-gradient(ellipse at 85% 85%, rgba(15, 23, 42, 0.6) 0%, transparent 50%),
+        radial-gradient(ellipse at 50% 50%, rgba(30, 58, 138, 0.1) 0%, transparent 40%),
+        #0a0a0f;
+    }
+
+    .orb { position: fixed; border-radius: 50%; filter: blur(100px); opacity: 0.2; pointer-events: none; z-index: 0; animation: orbFloat 25s ease-in-out infinite; }
+    .orb-1 { width: 500px; height: 500px; background: #7c3aed; top: -150px; right: -150px; }
+    .orb-2 { width: 400px; height: 400px; background: #1e40af; bottom: -100px; left: -100px; animation-delay: -8s; }
+    .orb-3 { width: 250px; height: 250px; background: #db2777; top: 40%; left: 30%; animation-delay: -16s; }
+    @keyframes orbFloat { 0%,100% { transform: translate(0,0) scale(1); } 33% { transform: translate(40px,-40px) scale(1.05); } 66% { transform: translate(-30px,30px) scale(0.95); } }
+
+    .glass { background: rgba(255,255,255,0.04); backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px); border: 1px solid rgba(255,255,255,0.08); }
+    .glass-card { background: rgba(255,255,255,0.04); backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px); border: 1px solid rgba(255,255,255,0.08); border-radius: 24px; }
+
+    @keyframes fadeInUp { from { opacity: 0; transform: translateY(40px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    @keyframes scaleIn { from { opacity: 0; transform: scale(0.9); } to { opacity: 1; transform: scale(1); } }
+    .anim-in { animation: fadeInUp 0.7s ease-out forwards; }
+    .anim-fade { animation: fadeIn 0.5s ease-out forwards; }
+    .anim-scale { animation: scaleIn 0.5s ease-out forwards; }
+
+    .section { display: none !important; }
+    .section.active { display: flex !important; flex-direction: column; }
+    .section.active.block-section { display: block !important; }
+
+    /* QR Code container */
+    #qrCanvas { border-radius: 16px; }
+
+    /* Progress bar */
+    .progress-track { height: 4px; background: rgba(255,255,255,0.06); border-radius: 4px; overflow: hidden; }
+    .progress-fill { height: 100%; border-radius: 4px; transition: width 0.8s ease; }
+
+    /* Color swatch */
+    .swatch {
+      border-radius: 10px; border: 2px solid rgba(255,255,255,0.1);
+      cursor: pointer; transition: all 0.25s cubic-bezier(0.4,0,0.2,1);
+      position: relative;
+    }
+    .swatch:hover { transform: scale(1.2); z-index: 10; }
+    .swatch-tooltip {
+      position: absolute; bottom: calc(100% + 8px); left: 50%; transform: translateX(-50%);
+      background: rgba(0,0,0,0.9); color: white; padding: 4px 10px; border-radius: 8px;
+      font-size: 11px; white-space: nowrap; opacity: 0; pointer-events: none;
+      transition: opacity 0.2s;
+    }
+    .swatch:hover .swatch-tooltip { opacity: 1; }
+
+    /* Season badge */
+    .season-badge {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 8px 20px; border-radius: 100px;
+      font-size: 14px; font-weight: 500;
+    }
+
+    /* Overlay canvas */
+    .overlay-canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; }
+
+    /* Image container */
+    .img-container { position: relative; border-radius: 16px; overflow: hidden; background: #111; }
+    .img-container img { width: 100%; height: 100%; object-fit: cover; }
+
+    /* Makeup tip card */
+    .tip-card {
+      background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06);
+      border-radius: 16px; padding: 20px; transition: all 0.3s;
+    }
+    .tip-card:hover { background: rgba(255,255,255,0.06); border-color: rgba(255,255,255,0.12); }
+
+    /* Styling card */
+    .style-tag {
+      display: inline-block; padding: 4px 12px; border-radius: 8px;
+      font-size: 12px; margin: 2px; background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.08);
+    }
+    .style-tag.good { background: rgba(52,211,153,0.08); border-color: rgba(52,211,153,0.2); color: #6ee7b7; }
+    .style-tag.bad { background: rgba(248,113,113,0.08); border-color: rgba(248,113,113,0.2); color: #fca5a5; }
+
+    .scroll-smooth { scroll-behavior: smooth; }
+  </style>
+</head>
+<body class="scroll-smooth">
+  <div class="mesh-gradient"></div>
+  <div class="orb orb-1"></div>
+  <div class="orb orb-2"></div>
+  <div class="orb orb-3"></div>
+
+  <div class="relative z-10 min-h-screen">
+
+    <!-- ====== Section 1: Waiting / QR ====== -->
+    <div id="waitingSection" class="section active min-h-screen flex flex-col items-center justify-center px-4">
+      <div class="text-center anim-in">
+        <h1 class="text-4xl md:text-5xl font-light tracking-tight mb-4">
+          <span class="bg-gradient-to-r from-violet-400 to-blue-400 bg-clip-text text-transparent">퍼스널 컬러</span>
+          <span class="text-white/80"> 분석</span>
+        </h1>
+        <p class="text-zinc-500 text-sm mb-12">폰과 연결하여 분석을 시작합니다</p>
+
+        <!-- QR Code Area -->
+        <div id="qrArea" class="glass-card p-8 inline-block mb-6">
+          <div id="qrLoading" class="w-48 h-48 flex items-center justify-center">
+            <div class="w-8 h-8 border-2 border-violet-500 border-t-transparent rounded-full animate-spin"></div>
+          </div>
+          <canvas id="qrCanvas" class="hidden"></canvas>
+        </div>
+
+        <div id="sessionInfo" class="hidden">
+          <p class="text-zinc-400 text-sm mb-2">세션 코드</p>
+          <p id="sessionCodeDisplay" class="text-3xl font-light tracking-[0.5em] text-white mb-4"></p>
+          <p class="text-zinc-600 text-xs">폰으로 QR 코드를 스캔하거나 코드를 입력하세요</p>
+        </div>
+
+        <!-- Phone Connected -->
+        <div id="phoneStatus" class="hidden mt-8">
+          <div class="inline-flex items-center gap-3 glass rounded-full px-6 py-3">
+            <div class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"></div>
+            <span class="text-emerald-300 text-sm">폰이 연결되었습니다 — 사진을 촬영해 주세요</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Model loading status -->
+      <div id="modelStatus" class="fixed bottom-6 left-6 right-6 md:left-auto md:right-6 md:w-80">
+        <div class="glass rounded-2xl p-4">
+          <p class="text-xs text-zinc-500 mb-2">AI 모델 로딩</p>
+          <div class="space-y-2">
+            <div class="flex items-center justify-between">
+              <span class="text-xs text-zinc-400">FaceLandmarker</span>
+              <span id="faceModelStatus" class="text-xs text-zinc-600">대기 중</span>
+            </div>
+            <div class="progress-track"><div id="faceModelProgress" class="progress-fill bg-violet-500" style="width:0%"></div></div>
+            <div class="flex items-center justify-between">
+              <span class="text-xs text-zinc-400">PoseLandmarker</span>
+              <span id="poseModelStatus" class="text-xs text-zinc-600">대기 중</span>
+            </div>
+            <div class="progress-track"><div id="poseModelProgress" class="progress-fill bg-blue-500" style="width:0%"></div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ====== Section 2: Analyzing ====== -->
+    <div id="analyzingSection" class="section min-h-screen flex flex-col items-center justify-center px-4">
+      <div class="text-center">
+        <div class="w-20 h-20 rounded-3xl bg-gradient-to-br from-violet-500/20 to-pink-500/20 border border-white/10 flex items-center justify-center mx-auto mb-8">
+          <div class="w-10 h-10 border-2 border-violet-400 border-t-transparent rounded-full animate-spin"></div>
+        </div>
+        <h2 class="text-2xl font-light text-white mb-3">분석 중...</h2>
+        <p id="analyzingStatus" class="text-zinc-500 text-sm">사진을 분석하고 있습니다</p>
+        <div class="mt-8 w-64 mx-auto">
+          <div class="progress-track">
+            <div id="analysisProgress" class="progress-fill bg-gradient-to-r from-violet-500 to-pink-500" style="width:0%"></div>
+          </div>
+        </div>
+        <!-- Thumbnails -->
+        <div class="flex gap-4 justify-center mt-10">
+          <div class="img-container w-32 h-40">
+            <img id="thumbFace" class="hidden">
+            <div id="thumbFacePlaceholder" class="w-full h-full flex items-center justify-center text-zinc-700">
+              <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+            </div>
+          </div>
+          <div class="img-container w-32 h-40">
+            <img id="thumbBody" class="hidden">
+            <div id="thumbBodyPlaceholder" class="w-full h-full flex items-center justify-center text-zinc-700">
+              <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ====== Section 3: Results — Professional Report ====== -->
+    <div id="resultsSection" class="section block-section">
+
+      <!-- Report Cover -->
+      <div class="pt-16 pb-12 px-4 md:px-8 text-center border-b border-white/5">
+        <div class="inline-flex items-center gap-2 glass rounded-full px-5 py-2 mb-6">
+          <div class="w-2 h-2 rounded-full bg-emerald-400"></div>
+          <span class="text-xs text-zinc-400 tracking-wider uppercase">Analysis Complete</span>
+        </div>
+        <h1 class="text-4xl md:text-5xl font-extralight text-white mb-3 tracking-tight">
+          스타일 분석 리포트
+        </h1>
+        <p class="text-zinc-500 text-sm mb-6">AI 기반 퍼스널 이미지 컨설팅 보고서</p>
+        <div class="flex items-center justify-center gap-6 text-xs text-zinc-600">
+          <span id="reportDate"></span>
+          <span class="w-1 h-1 rounded-full bg-zinc-700"></span>
+          <span>MediaPipe Vision AI</span>
+          <span class="w-1 h-1 rounded-full bg-zinc-700"></span>
+          <span id="reportItems">--</span>
+        </div>
+      </div>
+
+      <!-- Report Summary Banner -->
+      <div id="summaryBanner" class="max-w-5xl mx-auto px-4 md:px-8 -mt-1">
+        <div class="glass-card p-6 md:p-8 mt-8">
+          <div class="flex items-center gap-2 mb-5">
+            <div class="w-1 h-4 rounded-full bg-gradient-to-b from-violet-400 to-pink-400"></div>
+            <h2 class="text-sm font-medium text-zinc-300 tracking-wide">EXECUTIVE SUMMARY</h2>
+          </div>
+          <div id="summaryContent" class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <!-- Filled by JS -->
+          </div>
+        </div>
+      </div>
+
+      <div class="max-w-5xl mx-auto px-4 md:px-8 pb-20 space-y-10 mt-10">
+
+        <!-- ===== CHAPTER 1: Face Shape ===== -->
+        <div id="faceResultCard" class="hidden">
+          <div class="flex items-center gap-3 mb-6">
+            <div class="flex items-center gap-2">
+              <span class="text-xs text-violet-500 font-medium tracking-widest uppercase">Chapter 01</span>
+              <div class="w-12 h-px bg-violet-500/30"></div>
+            </div>
+          </div>
+          <div class="glass-card overflow-hidden">
+            <!-- Header -->
+            <div class="p-6 md:p-8 border-b border-white/5">
+              <div class="flex items-center justify-between">
+                <div class="flex items-center gap-3">
+                  <span class="text-2xl" id="faceEmoji">🥚</span>
+                  <div>
+                    <h3 class="text-xl font-light text-white">얼굴형 분석</h3>
+                    <p class="text-xs text-zinc-600 mt-0.5">Face Shape Analysis · 478 Landmark Points</p>
+                  </div>
+                </div>
+                <span id="faceConfidence" class="text-xs text-zinc-500 glass rounded-full px-4 py-1.5">신뢰도 --</span>
+              </div>
+            </div>
+
+            <!-- Result Title -->
+            <div class="p-6 md:p-8 bg-gradient-to-r from-violet-500/5 to-transparent border-b border-white/5">
+              <p class="text-zinc-500 text-xs mb-1">분석 결과</p>
+              <div class="flex items-baseline gap-3">
+                <span id="faceShapeName" class="text-3xl font-light text-white">--</span>
+                <span class="text-zinc-600 text-sm">얼굴형</span>
+              </div>
+              <p id="faceShapeDesc" class="text-zinc-500 text-sm mt-2"></p>
+            </div>
+
+            <!-- Content -->
+            <div class="grid md:grid-cols-5 gap-0">
+              <!-- Left: Image -->
+              <div class="md:col-span-2 p-6 md:p-8 border-r border-white/5">
+                <div class="img-container aspect-[3/4]">
+                  <img id="faceResultImg" class="w-full h-full object-cover">
+                  <canvas id="faceLandmarkCanvas" class="overlay-canvas"></canvas>
+                </div>
+                <p class="text-zinc-700 text-[10px] mt-3 text-center">478개 랜드마크 기반 얼굴 윤곽 분석</p>
+              </div>
+
+              <!-- Right: Makeup Tips -->
+              <div class="md:col-span-3 p-6 md:p-8">
+                <div class="flex items-center gap-2 mb-5">
+                  <div class="w-1 h-4 rounded-full bg-violet-400"></div>
+                  <h4 class="text-sm font-medium text-zinc-300">맞춤 메이크업 가이드</h4>
+                </div>
+                <div id="faceMakeupTips" class="space-y-4">
+                  <!-- Filled by JS -->
+                </div>
+              </div>
+            </div>
+
+            <!-- Extra sections: Hair, Glasses, Accessories, Celebrities -->
+            <div class="border-t border-white/5 p-6 md:p-8">
+              <!-- Pro Styling Tip -->
+              <div id="faceStylingTip" class="mb-6 hidden">
+                <div class="glass rounded-2xl p-5 border-l-2 border-violet-500/50">
+                  <p class="text-violet-400 text-xs font-medium mb-2 flex items-center gap-1.5">💡 프로 스타일링 팁</p>
+                  <p id="faceStylingTipText" class="text-zinc-300 text-sm leading-relaxed"></p>
+                </div>
+              </div>
+
+              <div class="grid md:grid-cols-2 gap-4 mb-4">
+                <!-- Hair Style -->
+                <div id="faceHairSection" class="tip-card hidden">
+                  <p class="text-amber-400 text-xs font-medium mb-3 flex items-center gap-1.5">
+                    <span class="w-2 h-2 rounded-full bg-amber-400"></span> 추천 헤어스타일
+                  </p>
+                  <p id="faceHairDesc" class="text-zinc-400 text-xs mb-2"></p>
+                  <div id="faceHairRecommended" class="flex flex-wrap gap-1 mb-2"></div>
+                  <p class="text-red-400/60 text-[10px] mt-2 mb-1">피해야 할 스타일</p>
+                  <div id="faceHairAvoid" class="flex flex-wrap gap-1"></div>
+                </div>
+                <!-- Glasses -->
+                <div id="faceGlassesSection" class="tip-card hidden">
+                  <p class="text-cyan-400 text-xs font-medium mb-3 flex items-center gap-1.5">
+                    <span class="w-2 h-2 rounded-full bg-cyan-400"></span> 안경 프레임 추천
+                  </p>
+                  <div id="faceGlassesRecommended" class="flex flex-wrap gap-1 mb-2"></div>
+                  <p class="text-red-400/60 text-[10px] mt-2 mb-1">피해야 할 프레임</p>
+                  <div id="faceGlassesAvoid" class="flex flex-wrap gap-1"></div>
+                </div>
+              </div>
+
+              <div class="grid md:grid-cols-2 gap-4">
+                <!-- Accessories -->
+                <div id="faceAccessoriesSection" class="tip-card hidden">
+                  <p class="text-pink-400 text-xs font-medium mb-3 flex items-center gap-1.5">
+                    <span class="w-2 h-2 rounded-full bg-pink-400"></span> 액세서리 추천
+                  </p>
+                  <div id="faceAccessoriesTips" class="space-y-1"></div>
+                </div>
+                <!-- Celebrities -->
+                <div id="faceCelebritiesSection" class="tip-card hidden">
+                  <p class="text-emerald-400 text-xs font-medium mb-3 flex items-center gap-1.5">
+                    <span class="w-2 h-2 rounded-full bg-emerald-400"></span> 같은 얼굴형 셀럽
+                  </p>
+                  <div id="faceCelebrities" class="flex flex-wrap gap-1.5"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ===== CHAPTER 2: Personal Color ===== -->
+        <div id="colorResultCard" class="hidden">
+          <div class="flex items-center gap-3 mb-6">
+            <div class="flex items-center gap-2">
+              <span id="colorChapterNum" class="text-xs text-pink-500 font-medium tracking-widest uppercase">Chapter 02</span>
+              <div class="w-12 h-px bg-pink-500/30"></div>
+            </div>
+          </div>
+          <div class="glass-card overflow-hidden">
+            <!-- Header -->
+            <div class="p-6 md:p-8 border-b border-white/5">
+              <div class="flex items-center justify-between w-full">
+                <div class="flex items-center gap-3">
+                  <span class="text-2xl" id="colorEmoji">🎨</span>
+                  <div>
+                    <h3 class="text-xl font-light text-white">퍼스널 컬러 진단</h3>
+                    <p class="text-xs text-zinc-600 mt-0.5">Personal Color Diagnosis · LAB Color Space Analysis</p>
+                  </div>
+                </div>
+                <span id="colorConfidence" class="text-xs text-zinc-500 glass rounded-full px-4 py-1.5">신뢰도 --</span>
+              </div>
+            </div>
+
+            <!-- Season Badge -->
+            <div class="p-8 md:p-10 text-center border-b border-white/5 bg-gradient-to-b from-white/[0.02] to-transparent">
+              <p class="text-zinc-600 text-xs mb-3 tracking-wider uppercase">Your Season Type</p>
+              <div id="seasonBadge" class="season-badge inline-flex mx-auto mb-4" style="background: rgba(124,58,237,0.15); color: #a78bfa;">
+                <span id="seasonEmoji">✨</span>
+                <span id="seasonFullName" class="text-lg">--</span>
+              </div>
+              <p id="seasonDescription" class="text-zinc-400 text-sm max-w-lg mx-auto leading-relaxed">--</p>
+            </div>
+
+            <!-- Color Palette -->
+            <div class="p-6 md:p-8 border-b border-white/5">
+              <div class="flex items-center gap-2 mb-4">
+                <div class="w-1 h-4 rounded-full bg-pink-400"></div>
+                <h4 class="text-sm font-medium text-zinc-300">베스트 컬러 팔레트</h4>
+              </div>
+              <div id="colorPalette" class="flex flex-wrap gap-2 justify-center mb-6">
+                <!-- Filled by JS -->
+              </div>
+              <div class="grid md:grid-cols-2 gap-4">
+                <div class="tip-card">
+                  <p class="text-emerald-400 text-xs font-medium mb-2 flex items-center gap-1.5">
+                    <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg>
+                    BEST 컬러
+                  </p>
+                  <div id="bestColors" class="flex flex-wrap gap-1"></div>
+                </div>
+                <div class="tip-card">
+                  <p class="text-red-400 text-xs font-medium mb-2 flex items-center gap-1.5">
+                    <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"/></svg>
+                    WORST 컬러
+                  </p>
+                  <div id="worstColors" class="flex flex-wrap gap-1"></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Makeup Recommendation -->
+            <div class="p-6 md:p-8 border-b border-white/5">
+              <div class="flex items-center gap-2 mb-5">
+                <div class="w-1 h-4 rounded-full bg-pink-400"></div>
+                <h4 class="text-sm font-medium text-zinc-300">메이크업 컬러 추천</h4>
+              </div>
+              <div class="grid md:grid-cols-3 gap-4">
+                <div class="tip-card">
+                  <p class="text-pink-400 text-xs font-medium mb-3 flex items-center gap-1.5">
+                    <span class="w-2 h-2 rounded-full bg-pink-400"></span> 립
+                  </p>
+                  <div id="lipColors" class="space-y-1.5"></div>
+                </div>
+                <div class="tip-card">
+                  <p class="text-violet-400 text-xs font-medium mb-3 flex items-center gap-1.5">
+                    <span class="w-2 h-2 rounded-full bg-violet-400"></span> 아이섀도
+                  </p>
+                  <div id="eyeColors" class="space-y-1.5"></div>
+                </div>
+                <div class="tip-card">
+                  <p class="text-orange-400 text-xs font-medium mb-3 flex items-center gap-1.5">
+                    <span class="w-2 h-2 rounded-full bg-orange-400"></span> 블러셔
+                  </p>
+                  <div id="blushColors" class="space-y-1.5"></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Hair & Jewelry & Fashion -->
+            <div class="p-6 md:p-8 border-b border-white/5">
+              <div class="flex items-center gap-2 mb-5">
+                <div class="w-1 h-4 rounded-full bg-pink-400"></div>
+                <h4 class="text-sm font-medium text-zinc-300">스타일링 추천</h4>
+              </div>
+              <div class="grid md:grid-cols-3 gap-4 mb-6">
+                <div class="tip-card">
+                  <p class="text-amber-400 text-xs font-medium mb-2">추천 헤어 컬러</p>
+                  <div id="hairColors" class="space-y-1.5"></div>
+                </div>
+                <div class="tip-card">
+                  <p class="text-cyan-400 text-xs font-medium mb-2">주얼리</p>
+                  <p id="jewelryRec" class="text-zinc-300 text-sm">--</p>
+                </div>
+                <div id="nailSection" class="tip-card hidden">
+                  <p class="text-rose-400 text-xs font-medium mb-2">추천 네일 컬러</p>
+                  <div id="nailColors" class="space-y-1.5"></div>
+                </div>
+              </div>
+              <div class="tip-card">
+                <p class="text-zinc-400 text-xs font-medium mb-3">패션 스타일링 팁</p>
+                <div id="fashionTips" class="space-y-2"></div>
+              </div>
+            </div>
+
+            <!-- Occasion Styling -->
+            <div id="colorOccasionSection" class="p-6 md:p-8 border-b border-white/5 hidden">
+              <div class="flex items-center gap-2 mb-5">
+                <div class="w-1 h-4 rounded-full bg-pink-400"></div>
+                <h4 class="text-sm font-medium text-zinc-300">상황별 컬러 코디</h4>
+              </div>
+              <div class="grid md:grid-cols-2 gap-4">
+                <div class="tip-card">
+                  <p class="text-blue-400 text-xs font-medium mb-2 flex items-center gap-1.5">💼 오피스 / 직장</p>
+                  <div id="colorOccWork" class="space-y-1"></div>
+                </div>
+                <div class="tip-card">
+                  <p class="text-pink-400 text-xs font-medium mb-2 flex items-center gap-1.5">💕 데이트</p>
+                  <div id="colorOccDate" class="space-y-1"></div>
+                </div>
+                <div class="tip-card">
+                  <p class="text-green-400 text-xs font-medium mb-2 flex items-center gap-1.5">🌿 일상 / 캐주얼</p>
+                  <div id="colorOccCasual" class="space-y-1"></div>
+                </div>
+                <div class="tip-card">
+                  <p class="text-amber-400 text-xs font-medium mb-2 flex items-center gap-1.5">✨ 행사 / 포멀</p>
+                  <div id="colorOccFormal" class="space-y-1"></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Color Combos, Skincare, Celebrities -->
+            <div class="p-6 md:p-8">
+              <div class="grid md:grid-cols-2 gap-4 mb-4">
+                <div id="colorCombosSection" class="tip-card hidden">
+                  <p class="text-violet-400 text-xs font-medium mb-3 flex items-center gap-1.5">
+                    <span class="w-2 h-2 rounded-full bg-violet-400"></span> 추천 컬러 조합
+                  </p>
+                  <div id="colorCombos" class="space-y-1.5"></div>
+                </div>
+                <div id="skincareSection" class="tip-card hidden">
+                  <p class="text-emerald-400 text-xs font-medium mb-3 flex items-center gap-1.5">
+                    <span class="w-2 h-2 rounded-full bg-emerald-400"></span> 베이스 메이크업 / 스킨케어
+                  </p>
+                  <p id="skincareTone" class="text-zinc-400 text-xs mb-2"></p>
+                  <div id="skincareTips" class="space-y-1"></div>
+                </div>
+              </div>
+              <div class="grid md:grid-cols-2 gap-4">
+                <div id="colorCelebSection" class="tip-card hidden">
+                  <p class="text-amber-400 text-xs font-medium mb-3 flex items-center gap-1.5">
+                    <span class="w-2 h-2 rounded-full bg-amber-400"></span> 같은 컬러 타입 셀럽
+                  </p>
+                  <div id="colorCelebrities" class="flex flex-wrap gap-1.5"></div>
+                </div>
+                <div id="avoidPatternsSection" class="tip-card hidden">
+                  <p class="text-red-400 text-xs font-medium mb-3 flex items-center gap-1.5">
+                    <span class="w-2 h-2 rounded-full bg-red-400"></span> 피해야 할 패턴/프린트
+                  </p>
+                  <div id="avoidPatterns" class="flex flex-wrap gap-1"></div>
+                </div>
+              </div>
+
+              <!-- Technical Details -->
+              <details class="mt-6">
+                <summary class="text-xs text-zinc-700 cursor-pointer hover:text-zinc-500 transition-colors flex items-center gap-1.5">
+                  <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+                  기술 분석 상세 데이터
+                </summary>
+                <div id="colorDetails" class="mt-3 glass rounded-xl p-4 text-xs text-zinc-500 font-mono space-y-1"></div>
+              </details>
+            </div>
+          </div>
+        </div>
+
+        <!-- ===== CHAPTER 3: Body Type ===== -->
+        <div id="bodyResultCard" class="hidden">
+          <div class="flex items-center gap-3 mb-6">
+            <div class="flex items-center gap-2">
+              <span id="bodyChapterNum" class="text-xs text-blue-500 font-medium tracking-widest uppercase">Chapter 03</span>
+              <div class="w-12 h-px bg-blue-500/30"></div>
+            </div>
+          </div>
+          <div class="glass-card overflow-hidden">
+            <!-- Header -->
+            <div class="p-6 md:p-8 border-b border-white/5">
+              <div class="flex items-center justify-between">
+                <div class="flex items-center gap-3">
+                  <span class="text-2xl" id="bodyEmoji">📐</span>
+                  <div>
+                    <h3 class="text-xl font-light text-white">체형 분석</h3>
+                    <p class="text-xs text-zinc-600 mt-0.5">Body Type Analysis · 33 Pose Landmarks</p>
+                  </div>
+                </div>
+                <span id="bodyConfidence" class="text-xs text-zinc-500 glass rounded-full px-4 py-1.5">신뢰도 --</span>
+              </div>
+            </div>
+
+            <!-- Result Title -->
+            <div class="p-6 md:p-8 bg-gradient-to-r from-blue-500/5 to-transparent border-b border-white/5">
+              <p class="text-zinc-500 text-xs mb-1">분석 결과</p>
+              <div class="flex items-baseline gap-3">
+                <span id="bodyTypeName" class="text-3xl font-light text-white">--</span>
+                <span class="text-zinc-600 text-sm">체형</span>
+              </div>
+              <p id="bodyTypeDesc" class="text-zinc-500 text-sm mt-2">--</p>
+            </div>
+
+            <!-- Content -->
+            <div class="grid md:grid-cols-5 gap-0">
+              <!-- Left: Image -->
+              <div class="md:col-span-2 p-6 md:p-8 border-r border-white/5">
+                <div class="img-container aspect-[3/5]">
+                  <img id="bodyResultImg" class="w-full h-full object-cover">
+                  <canvas id="bodyLandmarkCanvas" class="overlay-canvas"></canvas>
+                </div>
+                <p class="text-zinc-700 text-[10px] mt-3 text-center">33개 랜드마크 기반 신체 비율 분석</p>
+              </div>
+
+              <!-- Right: Styling -->
+              <div class="md:col-span-3 p-6 md:p-8">
+                <div class="flex items-center gap-2 mb-5">
+                  <div class="w-1 h-4 rounded-full bg-blue-400"></div>
+                  <h4 class="text-sm font-medium text-zinc-300">맞춤 코디 추천</h4>
+                </div>
+                <div id="bodyStyleTips" class="space-y-4">
+                  <!-- Filled by JS -->
+                </div>
+              </div>
+            </div>
+
+            <!-- Key Principle -->
+            <div id="bodyKeyPrinciple" class="border-t border-white/5 px-6 md:px-8 py-4 hidden">
+              <div class="glass rounded-2xl p-5 border-l-2 border-blue-500/50">
+                <p class="text-blue-400 text-xs font-medium mb-2 flex items-center gap-1.5">🎯 핵심 스타일링 원칙</p>
+                <p id="bodyKeyPrincipleText" class="text-zinc-300 text-sm leading-relaxed"></p>
+              </div>
+            </div>
+
+            <!-- Occasion Styling -->
+            <div id="bodyOccasionSection" class="border-t border-white/5 p-6 md:p-8 hidden">
+              <div class="flex items-center gap-2 mb-5">
+                <div class="w-1 h-4 rounded-full bg-blue-400"></div>
+                <h4 class="text-sm font-medium text-zinc-300">상황별 코디 가이드</h4>
+              </div>
+              <div class="grid md:grid-cols-2 gap-4">
+                <div class="tip-card">
+                  <p class="text-blue-400 text-xs font-medium mb-2 flex items-center gap-1.5">💼 오피스</p>
+                  <div id="bodyOccWork" class="space-y-1"></div>
+                </div>
+                <div class="tip-card">
+                  <p class="text-pink-400 text-xs font-medium mb-2 flex items-center gap-1.5">💕 데이트</p>
+                  <div id="bodyOccDate" class="space-y-1"></div>
+                </div>
+                <div class="tip-card">
+                  <p class="text-green-400 text-xs font-medium mb-2 flex items-center gap-1.5">🌿 캐주얼</p>
+                  <div id="bodyOccCasual" class="space-y-1"></div>
+                </div>
+                <div class="tip-card">
+                  <p class="text-amber-400 text-xs font-medium mb-2 flex items-center gap-1.5">✨ 포멀</p>
+                  <div id="bodyOccFormal" class="space-y-1"></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Extra: Proportions, Shoes, Color Strategy, Celebrities -->
+            <div class="border-t border-white/5 p-6 md:p-8">
+              <div class="grid md:grid-cols-2 gap-4 mb-4">
+                <div id="bodyProportionSection" class="tip-card hidden">
+                  <p class="text-violet-400 text-xs font-medium mb-3 flex items-center gap-1.5">
+                    <span class="w-2 h-2 rounded-full bg-violet-400"></span> 비율 보정 팁
+                  </p>
+                  <div id="bodyProportionTips" class="space-y-1"></div>
+                </div>
+                <div id="bodyShoeSection" class="tip-card hidden">
+                  <p class="text-amber-400 text-xs font-medium mb-3 flex items-center gap-1.5">
+                    <span class="w-2 h-2 rounded-full bg-amber-400"></span> 추천 신발
+                  </p>
+                  <div id="bodyShoeRecommended" class="flex flex-wrap gap-1 mb-2"></div>
+                  <p class="text-red-400/60 text-[10px] mt-2 mb-1">피해야 할 신발</p>
+                  <div id="bodyShoeAvoid" class="flex flex-wrap gap-1"></div>
+                </div>
+              </div>
+              <div class="grid md:grid-cols-2 gap-4">
+                <div id="bodyColorSection" class="tip-card hidden">
+                  <p class="text-pink-400 text-xs font-medium mb-3 flex items-center gap-1.5">
+                    <span class="w-2 h-2 rounded-full bg-pink-400"></span> 컬러 전략
+                  </p>
+                  <div id="bodyColorStrategy" class="space-y-1"></div>
+                </div>
+                <div id="bodyCelebSection" class="tip-card hidden">
+                  <p class="text-emerald-400 text-xs font-medium mb-3 flex items-center gap-1.5">
+                    <span class="w-2 h-2 rounded-full bg-emerald-400"></span> 같은 체형 셀럽
+                  </p>
+                  <div id="bodyCelebrities" class="flex flex-wrap gap-1.5"></div>
+                </div>
+              </div>
+            </div>
+
+            <div class="px-6 md:px-8 py-4 border-t border-white/5 bg-white/[0.01]">
+              <p class="text-zinc-700 text-xs text-center">* 단일 2D 사진 기반 분석으로, 참고 자료로 활용해 주세요</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- ===== AI 보정 분석 결과 카드 ===== -->
+        <div id="aiResultCard" class="glass-card p-6 md:p-8 hidden">
+          <div class="flex items-center gap-3 mb-5">
+            <div class="flex items-center gap-2">
+              <span class="text-xs text-amber-500 font-medium tracking-widest uppercase">AI Expert Analysis</span>
+              <div class="w-12 h-px bg-amber-500/30"></div>
+            </div>
+          </div>
+          <div class="glass-card overflow-hidden">
+            <div class="p-6 md:p-8 border-b border-white/5">
+              <div class="flex items-center gap-3">
+                <span class="text-2xl">🤖</span>
+                <div>
+                  <h3 class="text-xl font-light text-white">Claude AI 전문가 분석</h3>
+                  <p class="text-xs text-zinc-600 mt-0.5">Claude Vision · 사진 맥락 종합 분석</p>
+                </div>
+                <div class="ml-auto">
+                  <span class="text-xs text-amber-400/70 glass rounded-full px-3 py-1">AI Enhanced</span>
+                </div>
+              </div>
+            </div>
+            <div id="aiAnalysisContent" class="p-6 md:p-8 space-y-4">
+              <!-- Filled by JS -->
+            </div>
+          </div>
+        </div>
+
+        <!-- ===== Report Footer ===== -->
+        <div class="glass-card p-6 md:p-8 text-center">
+          <p class="text-zinc-600 text-xs mb-6">본 리포트는 AI 비전 모델(MediaPipe + Claude)의 이미지 분석 결과를 바탕으로 생성되었습니다.</p>
+
+          <!-- AI 분석 버튼 -->
+          <div id="aiAnalyzeBtn" class="mb-6 hidden">
+            <button onclick="window._runAiAnalysis()" class="glass rounded-2xl px-6 py-3 text-sm text-amber-400 hover:bg-amber-500/10 transition-colors flex items-center gap-2 mx-auto">
+              <span class="text-lg">🤖</span>
+              Claude AI로 정밀 분석하기
+            </button>
+            <p class="text-zinc-700 text-xs mt-2">Claude Vision API로 사진을 추가 분석합니다</p>
+          </div>
+          <div id="aiAnalyzing" class="mb-6 hidden">
+            <div class="flex items-center justify-center gap-3">
+              <div class="w-5 h-5 border-2 border-amber-400 border-t-transparent rounded-full animate-spin"></div>
+              <span class="text-amber-400 text-sm">Claude AI가 분석 중입니다...</span>
+            </div>
+          </div>
+
+          <div class="flex flex-wrap justify-center gap-3">
+            <button onclick="window._downloadPdf()" class="glass rounded-2xl px-6 py-3 text-sm text-pink-400 hover:bg-pink-500/10 transition-colors flex items-center gap-2">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+              PDF 다운로드
+            </button>
+            <button onclick="window._showEmailModal()" class="glass rounded-2xl px-6 py-3 text-sm text-cyan-400 hover:bg-cyan-500/10 transition-colors flex items-center gap-2">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
+              이메일로 발송
+            </button>
+            <button onclick="window.print()" class="glass rounded-2xl px-6 py-3 text-sm text-zinc-400 hover:bg-white/10 transition-colors flex items-center gap-2">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/></svg>
+              인쇄
+            </button>
+            <button onclick="resetSession()" class="glass rounded-2xl px-6 py-3 text-sm text-violet-400 hover:bg-white/10 transition-colors flex items-center gap-2">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+              새로운 분석
+            </button>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- ====== 이메일 모달 ====== -->
+  <div id="emailModal" class="fixed inset-0 z-50 hidden">
+    <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" onclick="window._closeEmailModal()"></div>
+    <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-md">
+      <div class="glass-card p-8 mx-4">
+        <h3 class="text-lg font-light text-white mb-2">이메일로 리포트 발송</h3>
+        <p class="text-zinc-500 text-xs mb-6">PDF 리포트가 첨부파일로 전송됩니다</p>
+
+        <div class="space-y-4">
+          <div>
+            <label class="text-zinc-400 text-xs block mb-1.5">받는 사람 이메일</label>
+            <input id="emailTo" type="email" placeholder="example@email.com"
+              class="w-full glass rounded-xl px-4 py-3 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-violet-500/50">
+          </div>
+          <div>
+            <label class="text-zinc-400 text-xs block mb-1.5">제목 (선택)</label>
+            <input id="emailSubject" type="text" placeholder="스타일 분석 리포트"
+              class="w-full glass rounded-xl px-4 py-3 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-violet-500/50">
+          </div>
+        </div>
+
+        <div id="emailStatus" class="mt-4 text-xs hidden"></div>
+
+        <div class="flex gap-3 mt-6">
+          <button onclick="window._closeEmailModal()" class="flex-1 glass rounded-xl py-3 text-sm text-zinc-400 hover:bg-white/10 transition-colors">
+            취소
+          </button>
+          <button onclick="window._sendEmail()" id="emailSendBtn" class="flex-1 rounded-xl py-3 text-sm text-white bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 transition-colors">
+            발송하기
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module">
+    import { FACE_SHAPES } from './data/face-shape-data.js';
+    import { BODY_TYPES } from './data/body-type-data.js';
+    import { PERSONAL_COLORS, SEASON_ACCENTS } from './data/personal-color-data.js';
+    import { analyzeFace, drawFaceLandmarks } from './lib/face-analyzer.js';
+    import { analyzePersonalColor } from './lib/color-analyzer.js';
+    import { analyzeBody, drawPoseLandmarks } from './lib/body-analyzer.js';
+
+    // ============================================================
+    //  State
+    // ============================================================
+    let ws = null;
+    let sessionCode = '';
+    let faceImage = null;  // HTMLImageElement
+    let bodyImage = null;
+    let userGender = 'female'; // default, received from phone
+    let faceLandmarkerReady = false;
+    let poseLandmarkerReady = false;
+    let visionInstance = null;
+
+    // ============================================================
+    //  Initialize
+    // ============================================================
+    window.resetSession = function() { location.reload(); };
+
+    async function init() {
+      await Promise.all([
+        initModels(),
+        connectWebSocket()
+      ]);
+    }
+
+    // ============================================================
+    //  MediaPipe Model Loading
+    // ============================================================
+    async function initModels() {
+      try {
+        updateModelStatus('face', '로딩 중...', 30);
+        updateModelStatus('pose', '대기 중', 0);
+
+        const { FilesetResolver, FaceLandmarker, PoseLandmarker } = await import(
+          'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.18/vision_bundle.mjs'
+        );
+
+        visionInstance = await FilesetResolver.forVisionTasks(
+          'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.18/wasm'
+        );
+
+        updateModelStatus('face', '모델 다운로드 중...', 50);
+
+        // Face Landmarker
+        window._faceLandmarker = await FaceLandmarker.createFromOptions(visionInstance, {
+          baseOptions: {
+            modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task',
+            delegate: 'GPU'
+          },
+          runningMode: 'IMAGE',
+          numFaces: 1
+        });
+        faceLandmarkerReady = true;
+        updateModelStatus('face', '준비 완료', 100);
+
+        updateModelStatus('pose', '모델 다운로드 중...', 50);
+
+        // Pose Landmarker
+        window._poseLandmarker = await PoseLandmarker.createFromOptions(visionInstance, {
+          baseOptions: {
+            modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task',
+            delegate: 'GPU'
+          },
+          runningMode: 'IMAGE',
+          numPoses: 1
+        });
+        poseLandmarkerReady = true;
+        updateModelStatus('pose', '준비 완료', 100);
+
+        // Hide model status after loaded
+        setTimeout(() => {
+          document.getElementById('modelStatus').style.opacity = '0';
+          document.getElementById('modelStatus').style.transition = 'opacity 1s';
+        }, 2000);
+
+      } catch (err) {
+        console.error('Model loading error:', err);
+        updateModelStatus('face', '오류: ' + err.message, 0);
+      }
+    }
+
+    function updateModelStatus(model, text, percent) {
+      document.getElementById(`${model}ModelStatus`).textContent = text;
+      document.getElementById(`${model}ModelProgress`).style.width = percent + '%';
+      if (percent === 100) {
+        document.getElementById(`${model}ModelStatus`).classList.add('text-emerald-400');
+        document.getElementById(`${model}ModelStatus`).classList.remove('text-zinc-600');
+      }
+    }
+
+    // ============================================================
+    //  WebSocket Connection
+    // ============================================================
+    function connectWebSocket() {
+      const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+      ws = new WebSocket(`${protocol}//${location.host}`);
+
+      ws.onopen = () => {
+        ws.send(JSON.stringify({ type: 'session:create' }));
+      };
+
+      ws.onmessage = async (e) => {
+        const msg = JSON.parse(e.data);
+
+        switch (msg.type) {
+          case 'session:created':
+            sessionCode = msg.code;
+            document.getElementById('sessionCodeDisplay').textContent = msg.code;
+            document.getElementById('sessionInfo').classList.remove('hidden');
+            document.getElementById('qrLoading').classList.add('hidden');
+
+            // Generate QR Code
+            const qrCanvas = document.getElementById('qrCanvas');
+            qrCanvas.classList.remove('hidden');
+            new QRious({
+              element: qrCanvas,
+              value: msg.phoneUrl,
+              size: 192,
+              foreground: '#e4e4e7',
+              background: '#18181b',
+              level: 'M'
+            });
+            break;
+
+          case 'phone:connected':
+            document.getElementById('phoneStatus').classList.remove('hidden');
+            break;
+
+          case 'phone:disconnected':
+            document.getElementById('phoneStatus').innerHTML = `
+              <div class="inline-flex items-center gap-3 glass rounded-full px-6 py-3">
+                <div class="w-2.5 h-2.5 rounded-full bg-red-400"></div>
+                <span class="text-red-300 text-sm">폰 연결이 끊어졌습니다</span>
+              </div>`;
+            break;
+
+          case 'photo:face':
+            showSection('analyzingSection');
+            if (msg.gender) userGender = msg.gender;
+            faceImage = await loadImage(msg.image);
+            document.getElementById('thumbFace').src = msg.image;
+            document.getElementById('thumbFace').classList.remove('hidden');
+            document.getElementById('thumbFacePlaceholder').classList.add('hidden');
+            if (msg.only) {
+              document.getElementById('analyzingStatus').textContent = 'AI 분석을 시작합니다...';
+              document.getElementById('analysisProgress').style.width = '50%';
+              await runAnalysis();
+            } else {
+              document.getElementById('analyzingStatus').textContent = '얼굴 사진 수신 완료. 전신 사진을 기다리는 중...';
+              document.getElementById('analysisProgress').style.width = '30%';
+            }
+            break;
+
+          case 'photo:body':
+            if (!faceImage) showSection('analyzingSection');
+            if (msg.gender) userGender = msg.gender;
+            bodyImage = await loadImage(msg.image);
+            document.getElementById('thumbBody').src = msg.image;
+            document.getElementById('thumbBody').classList.remove('hidden');
+            document.getElementById('thumbBodyPlaceholder').classList.add('hidden');
+            document.getElementById('analyzingStatus').textContent = 'AI 분석을 시작합니다...';
+            document.getElementById('analysisProgress').style.width = '50%';
+            await runAnalysis();
+            break;
+        }
+      };
+
+      ws.onerror = () => console.error('WebSocket error');
+      ws.onclose = () => {
+        // Simple reconnect
+        setTimeout(connectWebSocket, 3000);
+      };
+    }
+
+    function loadImage(src) {
+      return new Promise((resolve) => {
+        const img = new Image();
+        img.onload = () => resolve(img);
+        img.src = src;
+      });
+    }
+
+    function showSection(id) {
+      document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+      document.getElementById(id).classList.add('active');
+    }
+
+    // ============================================================
+    //  Run Analysis
+    // ============================================================
+    async function runAnalysis() {
+      if (!faceImage && !bodyImage) return;
+
+      try {
+        // Wait for needed models
+        if (faceImage) {
+          while (!faceLandmarkerReady) {
+            document.getElementById('analyzingStatus').textContent = '얼굴 분석 AI 모델 로딩 대기 중...';
+            await new Promise(r => setTimeout(r, 500));
+          }
+        }
+        if (bodyImage) {
+          while (!poseLandmarkerReady) {
+            document.getElementById('analyzingStatus').textContent = '체형 분석 AI 모델 로딩 대기 중...';
+            await new Promise(r => setTimeout(r, 500));
+          }
+        }
+
+        let faceClassification = null;
+        let faceLandmarks = null;
+        let colorResult = null;
+        let bodyClassification = null;
+        let bodyLandmarks = null;
+
+        // 1. Face Analysis (if face photo exists)
+        if (faceImage) {
+          document.getElementById('analyzingStatus').textContent = '얼굴형을 분석하고 있습니다...';
+          document.getElementById('analysisProgress').style.width = '60%';
+
+          const faceResult = window._faceLandmarker.detect(faceImage);
+          if (faceResult.faceLandmarks && faceResult.faceLandmarks.length > 0) {
+            faceLandmarks = faceResult.faceLandmarks[0];
+            const { classifyFaceShape } = await import('./lib/face-analyzer.js');
+            faceClassification = classifyFaceShape(faceLandmarks);
+          }
+
+          // 2. Personal Color Analysis (requires face landmarks)
+          document.getElementById('analyzingStatus').textContent = '퍼스널 컬러를 분석하고 있습니다...';
+          document.getElementById('analysisProgress').style.width = '75%';
+
+          if (faceLandmarks) {
+            colorResult = analyzePersonalColor(faceImage, faceLandmarks);
+          }
+        }
+
+        // 3. Body Analysis (if body photo exists)
+        if (bodyImage) {
+          document.getElementById('analyzingStatus').textContent = '체형을 분석하고 있습니다...';
+          document.getElementById('analysisProgress').style.width = '90%';
+
+          const bodyResult = window._poseLandmarker.detect(bodyImage);
+          if (bodyResult.landmarks && bodyResult.landmarks.length > 0) {
+            bodyLandmarks = bodyResult.landmarks[0];
+            const { classifyBodyType } = await import('./lib/body-analyzer.js');
+            bodyClassification = classifyBodyType(bodyLandmarks);
+          }
+        }
+
+        document.getElementById('analysisProgress').style.width = '100%';
+        document.getElementById('analyzingStatus').textContent = '분석 완료! 결과를 준비합니다...';
+
+        await new Promise(r => setTimeout(r, 800));
+
+        // Render Results
+        renderResults(faceClassification, faceLandmarks, colorResult, bodyClassification, bodyLandmarks);
+
+        // Notify phone
+        if (ws && ws.readyState === 1) {
+          const summary = [];
+          if (faceClassification) summary.push(`얼굴형: ${FACE_SHAPES[faceClassification.shape]?.name || '--'}`);
+          if (colorResult && !colorResult.error) summary.push(`퍼스널 컬러: ${PERSONAL_COLORS[colorResult.key]?.name || '--'}`);
+          if (bodyClassification) summary.push(`체형: ${BODY_TYPES[bodyClassification.bodyType]?.name || '--'}`);
+          ws.send(JSON.stringify({ type: 'analysis:complete', summary: summary.join(' / ') }));
+        }
+
+      } catch (err) {
+        console.error('Analysis error:', err);
+        document.getElementById('analyzingStatus').textContent = '분석 중 오류: ' + err.message;
+      }
+    }
+
+    // ============================================================
+    //  Render Results
+    // ============================================================
+    function renderResults(faceClass, faceLm, colorResult, bodyClass, bodyLm) {
+      showSection('resultsSection');
+
+      // Report metadata
+      const now = new Date();
+      document.getElementById('reportDate').textContent =
+        `${now.getFullYear()}. ${now.getMonth()+1}. ${now.getDate()}`;
+
+      const hasFace = !!(faceClass && faceLm);
+      const hasColor = !!(colorResult && !colorResult.error);
+      const hasBody = !!(bodyClass && bodyLm);
+
+      const items = [];
+      if (hasFace) items.push('얼굴형');
+      if (hasColor) items.push('퍼스널 컬러');
+      if (hasBody) items.push('체형');
+      const genderLabel = userGender === 'male' ? '남성' : '여성';
+      document.getElementById('reportItems').textContent = `${genderLabel} · ${items.join(' · ')} 분석`;
+
+      // Dynamic chapter numbers
+      let chapterNum = 1;
+
+      // --- Face Shape ---
+      if (hasFace) {
+        const card = document.getElementById('faceResultCard');
+        card.classList.remove('hidden');
+
+        const shape = FACE_SHAPES[faceClass.shape] || FACE_SHAPES.oval;
+        document.getElementById('faceEmoji').textContent = shape.emoji;
+        document.getElementById('faceShapeName').textContent = shape.name;
+        document.getElementById('faceShapeDesc').textContent = shape.description || '';
+        document.getElementById('faceConfidence').textContent = `신뢰도 ${faceClass.confidence}%`;
+        document.getElementById('faceResultImg').src = faceImage.src;
+
+        // Draw landmarks
+        const faceCanvas = document.getElementById('faceLandmarkCanvas');
+        const faceImgEl = document.getElementById('faceResultImg');
+        setTimeout(() => {
+          const w = faceImgEl.clientWidth;
+          const h = faceImgEl.clientHeight;
+          faceCanvas.style.width = w + 'px';
+          faceCanvas.style.height = h + 'px';
+          drawFaceLandmarks(faceCanvas, faceLm, faceCanvas.width = w * 2, faceCanvas.height = h * 2);
+          faceCanvas.style.width = w + 'px';
+          faceCanvas.style.height = h + 'px';
+        }, 100);
+
+        // Gender-specific data
+        const faceGender = shape.genderSpecific?.[userGender] || {};
+        const isMale = userGender === 'male';
+
+        // Makeup / Grooming tips
+        const tipsContainer = document.getElementById('faceMakeupTips');
+        tipsContainer.innerHTML = '';
+        if (isMale && faceGender.grooming) {
+          // Male: show grooming guide instead of makeup
+          const card = document.createElement('div');
+          card.className = 'tip-card';
+          card.innerHTML = `
+            <p class="text-violet-400 text-xs font-medium mb-2">${faceGender.grooming.title}</p>
+            <ul class="space-y-1">
+              ${faceGender.grooming.tips.map(t => `<li class="text-zinc-500 text-xs flex items-start gap-2">
+                <span class="text-violet-500 mt-0.5">-</span><span>${t}</span>
+              </li>`).join('')}
+            </ul>
+          `;
+          tipsContainer.appendChild(card);
+        } else {
+          for (const [key, tip] of Object.entries(shape.makeup)) {
+            const card = document.createElement('div');
+            card.className = 'tip-card';
+            card.innerHTML = `
+              <p class="text-violet-400 text-xs font-medium mb-2">${tip.title}</p>
+              <p class="text-zinc-300 text-sm mb-2">${tip.description}</p>
+              <ul class="space-y-1">
+                ${tip.tips.map(t => `<li class="text-zinc-500 text-xs flex items-start gap-2">
+                  <span class="text-violet-500 mt-0.5">-</span><span>${t}</span>
+                </li>`).join('')}
+              </ul>
+            `;
+            tipsContainer.appendChild(card);
+          }
+        }
+
+        // HairStyle section
+        const hairData = (isMale && faceGender.hairStyle) ? faceGender.hairStyle : shape.hairStyle;
+        if (hairData) {
+          const sec = document.getElementById('faceHairSection');
+          sec.classList.remove('hidden');
+          document.getElementById('faceHairDesc').textContent = hairData.description || '';
+          document.getElementById('faceHairRecommended').innerHTML =
+            (hairData.recommended || []).map(h => `<span class="style-tag good">${h}</span>`).join('');
+          document.getElementById('faceHairAvoid').innerHTML =
+            (hairData.avoid || []).map(h => `<span class="style-tag bad">${h}</span>`).join('');
+        }
+
+        // Glasses section
+        const glassesData = (isMale && faceGender.glasses) ? faceGender.glasses : shape.glasses;
+        if (glassesData) {
+          const sec = document.getElementById('faceGlassesSection');
+          sec.classList.remove('hidden');
+          document.getElementById('faceGlassesRecommended').innerHTML =
+            (glassesData.recommended || []).map(g => `<span class="style-tag good">${g}</span>`).join('');
+          document.getElementById('faceGlassesAvoid').innerHTML =
+            (glassesData.avoid || []).map(g => `<span class="style-tag bad">${g}</span>`).join('');
+        }
+
+        // Accessories section
+        const accessoriesData = (isMale && faceGender.accessories) ? faceGender.accessories : shape.accessories;
+        if (accessoriesData && accessoriesData.length) {
+          const sec = document.getElementById('faceAccessoriesSection');
+          sec.classList.remove('hidden');
+          document.getElementById('faceAccessoriesTips').innerHTML =
+            accessoriesData.map(a => `<p class="text-zinc-400 text-xs flex items-start gap-2">
+              <span class="text-pink-500/50 mt-0.5">-</span><span>${a}</span></p>`).join('');
+        }
+
+        // Celebrities section
+        const celebsData = (isMale && faceGender.celebrities) ? faceGender.celebrities : shape.celebrities;
+        if (celebsData && celebsData.length) {
+          const sec = document.getElementById('faceCelebritiesSection');
+          sec.classList.remove('hidden');
+          document.getElementById('faceCelebrities').innerHTML =
+            celebsData.map(c => `<span class="glass rounded-full px-3 py-1 text-xs text-zinc-300">${c}</span>`).join('');
+        }
+
+        // Styling Tip
+        const tipText = (isMale && faceGender.stylingTip) ? faceGender.stylingTip : shape.stylingTip;
+        if (tipText) {
+          document.getElementById('faceStylingTip').classList.remove('hidden');
+          document.getElementById('faceStylingTipText').textContent = tipText;
+        }
+
+        chapterNum++;
+      }
+
+      // --- Personal Color ---
+      if (hasColor) {
+        const colorData = PERSONAL_COLORS[colorResult.key];
+        if (colorData) {
+          document.getElementById('colorResultCard').classList.remove('hidden');
+          document.getElementById('colorChapterNum').textContent = `Chapter ${String(chapterNum).padStart(2, '0')}`;
+
+          const accent = SEASON_ACCENTS[colorResult.season];
+
+          document.getElementById('colorEmoji').textContent = colorData.emoji;
+          document.getElementById('seasonEmoji').textContent = colorData.emoji;
+          document.getElementById('seasonFullName').textContent = colorData.name;
+          document.getElementById('seasonDescription').textContent = colorData.description;
+          document.getElementById('colorConfidence').textContent = `신뢰도 ${colorResult.confidence}%`;
+
+          const badge = document.getElementById('seasonBadge');
+          badge.style.background = accent.gradient;
+          badge.style.color = 'white';
+
+          document.querySelector('.orb-1').style.background = accent.primary;
+          document.querySelector('.orb-3').style.background = accent.secondary;
+
+          // Palette swatches
+          const paletteContainer = document.getElementById('colorPalette');
+          paletteContainer.innerHTML = '';
+          colorData.palette.forEach(hex => {
+            const swatch = document.createElement('div');
+            swatch.className = 'swatch';
+            swatch.style.cssText = `width:44px; height:44px; background:${hex};`;
+            swatch.innerHTML = `<div class="swatch-tooltip">${hex}</div>`;
+            paletteContainer.appendChild(swatch);
+          });
+
+          document.getElementById('bestColors').innerHTML =
+            colorData.bestColors.map(c => `<span class="style-tag good">${c}</span>`).join('');
+          document.getElementById('worstColors').innerHTML =
+            colorData.worstColors.map(c => `<span class="style-tag bad">${c}</span>`).join('');
+
+          // Gender-specific color data
+          const colorGender = colorData.genderSpecific?.[userGender] || {};
+          const isMaleColor = userGender === 'male';
+
+          // Makeup section - hide for males or show grooming
+          const makeupSection = document.querySelector('#colorResultCard .grid.md\\:grid-cols-3');
+          if (isMaleColor && colorGender.grooming) {
+            makeupSection.innerHTML = `
+              <div class="tip-card md:col-span-3">
+                <p class="text-violet-400 text-xs font-medium mb-3">남성 그루밍 컬러 가이드</p>
+                <div class="space-y-1">
+                  ${colorGender.grooming.tips.map(t => `<p class="text-zinc-400 text-xs">- ${t}</p>`).join('')}
+                </div>
+              </div>`;
+          } else if (!isMaleColor) {
+            document.getElementById('lipColors').innerHTML =
+              colorData.makeup.lip.map(c => `<p class="text-zinc-400 text-xs">- ${c}</p>`).join('');
+            document.getElementById('eyeColors').innerHTML =
+              colorData.makeup.eyeshadow.map(c => `<p class="text-zinc-400 text-xs">- ${c}</p>`).join('');
+            document.getElementById('blushColors').innerHTML =
+              colorData.makeup.blush.map(c => `<p class="text-zinc-400 text-xs">- ${c}</p>`).join('');
+          }
+
+          // Hair colors (gender-specific)
+          const hairList = (isMaleColor && colorGender.hair) ? colorGender.hair : colorData.hair;
+          document.getElementById('hairColors').innerHTML =
+            hairList.map(c => `<p class="text-zinc-400 text-xs">- ${c}</p>`).join('');
+          document.getElementById('jewelryRec').textContent = colorData.jewelryName;
+
+          // Nail colors
+          if (colorData.nail && colorData.nail.length) {
+            document.getElementById('nailSection').classList.remove('hidden');
+            document.getElementById('nailColors').innerHTML =
+              colorData.nail.map(c => `<p class="text-zinc-400 text-xs">- ${c}</p>`).join('');
+          }
+
+          // Fashion tips (gender-specific)
+          const fashionList = (isMaleColor && colorGender.fashionTips) ? colorGender.fashionTips : colorData.fashionTips;
+          document.getElementById('fashionTips').innerHTML =
+            fashionList.map(t => `
+              <div class="flex items-start gap-3">
+                <span class="text-pink-500/60 mt-0.5 text-xs">-</span>
+                <p class="text-zinc-400 text-sm">${t}</p>
+              </div>`).join('');
+
+          // Occasion Styling
+          const occData = (isMaleColor && colorGender.occasionStyling) ? colorGender.occasionStyling : colorData.occasionStyling;
+          if (occData) {
+            document.getElementById('colorOccasionSection').classList.remove('hidden');
+            const renderOcc = (el, arr) => {
+              document.getElementById(el).innerHTML = (arr || []).map(t =>
+                `<p class="text-zinc-400 text-xs flex items-start gap-2"><span class="text-zinc-600 mt-0.5">-</span><span>${t}</span></p>`).join('');
+            };
+            renderOcc('colorOccWork', occData.work);
+            renderOcc('colorOccDate', occData.date);
+            renderOcc('colorOccCasual', occData.casual);
+            renderOcc('colorOccFormal', occData.formal);
+          }
+
+          // Color Combos
+          const combos = (isMaleColor && colorGender.colorCombos) ? colorGender.colorCombos : colorData.colorCombos;
+          if (combos && combos.length) {
+            document.getElementById('colorCombosSection').classList.remove('hidden');
+            document.getElementById('colorCombos').innerHTML =
+              combos.map(c => `<p class="text-zinc-400 text-xs flex items-start gap-2"><span class="text-violet-500/50 mt-0.5">-</span><span>${c}</span></p>`).join('');
+          }
+
+          // Skincare
+          if (colorData.skincare) {
+            document.getElementById('skincareSection').classList.remove('hidden');
+            document.getElementById('skincareTone').textContent = colorData.skincare.tone || '';
+            document.getElementById('skincareTips').innerHTML =
+              (colorData.skincare.tips || []).map(t => `<p class="text-zinc-400 text-xs flex items-start gap-2"><span class="text-emerald-500/50 mt-0.5">-</span><span>${t}</span></p>`).join('');
+          }
+
+          // Celebrities
+          const colorCelebs = (isMaleColor && colorGender.celebrities) ? colorGender.celebrities : colorData.celebrities;
+          if (colorCelebs && colorCelebs.length) {
+            document.getElementById('colorCelebSection').classList.remove('hidden');
+            document.getElementById('colorCelebrities').innerHTML =
+              colorCelebs.map(c => `<span class="glass rounded-full px-3 py-1 text-xs text-zinc-300">${c}</span>`).join('');
+          }
+
+          // Avoid Patterns
+          if (colorData.avoidPatterns && colorData.avoidPatterns.length) {
+            document.getElementById('avoidPatternsSection').classList.remove('hidden');
+            document.getElementById('avoidPatterns').innerHTML =
+              colorData.avoidPatterns.map(p => `<span class="style-tag bad">${p}</span>`).join('');
+          }
+
+          const candidates = colorResult.topCandidates || [];
+          document.getElementById('colorDetails').innerHTML = `
+            <p><strong>LAB 색공간</strong></p>
+            <p>  L* (명도): ${colorResult.details.L} ± ${colorResult.details.Lstd || 0}</p>
+            <p>  a* (적/녹): ${colorResult.details.a} ± ${colorResult.details.astd || 0}</p>
+            <p>  b* (황/청): ${colorResult.details.b} ± ${colorResult.details.bstd || 0}</p>
+            <p>  Chroma: ${colorResult.details.chroma || colorResult.chroma}</p>
+            <p>  Hue Angle: ${colorResult.details.hueAngle || '--'}°</p>
+            <p>  Color Variance: ${colorResult.details.colorVariance || '--'}</p>
+            <br>
+            <p><strong>판정 지표</strong></p>
+            <p>  Warm Score: ${colorResult.warmScore}</p>
+            <p>  Undertone: ${colorResult.isWarm ? 'Warm (웜톤)' : 'Cool (쿨톤)'}</p>
+            <p>  신뢰도: ${colorResult.confidence}%</p>
+            <br>
+            <p><strong>상위 후보</strong></p>
+            ${candidates.map((c, i) => `<p>  ${i + 1}. ${c.key} — ${c.percentage}% (${c.score}점)</p>`).join('')}
+            <br>
+            <p><strong>샘플링</strong></p>
+            <p>  총 픽셀: ${colorResult.sampleInfo?.totalPixels || '--'}</p>
+            <p>  유효 픽셀: ${colorResult.sampleInfo?.cleanPixels || '--'}</p>
+            <p>  이상값 제거: ${colorResult.sampleInfo?.outlierRemoved || 0}개</p>
+            <p>  중앙값 RGB: rgb(${colorResult.details.avgRgb.r}, ${colorResult.details.avgRgb.g}, ${colorResult.details.avgRgb.b})</p>
+          `;
+
+          chapterNum++;
+        }
+      }
+
+      // --- Body Type ---
+      if (hasBody) {
+        document.getElementById('bodyResultCard').classList.remove('hidden');
+        document.getElementById('bodyChapterNum').textContent = `Chapter ${String(chapterNum).padStart(2, '0')}`;
+
+        const bodyData = BODY_TYPES[bodyClass.bodyType] || BODY_TYPES.straight;
+        document.getElementById('bodyEmoji').textContent = bodyData.emoji;
+        document.getElementById('bodyTypeName').textContent = bodyData.name;
+        document.getElementById('bodyTypeDesc').textContent = bodyData.description;
+        document.getElementById('bodyConfidence').textContent = `신뢰도 ${bodyClass.confidence}%`;
+        document.getElementById('bodyResultImg').src = bodyImage.src;
+
+        const bodyCanvas = document.getElementById('bodyLandmarkCanvas');
+        const bodyImgEl = document.getElementById('bodyResultImg');
+        setTimeout(() => {
+          const w = bodyImgEl.clientWidth;
+          const h = bodyImgEl.clientHeight;
+          bodyCanvas.style.width = w + 'px';
+          bodyCanvas.style.height = h + 'px';
+          drawPoseLandmarks(bodyCanvas, bodyLm, bodyCanvas.width = w * 2, bodyCanvas.height = h * 2);
+          bodyCanvas.style.width = w + 'px';
+          bodyCanvas.style.height = h + 'px';
+        }, 100);
+
+        // Gender-specific body data
+        const bodyGender = bodyData.genderSpecific?.[userGender] || {};
+        const isMaleBody = userGender === 'male';
+
+        // Styling tips (gender-specific)
+        const stylingSource = (isMaleBody && bodyGender.styling) ? bodyGender.styling : bodyData.styling;
+        const tipsContainer = document.getElementById('bodyStyleTips');
+        tipsContainer.innerHTML = '';
+        for (const [key, section] of Object.entries(stylingSource)) {
+          const tipCard = document.createElement('div');
+          tipCard.className = 'tip-card';
+
+          if (section.recommended && section.avoid) {
+            tipCard.innerHTML = `
+              <p class="text-blue-400 text-xs font-medium mb-3">${section.title}</p>
+              <div class="mb-3">
+                <p class="text-emerald-500/70 text-[10px] mb-1 flex items-center gap-1">
+                  <svg class="w-2.5 h-2.5" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg>
+                  추천
+                </p>
+                <div class="flex flex-wrap gap-1">
+                  ${section.recommended.map(r => `<span class="style-tag good">${r}</span>`).join('')}
+                </div>
+              </div>
+              <div>
+                <p class="text-red-500/70 text-[10px] mb-1 flex items-center gap-1">
+                  <svg class="w-2.5 h-2.5" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"/></svg>
+                  주의
+                </p>
+                <div class="flex flex-wrap gap-1">
+                  ${section.avoid.map(a => `<span class="style-tag bad">${a}</span>`).join('')}
+                </div>
+              </div>
+            `;
+          } else if (section.tips) {
+            tipCard.innerHTML = `
+              <p class="text-blue-400 text-xs font-medium mb-2">${section.title}</p>
+              <ul class="space-y-1">
+                ${section.tips.map(t => `<li class="text-zinc-400 text-xs flex items-start gap-2">
+                  <span class="text-blue-500/50 mt-0.5">-</span><span>${t}</span>
+                </li>`).join('')}
+              </ul>
+            `;
+          }
+          tipsContainer.appendChild(tipCard);
+        }
+
+        // Key Principle
+        const keyP = (isMaleBody && bodyGender.keyPrinciple) ? bodyGender.keyPrinciple : bodyData.keyPrinciple;
+        if (keyP) {
+          document.getElementById('bodyKeyPrinciple').classList.remove('hidden');
+          document.getElementById('bodyKeyPrincipleText').textContent = keyP;
+        }
+
+        // Occasion Styling
+        const bodyOcc = (isMaleBody && bodyGender.occasionStyling) ? bodyGender.occasionStyling : bodyData.occasionStyling;
+        if (bodyOcc) {
+          document.getElementById('bodyOccasionSection').classList.remove('hidden');
+          const renderOcc = (el, arr) => {
+            document.getElementById(el).innerHTML = (arr || []).map(t =>
+              `<p class="text-zinc-400 text-xs flex items-start gap-2"><span class="text-zinc-600 mt-0.5">-</span><span>${t}</span></p>`).join('');
+          };
+          renderOcc('bodyOccWork', bodyOcc.work);
+          renderOcc('bodyOccDate', bodyOcc.date);
+          renderOcc('bodyOccCasual', bodyOcc.casual);
+          renderOcc('bodyOccFormal', bodyOcc.formal);
+        }
+
+        // Proportion Tips
+        const propTips = bodyData.proportionTips;
+        if (propTips && propTips.length) {
+          document.getElementById('bodyProportionSection').classList.remove('hidden');
+          document.getElementById('bodyProportionTips').innerHTML =
+            propTips.map(t => `<p class="text-zinc-400 text-xs flex items-start gap-2"><span class="text-violet-500/50 mt-0.5">-</span><span>${t}</span></p>`).join('');
+        }
+
+        // Shoe Tips
+        const shoeData = (isMaleBody && bodyGender.shoeTips) ? bodyGender.shoeTips : bodyData.shoeTips;
+        if (shoeData) {
+          document.getElementById('bodyShoeSection').classList.remove('hidden');
+          document.getElementById('bodyShoeRecommended').innerHTML =
+            (shoeData.recommended || []).map(s => `<span class="style-tag good">${s}</span>`).join('');
+          document.getElementById('bodyShoeAvoid').innerHTML =
+            (shoeData.avoid || []).map(s => `<span class="style-tag bad">${s}</span>`).join('');
+        }
+
+        // Color Strategy
+        const colorStrat = bodyData.colorStrategy;
+        if (colorStrat && colorStrat.length) {
+          document.getElementById('bodyColorSection').classList.remove('hidden');
+          document.getElementById('bodyColorStrategy').innerHTML =
+            colorStrat.map(t => `<p class="text-zinc-400 text-xs flex items-start gap-2"><span class="text-pink-500/50 mt-0.5">-</span><span>${t}</span></p>`).join('');
+        }
+
+        // Celebrities
+        const bodyCelebs = (isMaleBody && bodyGender.celebrities) ? bodyGender.celebrities : bodyData.celebrities;
+        if (bodyCelebs && bodyCelebs.length) {
+          document.getElementById('bodyCelebSection').classList.remove('hidden');
+          document.getElementById('bodyCelebrities').innerHTML =
+            bodyCelebs.map(c => `<span class="glass rounded-full px-3 py-1 text-xs text-zinc-300">${c}</span>`).join('');
+        }
+      }
+
+      // --- Summary Banner ---
+      const summaryContent = document.getElementById('summaryContent');
+      const faceShape = hasFace ? (FACE_SHAPES[faceClass.shape] || null) : null;
+      const colorData = hasColor ? PERSONAL_COLORS[colorResult.key] : null;
+      const bodyData = hasBody ? (BODY_TYPES[bodyClass.bodyType] || null) : null;
+
+      const summaryCards = [];
+      if (faceShape) {
+        summaryCards.push(`
+          <div class="tip-card text-center py-5">
+            <p class="text-3xl mb-2">${faceShape.emoji}</p>
+            <p class="text-white font-medium text-lg">${faceShape.name}</p>
+            <p class="text-zinc-600 text-xs mt-1">얼굴형</p>
+          </div>
+        `);
+      }
+      if (colorData) {
+        summaryCards.push(`
+          <div class="tip-card text-center py-5">
+            <p class="text-3xl mb-2">${colorData.emoji}</p>
+            <p class="text-white font-medium text-lg">${colorData.name}</p>
+            <p class="text-zinc-600 text-xs mt-1">퍼스널 컬러</p>
+            <div class="flex justify-center gap-1 mt-3">
+              ${colorData.palette.slice(0, 7).map(h => `<div class="w-4 h-4 rounded" style="background:${h}"></div>`).join('')}
+            </div>
+          </div>
+        `);
+      }
+      if (bodyData) {
+        summaryCards.push(`
+          <div class="tip-card text-center py-5">
+            <p class="text-3xl mb-2">${bodyData.emoji}</p>
+            <p class="text-white font-medium text-lg">${bodyData.name}</p>
+            <p class="text-zinc-600 text-xs mt-1">체형</p>
+          </div>
+        `);
+      }
+
+      // Adjust grid based on card count
+      const banner = document.getElementById('summaryBanner');
+      if (summaryCards.length === 1) {
+        summaryContent.className = 'grid grid-cols-1 max-w-xs mx-auto gap-4';
+      } else if (summaryCards.length === 2) {
+        summaryContent.className = 'grid grid-cols-2 gap-4';
+      } else {
+        summaryContent.className = 'grid grid-cols-1 md:grid-cols-3 gap-4';
+      }
+      summaryContent.innerHTML = summaryCards.join('');
+
+      // Store results for AI/PDF/email
+      lastResults = {
+        face: faceClass ? { shape: faceClass.shape, confidence: faceClass.confidence, scores: faceClass.scores } : null,
+        color: colorResult && !colorResult.error ? { key: colorResult.key, season: colorResult.season, subtype: colorResult.subtype, confidence: colorResult.confidence, warmScore: colorResult.warmScore, chroma: colorResult.chroma } : null,
+        body: bodyClass ? { bodyType: bodyClass.bodyType, confidence: bodyClass.confidence, scores: bodyClass.scores } : null
+      };
+
+      // Show AI analysis button if API key exists
+      if (window._hasApiKey) {
+        document.getElementById('aiAnalyzeBtn').classList.remove('hidden');
+      }
+    }
+
+    // ============================================================
+    //  Start
+    // ============================================================
+    // Store last analysis results for AI/PDF/email
+    let lastResults = { face: null, color: null, body: null };
+
+    // Save results in renderResults
+    const _origRenderResults = renderResults;
+
+    init();
+
+    // ============================================================
+    //  PDF Download
+    // ============================================================
+    window._downloadPdf = async function() {
+      const el = document.getElementById('resultsSection');
+      if (!el) return;
+
+      const btn = event.target.closest('button');
+      const origText = btn.innerHTML;
+      btn.innerHTML = '<div class="w-4 h-4 border-2 border-pink-400 border-t-transparent rounded-full animate-spin"></div> PDF 생성 중...';
+      btn.disabled = true;
+
+      try {
+        // 임시로 배경색 설정 (투명→불투명)
+        el.style.background = '#0a0a0f';
+
+        const opt = {
+          margin: [10, 10, 10, 10],
+          filename: `style-report-${new Date().toISOString().slice(0,10)}.pdf`,
+          image: { type: 'jpeg', quality: 0.92 },
+          html2canvas: {
+            scale: 2,
+            useCORS: true,
+            backgroundColor: '#0a0a0f',
+            scrollY: 0,
+            windowWidth: 900
+          },
+          jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+          pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
+        };
+
+        await html2pdf().set(opt).from(el).save();
+        el.style.background = '';
+      } catch (err) {
+        console.error('PDF 생성 오류:', err);
+        alert('PDF 생성 중 오류가 발생했습니다: ' + err.message);
+      }
+
+      btn.innerHTML = origText;
+      btn.disabled = false;
+    };
+
+    // ============================================================
+    //  PDF as base64 (for email)
+    // ============================================================
+    async function generatePdfBase64() {
+      const el = document.getElementById('resultsSection');
+      el.style.background = '#0a0a0f';
+
+      const opt = {
+        margin: [10, 10, 10, 10],
+        image: { type: 'jpeg', quality: 0.85 },
+        html2canvas: {
+          scale: 1.5,
+          useCORS: true,
+          backgroundColor: '#0a0a0f',
+          scrollY: 0,
+          windowWidth: 900
+        },
+        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+        pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
+      };
+
+      const pdfBlob = await html2pdf().set(opt).from(el).outputPdf('blob');
+      el.style.background = '';
+
+      return new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          const base64 = reader.result.split(',')[1];
+          resolve(base64);
+        };
+        reader.readAsDataURL(pdfBlob);
+      });
+    }
+
+    // ============================================================
+    //  Email Modal
+    // ============================================================
+    window._showEmailModal = function() {
+      document.getElementById('emailModal').classList.remove('hidden');
+      document.getElementById('emailTo').focus();
+    };
+
+    window._closeEmailModal = function() {
+      document.getElementById('emailModal').classList.add('hidden');
+      document.getElementById('emailStatus').classList.add('hidden');
+    };
+
+    window._sendEmail = async function() {
+      const to = document.getElementById('emailTo').value.trim();
+      if (!to || !to.includes('@')) {
+        showEmailStatus('이메일 주소를 올바르게 입력해 주세요.', 'error');
+        return;
+      }
+
+      const subject = document.getElementById('emailSubject').value.trim();
+      const btn = document.getElementById('emailSendBtn');
+      btn.disabled = true;
+      btn.textContent = '발송 중...';
+      showEmailStatus('PDF를 생성하고 이메일을 발송 중입니다...', 'info');
+
+      try {
+        const pdfBase64 = await generatePdfBase64();
+
+        const response = await fetch('/api/send-email', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            to,
+            subject: subject || undefined,
+            pdfBase64
+          })
+        });
+
+        const result = await response.json();
+        if (result.success) {
+          showEmailStatus('이메일이 성공적으로 발송되었습니다!', 'success');
+          setTimeout(() => window._closeEmailModal(), 2000);
+        } else {
+          showEmailStatus(result.error || '발송 실패', 'error');
+        }
+      } catch (err) {
+        showEmailStatus('발송 중 오류: ' + err.message, 'error');
+      }
+
+      btn.disabled = false;
+      btn.textContent = '발송하기';
+    };
+
+    function showEmailStatus(msg, type) {
+      const el = document.getElementById('emailStatus');
+      el.classList.remove('hidden');
+      el.className = 'mt-4 text-xs p-3 rounded-xl';
+      if (type === 'error') {
+        el.className += ' bg-red-500/10 text-red-400';
+      } else if (type === 'success') {
+        el.className += ' bg-emerald-500/10 text-emerald-400';
+      } else {
+        el.className += ' bg-blue-500/10 text-blue-400';
+      }
+      el.textContent = msg;
+    }
+
+    // ============================================================
+    //  Claude AI Analysis
+    // ============================================================
+    window._runAiAnalysis = async function() {
+      document.getElementById('aiAnalyzeBtn').classList.add('hidden');
+      document.getElementById('aiAnalyzing').classList.remove('hidden');
+
+      try {
+        const body = {
+          faceImage: faceImage ? faceImage.src : null,
+          bodyImage: bodyImage ? bodyImage.src : null,
+          localResults: lastResults,
+          gender: userGender
+        };
+
+        const response = await fetch('/api/analyze-with-ai', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body)
+        });
+
+        const result = await response.json();
+        document.getElementById('aiAnalyzing').classList.add('hidden');
+
+        if (result.success && result.analysis) {
+          renderAiResults(result.analysis);
+        } else {
+          document.getElementById('aiAnalyzeBtn').classList.remove('hidden');
+          alert(result.error || 'AI 분석에 실패했습니다.');
+        }
+      } catch (err) {
+        document.getElementById('aiAnalyzing').classList.add('hidden');
+        document.getElementById('aiAnalyzeBtn').classList.remove('hidden');
+        alert('AI 분석 오류: ' + err.message);
+      }
+    };
+
+    function renderAiResults(analysis) {
+      const card = document.getElementById('aiResultCard');
+      card.classList.remove('hidden');
+      const content = document.getElementById('aiAnalysisContent');
+      const renderList = (arr, color = 'amber') => (arr || []).map(t =>
+        `<p class="text-zinc-500 text-xs flex items-start gap-1.5"><span class="text-${color}-500/50">-</span>${t}</p>`).join('');
+
+      let html = '';
+
+      if (analysis.faceShape) {
+        const f = analysis.faceShape;
+        html += `
+          <div class="tip-card">
+            <div class="flex items-center gap-2 mb-3">
+              <span class="text-amber-400 text-xs font-medium">얼굴형 분석</span>
+              <span class="text-zinc-600 text-xs">신뢰도 ${f.confidence}%</span>
+            </div>
+            <p class="text-white text-sm font-medium mb-1">${f.type || '--'}</p>
+            <p class="text-zinc-400 text-xs mb-3 leading-relaxed">${f.reasoning || ''}</p>
+            ${f.strengths ? `<div class="mb-3"><p class="text-emerald-400 text-[10px] mb-1">매력 포인트</p><div class="space-y-0.5">${renderList(f.strengths, 'emerald')}</div></div>` : ''}
+            ${f.characteristics ? `<div class="mb-3"><p class="text-violet-400 text-[10px] mb-1">관찰된 특징</p><div class="space-y-0.5">${renderList(f.characteristics, 'violet')}</div></div>` : ''}
+            ${f.makeupTips ? `<div class="mb-3"><p class="text-pink-400 text-[10px] mb-1">맞춤 스타일링</p><div class="space-y-0.5">${renderList(f.makeupTips, 'pink')}</div></div>` : ''}
+            ${f.avoidPoints ? `<div><p class="text-red-400 text-[10px] mb-1">주의 사항</p><div class="space-y-0.5">${renderList(f.avoidPoints, 'red')}</div></div>` : ''}
+          </div>`;
+      }
+
+      if (analysis.personalColor) {
+        const p = analysis.personalColor;
+        html += `
+          <div class="tip-card">
+            <div class="flex items-center gap-2 mb-3">
+              <span class="text-amber-400 text-xs font-medium">퍼스널 컬러</span>
+              <span class="text-zinc-600 text-xs">신뢰도 ${p.confidence}%</span>
+            </div>
+            <p class="text-white text-sm font-medium mb-1">${p.key || '--'}</p>
+            <p class="text-zinc-400 text-xs mb-1">피부톤: ${p.skinTone || '--'}</p>
+            <p class="text-zinc-400 text-xs mb-3 leading-relaxed">${p.reasoning || ''}</p>
+            ${p.recommendations ? `<div class="mb-3"><p class="text-pink-400 text-[10px] mb-1">컬러 활용 가이드</p><div class="space-y-0.5">${renderList(p.recommendations, 'pink')}</div></div>` : ''}
+            ${p.specificProducts ? `<div class="mb-3"><p class="text-violet-400 text-[10px] mb-1">추천 컬러 코디</p><div class="space-y-0.5">${renderList(p.specificProducts, 'violet')}</div></div>` : ''}
+            ${p.seasonalWardrobe ? `<div class="glass rounded-xl p-3 mt-2"><p class="text-cyan-400 text-[10px] mb-1">계절별 옷장 구성</p><p class="text-zinc-400 text-xs leading-relaxed">${p.seasonalWardrobe}</p></div>` : ''}
+          </div>`;
+      }
+
+      if (analysis.bodyType) {
+        const b = analysis.bodyType;
+        html += `
+          <div class="tip-card">
+            <div class="flex items-center gap-2 mb-3">
+              <span class="text-amber-400 text-xs font-medium">체형 분석</span>
+              <span class="text-zinc-600 text-xs">신뢰도 ${b.confidence}%</span>
+            </div>
+            <p class="text-white text-sm font-medium mb-1">${b.type || '--'}</p>
+            <p class="text-zinc-400 text-xs mb-3 leading-relaxed">${b.reasoning || ''}</p>
+            ${b.strengths ? `<div class="mb-3"><p class="text-emerald-400 text-[10px] mb-1">체형의 매력 포인트</p><div class="space-y-0.5">${renderList(b.strengths, 'emerald')}</div></div>` : ''}
+            ${b.stylingTips ? `<div class="mb-3"><p class="text-blue-400 text-[10px] mb-1">맞춤 코디 조언</p><div class="space-y-0.5">${renderList(b.stylingTips, 'blue')}</div></div>` : ''}
+            ${b.avoidPoints ? `<div><p class="text-red-400 text-[10px] mb-1">피해야 할 옷차림</p><div class="space-y-0.5">${renderList(b.avoidPoints, 'red')}</div></div>` : ''}
+          </div>`;
+      }
+
+      // Overall + Signature + Shopping
+      html += `<div class="tip-card border-amber-500/20">`;
+      if (analysis.signatureStyle) {
+        html += `<div class="glass rounded-xl p-4 mb-4 text-center">
+          <p class="text-amber-400 text-[10px] mb-1">나의 시그니처 스타일</p>
+          <p class="text-white text-sm font-medium">"${analysis.signatureStyle}"</p>
+        </div>`;
+      }
+      if (analysis.overallAdvice) {
+        html += `<p class="text-amber-400 text-xs font-medium mb-2">종합 스타일링 전략</p>
+          <p class="text-zinc-300 text-sm leading-relaxed mb-4">${analysis.overallAdvice}</p>`;
+      }
+      if (analysis.shoppingList) {
+        html += `<p class="text-pink-400 text-xs font-medium mb-2">지금 당장 구매할 핵심 아이템</p>
+          <div class="space-y-1">${renderList(analysis.shoppingList, 'pink')}</div>`;
+      }
+      html += `</div>`;
+
+      content.innerHTML = html;
+      card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    // Check config on load
+    fetch('/api/check-config').then(r => r.json()).then(cfg => {
+      window._hasApiKey = cfg.hasApiKey;
+      window._hasSmtp = cfg.hasSmtp;
+    }).catch(() => {});
+  </script>
+</body>
+</html>
