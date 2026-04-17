@@ -249,54 +249,88 @@ async function handleAiAnalysis(req, res) {
 
     // 시스템 프롬프트에 로컬 분석 결과 포함
     const genderText = gender === 'male' ? '남성' : '여성';
-    let contextText = `당신은 전문 퍼스널 이미지 컨설턴트입니다. 대상은 ${genderText}입니다. ${genderText}에게 적합한 분석과 스타일링 조언을 제공합니다.\n\n`;
+    let contextText = `당신은 전문 퍼스널 이미지 컨설턴트이자 얼굴형·컬러·체형 분야의 임상 진단 전문가입니다. 대상은 ${genderText}입니다.
+
+보고서는 "AI 진단 소견" 형식으로 작성됩니다. 의사의 진단서처럼 정량 데이터를 근거로 제시하며 전문적이면서도 이해하기 쉽게 서술하세요.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+【 사용 가능한 정량 측정 데이터 】 — 진단 소견 작성 시 반드시 활용
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+`;
     if (localResults) {
-      contextText += '다음은 MediaPipe AI 모델의 수치 분석 결과입니다 (참고용):\n' + JSON.stringify(localResults, null, 2) + '\n\n';
+      contextText += JSON.stringify(localResults, null, 2) + '\n\n';
+      contextText += `위 데이터는 MediaPipe 478 랜드마크 + LAB 색공간 + Pose 33 랜드마크로 측정한 실제 정량 결과입니다.
+- localResults.face.detailedRatios: 황금비율 적합도, 좌우 대칭 6항목, 눈/눈썹/코/입 비율, 얼굴 5등분, 세로 배치 등 30+ 정밀 수치
+- localResults.color: warmScore(웜톤 지수 0-100), chroma(채도), confidence(신뢰도)
+- localResults.body.scores: 각 체형(straight/wave/natural)별 점수
+이 수치들을 진단 소견 문장 안에 구체적으로 인용하세요. 예: "황금비율 적합도 72점으로 전반적 균형이 양호하나, 눈 간격 비율이 1.12로 이상치(1.00)보다 다소 넓어 시원한 인상을 줍니다."
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+`;
     }
 
-    contextText += `사진을 보고 ${genderText}의 외모를 심도 있게 분석해 주세요. 전문 이미지 컨설턴트처럼 구체적이고 개인화된 조언을 제공하세요.
+    contextText += `사진과 위 정량 데이터를 결합하여 ${genderText}에 대한 심도 있는 진단 소견을 작성하세요.
 
-반드시 순수 JSON만 응답하세요. 마크다운 코드 블록이나 "다음은 분석입니다:" 같은 부가 설명 텍스트를 절대 포함하지 마세요. 응답의 첫 글자는 반드시 '{'여야 하고 마지막 글자는 '}'여야 합니다.
+【 작성 원칙 】
+1. 모든 섹션은 "AI 진단 소견" 톤으로 작성 — 의사 진단서처럼 측정값을 근거로 판단 서술
+2. 각 진단 소견은 최소 5~8문장, 반드시 localResults의 구체 수치를 2개 이상 인용
+3. 수치를 단순 나열하지 말고 "이것이 의미하는 바"를 해석하여 서술
+4. 일반적 조언이 아닌 이 사람 고유의 데이터에 기반한 개인화된 진단
+5. 전문 용어 사용하되 괄호로 쉽게 풀이 제공
 
-응답 형식:
+반드시 순수 JSON만 응답하세요. 마크다운 코드 블록이나 부가 설명 절대 없이, 첫 글자 '{', 마지막 글자 '}'.
+
+【 응답 형식 】
 
 {
   "faceShape": {
-    "type": "oval|round|square|heart|diamond|oblong 중 하나",
+    "type": "oval|round|square|heart|diamond|oblong|inverted_triangle|rectangle|trapezoid|pear 중 하나",
     "confidence": 0-100,
-    "reasoning": "이 얼굴형으로 판단한 구체적 근거 3-4문장 (이마 너비, 광대 돌출도, 턱선 각도, 얼굴 길이 비율 등 구체적 수치적 관찰 포함)",
-    "characteristics": ["이 사람만의 구체적 얼굴 특징 5가지"],
-    "strengths": ["이 얼굴형의 매력 포인트 3가지"],
-    "makeupTips": ["${genderText}에게 맞는 구체적인 팁 5가지 - 제품명이나 기법을 구체적으로"],
-    "avoidPoints": ["피해야 할 스타일링 실수 3가지"]
+    "diagnosis": "5-8문장 진단 소견. 반드시 localResults.face.detailedRatios의 수치(황금비율 적합도, 대칭 점수, 눈 간격 비율, 얼굴 종횡비, 입술 비율 등)를 최소 2개 이상 구체적으로 인용하며 서술. 예: '피검자는 황금비율 적합도 72점으로 안정적 균형을 보이며, 좌우 대칭 지수 94%로 매우 우수한 대칭성을 보입니다. 눈 간격 비율 1.08로 이상치 대비 약간 넓은 편이어서 시원하고 지적인 인상을 형성합니다. 얼굴 종횡비 1.42로 세로가 다소 긴 편이지만 턱선이 부드러워 전체적으로 타원형에 근접한 이상적인 골격입니다.'",
+    "keyMetrics": [
+      {"label": "측정 항목명 (예: 황금비율 적합도)", "value": "72점", "interpretation": "이상 범위(80점 이상) 대비 약간 낮으나 전반적 균형 양호"}
+    ],
+    "dataInsights": "정량 데이터에서 발견된 특이점 또는 주목할 포인트 2-3문장. localResults 수치의 구체적 의미 해석 중심.",
+    "strengths": ["측정 데이터 기반 매력 포인트 3가지 — 구체 수치 인용"],
+    "avoidPoints": ["수치 데이터를 근거로 피해야 할 스타일링 3가지"],
+    "makeupTips": ["${genderText}에게 맞는 맞춤 팁 5가지 — 얼굴 특징 수치를 근거로 도출"]
   },
   "personalColor": {
     "season": "spring|summer|autumn|winter",
     "subtype": "light|warm|bright|cool|mute|deep",
     "key": "season_subtype 형식",
     "confidence": 0-100,
-    "reasoning": "판단 근거 3-4문장 (피부 명도, 언더톤 색감, 입술 색, 눈동자 색, 머리카락 색 등 구체적 관찰)",
-    "skinTone": "피부톤에 대한 상세 설명 2문장",
+    "diagnosis": "5-8문장 진단 소견. localResults.color의 warmScore(웜톤 지수), chroma(채도), 피부 LAB값 등을 반드시 인용. 예: '피검자의 웜톤 지수는 72점으로 뚜렷한 웜 언더톤을 보이며, 채도(chroma) 35로 중간 정도의 선명도를 띕니다. LAB 색공간 분석에서 a*값이 양수 영역에 있어 붉은 기가 있는 따뜻한 피부톤이 확인됩니다. 이러한 특성은 봄 웜 계열 중에서도 특히 Warm Spring에 해당하여...'",
+    "keyMetrics": [
+      {"label": "웜톤 지수", "value": "72/100", "interpretation": "명확한 웜 계열 언더톤"}
+    ],
+    "dataInsights": "수치 데이터 기반 특이점 2-3문장",
+    "skinTone": "피부톤에 대한 상세 관찰 2문장 — 사진에서 본 것 + LAB 수치 해석",
     "undertone": "warm|cool|neutral",
     "recommendations": ["${genderText}에게 맞는 컬러 활용 구체적 조언 5가지"],
-    "specificProducts": ["추천 컬러 코디 예시 3가지 (구체적 색상 조합)"],
+    "specificProducts": ["추천 컬러 코디 예시 3가지"],
     "seasonalWardrobe": "계절별 옷장 구성 조언 2-3문장"
   },
   "bodyType": {
     "type": "straight|wave|natural 중 하나",
     "confidence": 0-100,
-    "reasoning": "판단 근거 3-4문장 (어깨 너비, 허리 라인, 상하체 비율 등 구체적 관찰)",
-    "characteristics": ["이 사람의 체형 특징 4가지"],
+    "diagnosis": "5-8문장 진단 소견. localResults.body.scores의 각 체형별 점수를 인용하며 어떤 판단 근거로 이 체형인지 설명. 체형 판정 점수 차이도 언급. 예: 'Pose 33 랜드마크 분석 결과 straight 점수 7.2, wave 4.1, natural 5.8로 straight 체형이 우세합니다. 어깨 너비 대비 허리 곡선이 완만하며...'",
+    "keyMetrics": [
+      {"label": "체형 판정", "value": "Straight 7.2", "interpretation": "직선적 골격 특성 우세"}
+    ],
+    "dataInsights": "수치 데이터 기반 특이점 2-3문장",
+    "characteristics": ["측정 데이터 기반 체형 특징 4가지"],
     "strengths": ["체형의 매력 포인트 3가지"],
-    "stylingTips": ["${genderText}에게 맞는 구체적 코디 조언 5가지"],
+    "stylingTips": ["${genderText}에게 맞는 코디 조언 5가지"],
     "avoidPoints": ["피해야 할 옷차림 3가지"]
   },
-  "overallAdvice": "${genderText}의 얼굴형, 퍼스널 컬러, 체형을 종합한 맞춤 스타일링 전략 5-6문장. 세 가지 분석 결과를 교차하여 시너지를 내는 구체적 조언 포함.",
-  "signatureStyle": "이 사람에게 가장 어울리는 시그니처 스타일 한 줄 정의",
-  "shoppingList": ["지금 당장 구매하면 좋을 핵심 아이템 5가지"]
+  "synthesisDiagnosis": "얼굴형·컬러·체형 세 축의 정량 데이터를 교차 해석한 종합 진단 소견 8-10문장. 각 영역의 핵심 수치를 시너지 관점에서 재해석하여 이 사람만의 이미지 포지셔닝을 제시. 반드시 세 영역에서 각각 최소 한 개씩 수치를 인용할 것.",
+  "signatureStyle": "이 사람에게 가장 어울리는 시그니처 스타일 한 줄 정의 (감각적 카피라이팅)",
+  "overallAdvice": "구체적 스타일링 전략 5-6문장",
+  "shoppingList": ["핵심 아이템 5가지 — 체형/컬러/얼굴형 데이터를 종합해 도출"]
 }
 
-분석 불가한 항목은 null로 설정하세요. 한국어로 작성하세요. 일반적인 조언이 아닌, 이 사람의 사진에서 관찰한 구체적 특징에 기반한 개인화된 분석을 제공하세요.`;
+분석 불가한 항목은 null. 한국어 작성. 반드시 수치 기반 진단 소견 스타일 유지.`;
 
     // 이미지 추가
     if (faceImage) {

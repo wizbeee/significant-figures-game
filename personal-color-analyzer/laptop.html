@@ -317,20 +317,33 @@
 
             <!-- ── Section 1: Face Analysis (Chapter 1 embedded) ── -->
             <div id="aiFaceSection" class="p-6 md:p-8 border-b border-white/5 hidden">
-              <div class="flex items-center gap-2 mb-4">
+              <div class="flex items-center gap-2 mb-5">
                 <span class="text-[10px] text-violet-500 tracking-widest uppercase">Section 01</span>
                 <div class="w-8 h-px bg-violet-500/30"></div>
-                <h4 class="text-sm font-medium text-violet-300">얼굴형 정밀 분석</h4>
+                <h4 class="text-sm font-medium text-violet-300">얼굴형 진단 소견</h4>
               </div>
-              <div class="grid md:grid-cols-2 gap-4 mb-4">
-                <!-- Left: Key Metrics (InBody-style measurement bars) -->
-                <div class="space-y-2" id="aiFaceMetrics"></div>
-                <!-- Right: AI Reasoning -->
-                <div class="glass rounded-xl p-4" id="aiFaceReasoning">
-                  <p class="text-[10px] text-amber-400 mb-2 tracking-wide">AI 진단 소견</p>
-                  <p id="aiFaceReasoningText" class="text-zinc-300 text-xs leading-relaxed"></p>
+
+              <!-- 진단 소견 (메인) -->
+              <div class="glass rounded-2xl p-5 md:p-6 mb-5 border border-amber-500/20 bg-gradient-to-br from-amber-500/5 to-transparent">
+                <div class="flex items-center gap-2 mb-3">
+                  <span class="text-amber-400 text-sm">🔬</span>
+                  <p class="text-amber-400 text-xs font-medium tracking-wide">AI 진단 소견</p>
                 </div>
+                <p id="aiFaceDiagnosis" class="text-zinc-200 text-sm leading-relaxed"></p>
               </div>
+
+              <!-- 정량 측정 근거 테이블 -->
+              <div class="glass rounded-xl p-4 mb-4">
+                <p class="text-[10px] text-violet-400 mb-3 tracking-widest uppercase">📊 진단 근거 — 정량 측정</p>
+                <div id="aiFaceMetrics" class="space-y-2"></div>
+              </div>
+
+              <!-- 데이터 인사이트 -->
+              <div id="aiFaceInsightsBox" class="glass rounded-xl p-4 mb-4 border-l-2 border-cyan-500/40 hidden">
+                <p class="text-[10px] text-cyan-400 mb-2 tracking-widest uppercase">🔎 데이터 특이점</p>
+                <p id="aiFaceInsights" class="text-zinc-300 text-xs leading-relaxed"></p>
+              </div>
+
               <!-- Strengths / Avoid -->
               <div class="grid md:grid-cols-2 gap-3">
                 <div class="tip-card border-emerald-500/20">
@@ -344,30 +357,46 @@
               </div>
               <!-- Styling Tips -->
               <div class="tip-card border-violet-500/20 mt-3">
-                <p class="text-violet-400 text-[10px] font-medium mb-2 tracking-wide">💄 맞춤 스타일링</p>
+                <p class="text-violet-400 text-[10px] font-medium mb-2 tracking-wide">💄 맞춤 스타일링 처방</p>
                 <div id="aiFaceTips" class="space-y-1"></div>
               </div>
             </div>
 
             <!-- ── Section 2: Personal Color (Chapter 2 embedded) ── -->
             <div id="aiColorSection" class="p-6 md:p-8 border-b border-white/5 hidden">
-              <div class="flex items-center gap-2 mb-4">
+              <div class="flex items-center gap-2 mb-5">
                 <span class="text-[10px] text-pink-500 tracking-widest uppercase">Section 02</span>
                 <div class="w-8 h-px bg-pink-500/30"></div>
-                <h4 class="text-sm font-medium text-pink-300">퍼스널 컬러 정밀 분석</h4>
+                <h4 class="text-sm font-medium text-pink-300">퍼스널 컬러 진단 소견</h4>
               </div>
-              <!-- Color palette preview -->
-              <div class="mb-4">
-                <p class="text-[10px] text-zinc-500 mb-2 tracking-wide">추천 컬러 팔레트</p>
-                <div id="aiColorPalette" class="flex flex-wrap gap-1"></div>
-              </div>
-              <div class="grid md:grid-cols-2 gap-4 mb-4">
-                <div class="space-y-2" id="aiColorMetrics"></div>
-                <div class="glass rounded-xl p-4">
-                  <p class="text-[10px] text-amber-400 mb-2 tracking-wide">AI 진단 소견</p>
-                  <p id="aiColorReasoningText" class="text-zinc-300 text-xs leading-relaxed"></p>
+
+              <!-- 진단 소견 (메인) -->
+              <div class="glass rounded-2xl p-5 md:p-6 mb-5 border border-amber-500/20 bg-gradient-to-br from-amber-500/5 to-transparent">
+                <div class="flex items-center gap-2 mb-3">
+                  <span class="text-amber-400 text-sm">🔬</span>
+                  <p class="text-amber-400 text-xs font-medium tracking-wide">AI 진단 소견</p>
                 </div>
+                <p id="aiColorDiagnosis" class="text-zinc-200 text-sm leading-relaxed"></p>
               </div>
+
+              <!-- Color palette preview -->
+              <div class="glass rounded-xl p-4 mb-4">
+                <p class="text-[10px] text-pink-400 mb-3 tracking-widest uppercase">🎨 처방 컬러 팔레트</p>
+                <div id="aiColorPalette" class="flex flex-wrap gap-1.5"></div>
+              </div>
+
+              <!-- 정량 측정 근거 -->
+              <div class="glass rounded-xl p-4 mb-4">
+                <p class="text-[10px] text-pink-400 mb-3 tracking-widest uppercase">📊 진단 근거 — LAB 색공간 분석</p>
+                <div id="aiColorMetrics" class="space-y-2"></div>
+              </div>
+
+              <!-- 데이터 인사이트 -->
+              <div id="aiColorInsightsBox" class="glass rounded-xl p-4 mb-4 border-l-2 border-cyan-500/40 hidden">
+                <p class="text-[10px] text-cyan-400 mb-2 tracking-widest uppercase">🔎 데이터 특이점</p>
+                <p id="aiColorInsights" class="text-zinc-300 text-xs leading-relaxed"></p>
+              </div>
+
               <div class="tip-card border-pink-500/20 mb-3">
                 <p class="text-pink-400 text-[10px] font-medium mb-2 tracking-wide">🎨 컬러 활용 가이드</p>
                 <div id="aiColorRecommendations" class="space-y-1"></div>
@@ -384,18 +413,33 @@
 
             <!-- ── Section 3: Body Type (Chapter 3 embedded) ── -->
             <div id="aiBodySection" class="p-6 md:p-8 border-b border-white/5 hidden">
-              <div class="flex items-center gap-2 mb-4">
+              <div class="flex items-center gap-2 mb-5">
                 <span class="text-[10px] text-blue-500 tracking-widest uppercase">Section 03</span>
                 <div class="w-8 h-px bg-blue-500/30"></div>
-                <h4 class="text-sm font-medium text-blue-300">체형 정밀 분석</h4>
+                <h4 class="text-sm font-medium text-blue-300">체형 진단 소견</h4>
               </div>
-              <div class="grid md:grid-cols-2 gap-4 mb-4">
-                <div class="space-y-2" id="aiBodyMetrics"></div>
-                <div class="glass rounded-xl p-4">
-                  <p class="text-[10px] text-amber-400 mb-2 tracking-wide">AI 진단 소견</p>
-                  <p id="aiBodyReasoningText" class="text-zinc-300 text-xs leading-relaxed"></p>
+
+              <!-- 진단 소견 (메인) -->
+              <div class="glass rounded-2xl p-5 md:p-6 mb-5 border border-amber-500/20 bg-gradient-to-br from-amber-500/5 to-transparent">
+                <div class="flex items-center gap-2 mb-3">
+                  <span class="text-amber-400 text-sm">🔬</span>
+                  <p class="text-amber-400 text-xs font-medium tracking-wide">AI 진단 소견</p>
                 </div>
+                <p id="aiBodyDiagnosis" class="text-zinc-200 text-sm leading-relaxed"></p>
               </div>
+
+              <!-- 정량 측정 근거 -->
+              <div class="glass rounded-xl p-4 mb-4">
+                <p class="text-[10px] text-blue-400 mb-3 tracking-widest uppercase">📊 진단 근거 — Pose 33 랜드마크 분석</p>
+                <div id="aiBodyMetrics" class="space-y-2"></div>
+              </div>
+
+              <!-- 데이터 인사이트 -->
+              <div id="aiBodyInsightsBox" class="glass rounded-xl p-4 mb-4 border-l-2 border-cyan-500/40 hidden">
+                <p class="text-[10px] text-cyan-400 mb-2 tracking-widest uppercase">🔎 데이터 특이점</p>
+                <p id="aiBodyInsights" class="text-zinc-300 text-xs leading-relaxed"></p>
+              </div>
+
               <div class="grid md:grid-cols-2 gap-3 mb-3">
                 <div class="tip-card border-emerald-500/20">
                   <p class="text-emerald-400 text-[10px] font-medium mb-2 tracking-wide">✓ 체형의 매력</p>
@@ -412,8 +456,23 @@
               </div>
             </div>
 
-            <!-- ── Final: Signature + Overall + Shopping ── -->
+            <!-- ── Final: Synthesis + Signature + Overall + Shopping ── -->
             <div class="bg-gradient-to-br from-amber-500/5 to-orange-500/5 p-6 md:p-8">
+
+              <!-- Section 04: Synthesis Diagnosis (종합 진단 소견) -->
+              <div id="aiSynthesisBox" class="glass rounded-2xl p-5 md:p-6 mb-5 border border-amber-500/30 hidden">
+                <div class="flex items-center gap-2 mb-3">
+                  <span class="text-[10px] text-amber-500 tracking-widest uppercase">Section 04</span>
+                  <div class="w-8 h-px bg-amber-500/30"></div>
+                  <h4 class="text-sm font-medium text-amber-300">종합 진단 소견</h4>
+                </div>
+                <div class="flex items-center gap-2 mb-3">
+                  <span class="text-amber-400 text-sm">🧬</span>
+                  <p class="text-amber-400 text-xs font-medium tracking-wide">얼굴형 · 컬러 · 체형 교차 분석</p>
+                </div>
+                <p id="aiSynthesisText" class="text-zinc-200 text-sm leading-relaxed"></p>
+              </div>
+
               <!-- Signature Style Banner -->
               <div id="aiSignatureBox" class="glass rounded-2xl p-5 mb-5 text-center border border-amber-500/20 hidden">
                 <p class="text-amber-400 text-[10px] tracking-widest uppercase mb-2">Your Signature Style</p>
@@ -422,7 +481,7 @@
               <!-- Overall Strategy -->
               <div id="aiOverallBox" class="mb-5 hidden">
                 <div class="flex items-center gap-2 mb-3">
-                  <span class="text-[10px] text-amber-500 tracking-widest uppercase">Overall Styling Strategy</span>
+                  <span class="text-[10px] text-amber-500 tracking-widest uppercase">Styling Prescription</span>
                   <div class="w-8 h-px bg-amber-500/30"></div>
                 </div>
                 <p id="aiOverallText" class="text-zinc-300 text-sm leading-relaxed"></p>
@@ -2233,21 +2292,68 @@
       const renderList = (arr, color = 'zinc') => (arr || []).map(t =>
         `<p class="text-zinc-400 text-xs flex items-start gap-1.5"><span class="text-${color}-500/60 mt-0.5">›</span><span>${t}</span></p>`).join('');
 
-      // Helper: 메트릭 바 (InBody 스타일)
-      const metricRow = (label, value, ideal, unit = '', barColor = 'violet') => {
-        const numVal = typeof value === 'number' ? value : parseFloat(value) || 0;
-        const numIdeal = typeof ideal === 'number' ? ideal : parseFloat(ideal) || 1;
-        const pct = Math.min((numVal / numIdeal) * 100, 150);
-        const diff = Math.abs(numVal - numIdeal);
-        const quality = diff < numIdeal * 0.05 ? 'text-emerald-400' : diff < numIdeal * 0.15 ? 'text-amber-400' : 'text-red-400';
-        return `<div class="glass rounded-lg p-2.5 flex items-center gap-3">
-          <span class="text-zinc-500 text-[10px] w-20 shrink-0">${label}</span>
-          <div class="flex-1 bg-zinc-800/50 rounded-full h-1.5 relative">
-            <div class="h-1.5 rounded-full bg-${barColor}-500/60" style="width:${Math.min(pct, 100)}%"></div>
-            <div class="absolute top-0 h-1.5 w-0.5 bg-zinc-400/50" style="left:${Math.min((numIdeal/numIdeal)*100, 100)}%"></div>
+      // Helper: keyMetrics 테이블 행 (Claude가 제공한 label/value/interpretation)
+      const keyMetricRow = (item, accent = 'violet') => {
+        const label = item.label || '--';
+        const value = item.value || '--';
+        const interp = item.interpretation || '';
+        return `<div class="glass rounded-lg p-3 flex items-start gap-3">
+          <div class="shrink-0 w-28 pt-0.5">
+            <p class="text-zinc-500 text-[10px] tracking-wide">${label}</p>
+            <p class="text-${accent}-400 text-sm font-mono font-medium">${value}</p>
           </div>
-          <span class="${quality} text-[11px] font-mono w-14 text-right">${value}${unit}</span>
+          <div class="flex-1 border-l border-white/5 pl-3">
+            <p class="text-zinc-300 text-xs leading-relaxed">${interp}</p>
+          </div>
         </div>`;
+      };
+
+      // Helper: fallback — local 수치를 keyMetric 형식으로 변환
+      const fallbackFaceMetrics = () => {
+        const dr = lastResults.face?.detailedRatios;
+        if (!dr) return [];
+        const items = [];
+        if (dr.goldenRatio?.fitScore != null)
+          items.push({ label: '황금비율 적합도', value: dr.goldenRatio.fitScore + '/100',
+                       interpretation: dr.goldenRatio.fitScore >= 80 ? '이상적 균형' : dr.goldenRatio.fitScore >= 60 ? '양호한 균형' : '개성 있는 비율' });
+        if (dr.symmetry?.overall != null)
+          items.push({ label: '좌우 대칭 지수', value: Math.round(dr.symmetry.overall * 100) + '%',
+                       interpretation: dr.symmetry.overall >= 0.95 ? '매우 우수한 대칭' : dr.symmetry.overall >= 0.85 ? '자연스러운 대칭' : '개성 있는 비대칭' });
+        if (dr.eye?.spacingRatio != null)
+          items.push({ label: '눈 간격 비율', value: dr.eye.spacingRatio.toFixed(2),
+                       interpretation: dr.eye.spacingRatio > 1.1 ? '넓은 편 — 시원한 인상' : dr.eye.spacingRatio < 0.9 ? '좁은 편 — 세련된 인상' : '표준 범위' });
+        if (dr.eye?.canthalTilt != null)
+          items.push({ label: '캔탈 틸트', value: dr.eye.canthalTilt.toFixed(1) + '°',
+                       interpretation: dr.eye.canthalTilt > 3 ? '상향 눈매' : dr.eye.canthalTilt < -3 ? '하향 눈매' : '수평 눈매' });
+        if (dr.mouth?.lipRatio != null)
+          items.push({ label: '입술 상/하 비율', value: dr.mouth.lipRatio.toFixed(2),
+                       interpretation: dr.mouth.lipRatio > 0.7 ? '상순 우세' : dr.mouth.lipRatio < 0.4 ? '하순 우세' : '균형 잡힌 입술' });
+        return items;
+      };
+
+      const fallbackColorMetrics = () => {
+        const lc = lastResults.color;
+        if (!lc) return [];
+        const items = [];
+        items.push({ label: '웜톤 지수', value: (lc.warmScore || 0) + '/100',
+                     interpretation: lc.warmScore >= 60 ? '명확한 웜 언더톤' : lc.warmScore <= 40 ? '명확한 쿨 언더톤' : '중립 언더톤' });
+        items.push({ label: '채도 (Chroma)', value: (lc.chroma || 0).toFixed(1),
+                     interpretation: lc.chroma >= 40 ? '선명한 피부 발색' : lc.chroma >= 25 ? '중간 채도' : '부드러운 저채도' });
+        items.push({ label: '시즌 판정 신뢰도', value: (lc.confidence || 0) + '%',
+                     interpretation: lc.confidence >= 80 ? '매우 명확한 판정' : lc.confidence >= 60 ? '안정적 판정' : '경계선 케이스' });
+        return items;
+      };
+
+      const fallbackBodyMetrics = () => {
+        const lb = lastResults.body;
+        if (!lb?.scores) return [];
+        const items = [];
+        for (const [key, score] of Object.entries(lb.scores)) {
+          const typeName = (BODY_TYPES[key] || {}).name || key;
+          const interp = score >= 7 ? '뚜렷한 특성' : score >= 5 ? '중간 정도 특성' : '약한 특성';
+          items.push({ label: typeName + ' 점수', value: score.toFixed(1) + '/10', interpretation: interp });
+        }
+        return items;
       };
 
       // ── Overall Score 계산 ──
@@ -2266,109 +2372,106 @@
         document.getElementById(baseId + 'Type').textContent = typeName || '--';
       };
 
-      // Face
+      // ══════════════════════════════════════
+      //  Section 01 · Face
+      // ══════════════════════════════════════
       if (analysis.faceShape) {
         const f = analysis.faceShape;
         const faceTypeLabel = (FACE_SHAPES[f.type] || {}).name || f.type;
         setScore('aiFace', f.confidence || 0, faceTypeLabel);
         document.getElementById('aiFaceSection').classList.remove('hidden');
-        document.getElementById('aiFaceReasoningText').textContent = f.reasoning || '';
 
-        // Face Metrics (local detailedRatios에서 추출)
-        const metrics = [];
-        const dr = lastResults.face?.detailedRatios;
-        if (dr) {
-          metrics.push(metricRow('얼굴 종횡비', dr.goldenRatio?.faceWidthToLength?.actual, 1.618, '', 'violet'));
-          metrics.push(metricRow('황금비율 적합도', dr.goldenRatio?.fitScore, 100, '%', 'amber'));
-          metrics.push(metricRow('좌우 대칭', Math.round((dr.symmetry?.overall || 0) * 100), 100, '%', 'cyan'));
-          metrics.push(metricRow('눈 간격 비율', dr.eye?.spacingRatio, 1.0, '', 'violet'));
-          metrics.push(metricRow('입술 균형', dr.mouth?.lipRatio, 0.618, '', 'pink'));
+        // 진단 소견 (diagnosis 우선, 폴백으로 reasoning)
+        document.getElementById('aiFaceDiagnosis').textContent = f.diagnosis || f.reasoning || '진단 소견 생성 중...';
+
+        // keyMetrics — Claude 제공값 우선, 없으면 local 데이터로 폴백
+        const metrics = (f.keyMetrics && f.keyMetrics.length) ? f.keyMetrics : fallbackFaceMetrics();
+        document.getElementById('aiFaceMetrics').innerHTML = metrics.map(m => keyMetricRow(m, 'violet')).join('') ||
+          '<p class="text-zinc-600 text-xs text-center py-3">측정 데이터가 없습니다</p>';
+
+        // 데이터 인사이트
+        if (f.dataInsights) {
+          document.getElementById('aiFaceInsightsBox').classList.remove('hidden');
+          document.getElementById('aiFaceInsights').textContent = f.dataInsights;
         }
-        document.getElementById('aiFaceMetrics').innerHTML = metrics.join('') ||
-          '<p class="text-zinc-600 text-xs text-center py-4">측정 데이터가 없습니다</p>';
 
         document.getElementById('aiFaceStrengths').innerHTML = renderList(f.strengths, 'emerald');
         document.getElementById('aiFaceAvoid').innerHTML = renderList(f.avoidPoints, 'red');
         document.getElementById('aiFaceTips').innerHTML = renderList(f.makeupTips, 'violet');
       }
 
-      // Color
+      // ══════════════════════════════════════
+      //  Section 02 · Color
+      // ══════════════════════════════════════
       if (analysis.personalColor) {
         const p = analysis.personalColor;
         const colorTypeLabel = (PERSONAL_COLORS[p.key] || {}).name || p.key;
         setScore('aiColor', p.confidence || 0, colorTypeLabel);
         document.getElementById('aiColorSection').classList.remove('hidden');
-        document.getElementById('aiColorReasoningText').textContent = p.reasoning || '';
+
+        // 진단 소견
+        document.getElementById('aiColorDiagnosis').textContent = p.diagnosis || p.reasoning || '진단 소견 생성 중...';
 
         // Palette
         const colorData = PERSONAL_COLORS[p.key];
         if (colorData?.palette) {
           document.getElementById('aiColorPalette').innerHTML =
-            colorData.palette.slice(0, 12).map(hex =>
-              `<div class="rounded-lg" style="width:32px;height:32px;background:${hex}" title="${hex}"></div>`
+            colorData.palette.slice(0, 15).map(hex =>
+              `<div class="rounded-lg shadow-sm" style="width:36px;height:36px;background:${hex}" title="${hex}"></div>`
             ).join('');
         }
 
-        // Metrics (local color 데이터)
-        const metrics = [];
-        const lc = lastResults.color;
-        if (lc) {
-          metrics.push(`<div class="glass rounded-lg p-2.5 flex items-center gap-3">
-            <span class="text-zinc-500 text-[10px] w-20 shrink-0">언더톤</span>
-            <div class="flex-1"><span class="text-white text-xs">${p.undertone || (lc.warmScore > 50 ? 'Warm' : 'Cool')}</span></div>
-            <span class="text-amber-400 text-[11px] font-mono">Warm ${lc.warmScore || 0}%</span>
-          </div>`);
-          metrics.push(metricRow('채도 (Chroma)', lc.chroma || 0, 50, '', 'pink'));
-          metrics.push(`<div class="glass rounded-lg p-2.5 flex items-center gap-3">
-            <span class="text-zinc-500 text-[10px] w-20 shrink-0">시즌</span>
-            <div class="flex-1"><span class="text-white text-xs">${colorTypeLabel}</span></div>
-            <span class="text-pink-400 text-[11px] font-mono">${p.confidence || 0}%</span>
-          </div>`);
+        // keyMetrics
+        const metrics = (p.keyMetrics && p.keyMetrics.length) ? p.keyMetrics : fallbackColorMetrics();
+        // Skintone은 별도 메트릭으로 추가
+        if (p.skinTone) metrics.push({ label: '피부톤 관찰', value: p.undertone || '-', interpretation: p.skinTone });
+        document.getElementById('aiColorMetrics').innerHTML = metrics.map(m => keyMetricRow(m, 'pink')).join('');
+
+        // 데이터 인사이트
+        if (p.dataInsights) {
+          document.getElementById('aiColorInsightsBox').classList.remove('hidden');
+          document.getElementById('aiColorInsights').textContent = p.dataInsights;
         }
-        metrics.push(`<div class="glass rounded-lg p-2.5">
-          <p class="text-zinc-500 text-[10px] mb-1">피부톤 관찰</p>
-          <p class="text-zinc-300 text-xs">${p.skinTone || '--'}</p>
-        </div>`);
-        document.getElementById('aiColorMetrics').innerHTML = metrics.join('');
 
         document.getElementById('aiColorRecommendations').innerHTML = renderList(p.recommendations, 'pink');
         document.getElementById('aiColorProducts').innerHTML = renderList(p.specificProducts, 'cyan');
         document.getElementById('aiColorWardrobe').textContent = p.seasonalWardrobe || '--';
       }
 
-      // Body
+      // ══════════════════════════════════════
+      //  Section 03 · Body
+      // ══════════════════════════════════════
       if (analysis.bodyType) {
         const b = analysis.bodyType;
         const bodyTypeLabel = (BODY_TYPES[b.type] || {}).name || b.type;
         setScore('aiBody', b.confidence || 0, bodyTypeLabel);
         document.getElementById('aiBodySection').classList.remove('hidden');
-        document.getElementById('aiBodyReasoningText').textContent = b.reasoning || '';
 
-        // Metrics
-        const metrics = [];
-        const lb = lastResults.body;
-        if (lb?.scores) {
-          for (const [key, score] of Object.entries(lb.scores)) {
-            const typeName = (BODY_TYPES[key] || {}).name || key;
-            metrics.push(metricRow(typeName, Math.round(score * 10) / 10, 10, '', 'blue'));
-          }
+        // 진단 소견
+        document.getElementById('aiBodyDiagnosis').textContent = b.diagnosis || b.reasoning || '진단 소견 생성 중...';
+
+        // keyMetrics
+        const metrics = (b.keyMetrics && b.keyMetrics.length) ? b.keyMetrics : fallbackBodyMetrics();
+        document.getElementById('aiBodyMetrics').innerHTML = metrics.map(m => keyMetricRow(m, 'blue')).join('') ||
+          '<p class="text-zinc-600 text-xs text-center py-3">측정 데이터가 없습니다</p>';
+
+        // 데이터 인사이트
+        if (b.dataInsights) {
+          document.getElementById('aiBodyInsightsBox').classList.remove('hidden');
+          document.getElementById('aiBodyInsights').textContent = b.dataInsights;
         }
-        // Characteristics as metric-like rows
-        if (b.characteristics) {
-          b.characteristics.slice(0, 3).forEach(c => {
-            metrics.push(`<div class="glass rounded-lg p-2.5">
-              <p class="text-zinc-400 text-xs flex items-start gap-1.5">
-                <span class="text-blue-500/60 mt-0.5">›</span><span>${c}</span>
-              </p>
-            </div>`);
-          });
-        }
-        document.getElementById('aiBodyMetrics').innerHTML = metrics.join('') ||
-          '<p class="text-zinc-600 text-xs text-center py-4">측정 데이터가 없습니다</p>';
 
         document.getElementById('aiBodyStrengths').innerHTML = renderList(b.strengths, 'emerald');
         document.getElementById('aiBodyAvoid').innerHTML = renderList(b.avoidPoints, 'red');
         document.getElementById('aiBodyTips').innerHTML = renderList(b.stylingTips, 'blue');
+      }
+
+      // ══════════════════════════════════════
+      //  Section 04 · Synthesis Diagnosis
+      // ══════════════════════════════════════
+      if (analysis.synthesisDiagnosis) {
+        document.getElementById('aiSynthesisBox').classList.remove('hidden');
+        document.getElementById('aiSynthesisText').textContent = analysis.synthesisDiagnosis;
       }
 
       // Signature
