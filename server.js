@@ -6,9 +6,10 @@ const url = require('url');
 const os = require('os');
 const crypto = require('crypto');
 
-const PORT = 8093;
+const PORT = parseInt(process.env.PORT) || 8093;
 const ROOT = __dirname;
-const DATA_DIR = path.join(ROOT, 'data');
+// DATA_DIR을 환경변수로 덮어쓸 수 있음 — 클라우드 배포 시 영구 디스크 경로로 지정
+const DATA_DIR = process.env.DATA_DIR || path.join(ROOT, 'data');
 const CONFIG_FILE = path.join(DATA_DIR, 'config.json');
 const LB_FILE = path.join(DATA_DIR, 'leaderboards.json');
 const STUDENTS_FILE = path.join(DATA_DIR, 'students.json');
@@ -16,7 +17,7 @@ const ATTEND_FILE = path.join(DATA_DIR, 'attendance.json');
 
 // ==================== 영구 데이터 ====================
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
-if (!fs.existsSync(CONFIG_FILE)) fs.writeFileSync(CONFIG_FILE, JSON.stringify({ teacherPassword: '3000', sheetsUrl: '' }, null, 2));
+if (!fs.existsSync(CONFIG_FILE)) fs.writeFileSync(CONFIG_FILE, JSON.stringify({ teacherPassword: process.env.TEACHER_PASSWORD || '3000', sheetsUrl: '' }, null, 2));
 if (!fs.existsSync(LB_FILE)) fs.writeFileSync(LB_FILE, JSON.stringify({ single: [], multi: [], battle: [] }, null, 2));
 if (!fs.existsSync(STUDENTS_FILE)) fs.writeFileSync(STUDENTS_FILE, JSON.stringify({}, null, 2));
 if (!fs.existsSync(ATTEND_FILE)) fs.writeFileSync(ATTEND_FILE, JSON.stringify({}, null, 2));
@@ -1668,8 +1669,10 @@ setInterval(() => {
   }
 }, 1000 * 5);
 
-server.listen(PORT, () => {
-  console.log(`\n🔬 유효숫자 마스터 PC방 서버 실행 중`);
+// 클라우드 배포 시 0.0.0.0 에 바인딩 — 모든 인터페이스에서 수신
+const HOST = process.env.HOST || '0.0.0.0';
+server.listen(PORT, HOST, () => {
+  console.log(`\n🔬 유효숫자 마스터 서버 실행 중 (port ${PORT})`);
   console.log(`  학생 입장: http://localhost:${PORT}/`);
   console.log(`  교사 카운터: http://localhost:${PORT}/teacher.html`);
   console.log(`  점수판: http://localhost:${PORT}/leaderboard.html`);
@@ -1677,5 +1680,5 @@ server.listen(PORT, () => {
   Object.values(ifs).flat().forEach(i => {
     if (i && i.family === 'IPv4' && !i.internal) console.log(`  네트워크 주소: http://${i.address}:${PORT}`);
   });
-  console.log(`  초기 교사 비밀번호: ${cfg.teacherPassword}\n`);
+  console.log(`  교사 비밀번호: ${cfg.teacherPassword}\n`);
 });

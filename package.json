@@ -1,0 +1,18 @@
+{
+  "name": "significant-figures-game",
+  "version": "2.0.0",
+  "description": "유효숫자 마스터 — 고등학교 과학 수업용 실시간 퀴즈 게임 (싱글/멀티/대전)",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "author": "wizbeee",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/wizbeee/significant-figures-game.git"
+  }
+}

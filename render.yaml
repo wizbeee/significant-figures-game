@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: significant-figures-game
+    runtime: node
+    plan: free
+    region: singapore
+    buildCommand: "echo 'no build needed — zero-dependency'"
+    startCommand: "node server.js"
+    envVars:
+      - key: NODE_VERSION
+        value: "20"
+      - key: DATA_DIR
+        value: "/var/data"
+      - key: TEACHER_PASSWORD
+        generateValue: true
+    disk:
+      name: game-data
+      mountPath: /var/data
+      sizeGB: 1
