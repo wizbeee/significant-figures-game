@@ -332,10 +332,39 @@
                 <p id="aiFaceDiagnosis" class="text-zinc-200 text-sm leading-relaxed"></p>
               </div>
 
+              <!-- 관찰 체크리스트 -->
+              <div id="aiFaceObsBox" class="glass rounded-xl p-4 mb-4 border-l-2 border-amber-500/40 hidden">
+                <p class="text-[10px] text-amber-400 mb-3 tracking-widest uppercase">📋 임상 관찰 기록</p>
+                <div id="aiFaceObservations" class="space-y-1"></div>
+              </div>
+
               <!-- 정량 측정 근거 테이블 -->
               <div class="glass rounded-xl p-4 mb-4">
                 <p class="text-[10px] text-violet-400 mb-3 tracking-widest uppercase">📊 진단 근거 — 정량 측정</p>
                 <div id="aiFaceMetrics" class="space-y-2"></div>
+              </div>
+
+              <!-- 감별 진단 -->
+              <div id="aiFaceDiffBox" class="glass rounded-xl p-4 mb-4 border-l-2 border-orange-500/40 hidden">
+                <p class="text-[10px] text-orange-400 mb-3 tracking-widest uppercase">⚖️ 감별 진단 (Differential Diagnosis)</p>
+                <div class="glass rounded-lg p-3 mb-2 border border-orange-500/20">
+                  <p class="text-[10px] text-zinc-500 mb-1">확정 진단</p>
+                  <p id="aiFaceDiffPrimary" class="text-orange-300 text-sm font-medium">--</p>
+                </div>
+                <p class="text-[10px] text-zinc-500 mb-2">배제된 후보</p>
+                <div id="aiFaceDiffRuled" class="space-y-2"></div>
+              </div>
+
+              <!-- 확신도 보정 -->
+              <div id="aiFaceCalBox" class="grid md:grid-cols-2 gap-3 mb-4 hidden">
+                <div class="glass rounded-xl p-3 border-l-2 border-emerald-500/40">
+                  <p class="text-[10px] text-emerald-400 mb-2 tracking-widest uppercase">✓ 높은 확신도</p>
+                  <div id="aiFaceCertain" class="space-y-1"></div>
+                </div>
+                <div class="glass rounded-xl p-3 border-l-2 border-yellow-500/40">
+                  <p class="text-[10px] text-yellow-400 mb-2 tracking-widest uppercase">? 재확인 권장</p>
+                  <div id="aiFaceUncertain" class="space-y-1"></div>
+                </div>
               </div>
 
               <!-- 데이터 인사이트 -->
@@ -379,6 +408,12 @@
                 <p id="aiColorDiagnosis" class="text-zinc-200 text-sm leading-relaxed"></p>
               </div>
 
+              <!-- 관찰 체크리스트 -->
+              <div id="aiColorObsBox" class="glass rounded-xl p-4 mb-4 border-l-2 border-amber-500/40 hidden">
+                <p class="text-[10px] text-amber-400 mb-3 tracking-widest uppercase">📋 임상 관찰 기록</p>
+                <div id="aiColorObservations" class="space-y-1"></div>
+              </div>
+
               <!-- Color palette preview -->
               <div class="glass rounded-xl p-4 mb-4">
                 <p class="text-[10px] text-pink-400 mb-3 tracking-widest uppercase">🎨 처방 컬러 팔레트</p>
@@ -389,6 +424,29 @@
               <div class="glass rounded-xl p-4 mb-4">
                 <p class="text-[10px] text-pink-400 mb-3 tracking-widest uppercase">📊 진단 근거 — LAB 색공간 분석</p>
                 <div id="aiColorMetrics" class="space-y-2"></div>
+              </div>
+
+              <!-- 감별 진단 -->
+              <div id="aiColorDiffBox" class="glass rounded-xl p-4 mb-4 border-l-2 border-orange-500/40 hidden">
+                <p class="text-[10px] text-orange-400 mb-3 tracking-widest uppercase">⚖️ 감별 진단 (Differential Diagnosis)</p>
+                <div class="glass rounded-lg p-3 mb-2 border border-orange-500/20">
+                  <p class="text-[10px] text-zinc-500 mb-1">확정 진단</p>
+                  <p id="aiColorDiffPrimary" class="text-orange-300 text-sm font-medium">--</p>
+                </div>
+                <p class="text-[10px] text-zinc-500 mb-2">배제된 후보</p>
+                <div id="aiColorDiffRuled" class="space-y-2"></div>
+              </div>
+
+              <!-- 확신도 보정 -->
+              <div id="aiColorCalBox" class="grid md:grid-cols-2 gap-3 mb-4 hidden">
+                <div class="glass rounded-xl p-3 border-l-2 border-emerald-500/40">
+                  <p class="text-[10px] text-emerald-400 mb-2 tracking-widest uppercase">✓ 높은 확신도</p>
+                  <div id="aiColorCertain" class="space-y-1"></div>
+                </div>
+                <div class="glass rounded-xl p-3 border-l-2 border-yellow-500/40">
+                  <p class="text-[10px] text-yellow-400 mb-2 tracking-widest uppercase">? 재확인 권장</p>
+                  <div id="aiColorUncertain" class="space-y-1"></div>
+                </div>
               </div>
 
               <!-- 데이터 인사이트 -->
@@ -428,10 +486,39 @@
                 <p id="aiBodyDiagnosis" class="text-zinc-200 text-sm leading-relaxed"></p>
               </div>
 
+              <!-- 관찰 체크리스트 -->
+              <div id="aiBodyObsBox" class="glass rounded-xl p-4 mb-4 border-l-2 border-amber-500/40 hidden">
+                <p class="text-[10px] text-amber-400 mb-3 tracking-widest uppercase">📋 임상 관찰 기록</p>
+                <div id="aiBodyObservations" class="space-y-1"></div>
+              </div>
+
               <!-- 정량 측정 근거 -->
               <div class="glass rounded-xl p-4 mb-4">
                 <p class="text-[10px] text-blue-400 mb-3 tracking-widest uppercase">📊 진단 근거 — Pose 33 랜드마크 분석</p>
                 <div id="aiBodyMetrics" class="space-y-2"></div>
+              </div>
+
+              <!-- 감별 진단 -->
+              <div id="aiBodyDiffBox" class="glass rounded-xl p-4 mb-4 border-l-2 border-orange-500/40 hidden">
+                <p class="text-[10px] text-orange-400 mb-3 tracking-widest uppercase">⚖️ 감별 진단 (Differential Diagnosis)</p>
+                <div class="glass rounded-lg p-3 mb-2 border border-orange-500/20">
+                  <p class="text-[10px] text-zinc-500 mb-1">확정 진단</p>
+                  <p id="aiBodyDiffPrimary" class="text-orange-300 text-sm font-medium">--</p>
+                </div>
+                <p class="text-[10px] text-zinc-500 mb-2">배제된 후보</p>
+                <div id="aiBodyDiffRuled" class="space-y-2"></div>
+              </div>
+
+              <!-- 확신도 보정 -->
+              <div id="aiBodyCalBox" class="grid md:grid-cols-2 gap-3 mb-4 hidden">
+                <div class="glass rounded-xl p-3 border-l-2 border-emerald-500/40">
+                  <p class="text-[10px] text-emerald-400 mb-2 tracking-widest uppercase">✓ 높은 확신도</p>
+                  <div id="aiBodyCertain" class="space-y-1"></div>
+                </div>
+                <div class="glass rounded-xl p-3 border-l-2 border-yellow-500/40">
+                  <p class="text-[10px] text-yellow-400 mb-2 tracking-widest uppercase">? 재확인 권장</p>
+                  <div id="aiBodyUncertain" class="space-y-1"></div>
+                </div>
               </div>
 
               <!-- 데이터 인사이트 -->
@@ -2292,6 +2379,42 @@
       const renderList = (arr, color = 'zinc') => (arr || []).map(t =>
         `<p class="text-zinc-400 text-xs flex items-start gap-1.5"><span class="text-${color}-500/60 mt-0.5">›</span><span>${t}</span></p>`).join('');
 
+      // Helper: 관찰/확신도 항목 렌더
+      const obsList = (arr, color = 'amber') => (arr || []).map((t, i) =>
+        `<p class="text-zinc-400 text-xs flex items-start gap-2">
+          <span class="text-${color}-500/60 font-mono text-[10px] mt-0.5">${String(i+1).padStart(2,'0')}</span>
+          <span>${t}</span>
+        </p>`).join('');
+
+      // Helper: 감별 진단 배제 후보 렌더
+      const renderRuledOut = (arr) => (arr || []).map(item =>
+        `<div class="glass rounded-lg p-3 border-l-2 border-zinc-700">
+          <p class="text-zinc-400 text-xs font-medium mb-1">✗ ${item.type}</p>
+          <p class="text-zinc-500 text-[11px] leading-relaxed">${item.whyNot}</p>
+        </div>`).join('');
+
+      // Helper: 새 섹션(observation/differential/calibration) 렌더 통합
+      const renderDiagnosticSections = (prefix, data) => {
+        // 관찰 체크리스트
+        if (data.observationChecklist?.length) {
+          document.getElementById(prefix + 'ObsBox').classList.remove('hidden');
+          document.getElementById(prefix + 'Observations').innerHTML = obsList(data.observationChecklist, 'amber');
+        }
+        // 감별 진단
+        if (data.differentialDiagnosis?.rulingOut?.length) {
+          document.getElementById(prefix + 'DiffBox').classList.remove('hidden');
+          document.getElementById(prefix + 'DiffPrimary').textContent = data.differentialDiagnosis.primaryChoice || '--';
+          document.getElementById(prefix + 'DiffRuled').innerHTML = renderRuledOut(data.differentialDiagnosis.rulingOut);
+        }
+        // 확신도 보정
+        const cal = data.confidenceCalibration;
+        if (cal && (cal.certain?.length || cal.uncertain?.length)) {
+          document.getElementById(prefix + 'CalBox').classList.remove('hidden');
+          document.getElementById(prefix + 'Certain').innerHTML = obsList(cal.certain, 'emerald');
+          document.getElementById(prefix + 'Uncertain').innerHTML = obsList(cal.uncertain, 'yellow');
+        }
+      };
+
       // Helper: keyMetrics 테이블 행 (Claude가 제공한 label/value/interpretation)
       const keyMetricRow = (item, accent = 'violet') => {
         const label = item.label || '--';
@@ -2395,6 +2518,9 @@
           document.getElementById('aiFaceInsights').textContent = f.dataInsights;
         }
 
+        // 관찰 + 감별 진단 + 확신도 보정
+        renderDiagnosticSections('aiFace', f);
+
         document.getElementById('aiFaceStrengths').innerHTML = renderList(f.strengths, 'emerald');
         document.getElementById('aiFaceAvoid').innerHTML = renderList(f.avoidPoints, 'red');
         document.getElementById('aiFaceTips').innerHTML = renderList(f.makeupTips, 'violet');
@@ -2433,6 +2559,9 @@
           document.getElementById('aiColorInsights').textContent = p.dataInsights;
         }
 
+        // 관찰 + 감별 진단 + 확신도 보정
+        renderDiagnosticSections('aiColor', p);
+
         document.getElementById('aiColorRecommendations').innerHTML = renderList(p.recommendations, 'pink');
         document.getElementById('aiColorProducts').innerHTML = renderList(p.specificProducts, 'cyan');
         document.getElementById('aiColorWardrobe').textContent = p.seasonalWardrobe || '--';
@@ -2460,6 +2589,9 @@
           document.getElementById('aiBodyInsightsBox').classList.remove('hidden');
           document.getElementById('aiBodyInsights').textContent = b.dataInsights;
         }
+
+        // 관찰 + 감별 진단 + 확신도 보정
+        renderDiagnosticSections('aiBody', b);
 
         document.getElementById('aiBodyStrengths').innerHTML = renderList(b.strengths, 'emerald');
         document.getElementById('aiBodyAvoid').innerHTML = renderList(b.avoidPoints, 'red');

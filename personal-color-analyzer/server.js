@@ -254,7 +254,51 @@ async function handleAiAnalysis(req, res) {
 보고서는 "AI 진단 소견" 형식으로 작성됩니다. 의사의 진단서처럼 정량 데이터를 근거로 제시하며 전문적이면서도 이해하기 쉽게 서술하세요.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-【 사용 가능한 정량 측정 데이터 】 — 진단 소견 작성 시 반드시 활용
+【 참고 지식 베이스 — 진단 기준 임상 테이블 】
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+■ 얼굴형 정량 기준 (이상 범위 / 유형 판정 시그니처)
+  - 얼굴 종횡비 (length/width) 이상: 1.5~1.6 (황금비율 1.618에 근접할수록 타원)
+  - 황금비율 적합도: 80~100점 이상(타원), 60~79점(양호), 60점 미만(개성 비율)
+  - 좌우 대칭 지수: 95%+(매우 우수), 85~94%(자연스러움), 85% 미만(개성적 비대칭)
+  - 얼굴 너비비:
+      · 둥근형: widthToLength > 0.85 & 턱선 곡률 > 0.1 & 턱각도 > 105°
+      · 사각형: jawToCheekbone > 0.90 & 턱각도 < 95° & 턱선 직선도 > 0.7
+      · 하트형: foreheadToCheekbone > 0.95 & jawToCheekbone < 0.75 & chinTaper < 0.65
+      · 다이아몬드형: cheekProminence > 1.10 & 이마·턱 모두 좁음
+      · 역삼각형: foreheadToCheekbone ≈ 1.0 & chinTaper < 0.60 (뾰족)
+      · 사다리꼴: taperRatio > 1.05 (아래가 위보다 넓음) & 턱 직선
+      · 배형: taperRatio > 1.05 & 턱 둥글고 볼 풍성
+      · 긴얼굴: widthToLength < 0.70 & 하안면 비율 > 0.36
+  - 눈 간격 비율(이상 1.00): >1.1 넓은 편, <0.9 좁은 편
+  - 캔탈 틸트: >3° 상향, -3~3° 수평, <-3° 하향
+  - 입술 상/하 비율(황금 0.618): >0.7 상순우세, <0.4 하순우세
+  - 얼굴 5등분: 각 영역이 20% 근접 → 균형, 편차 >5% → 불균형
+
+■ 퍼스널 컬러 12유형 시그니처 지표
+  - 웜톤 지수(warmScore) 60+ : 웜 계열 (봄/가을)
+  - 웜톤 지수 40- : 쿨 계열 (여름/겨울)
+  - 채도(chroma) 40+ & warmScore 60+ : Bright Spring / True Spring
+  - 채도 40+ & warmScore 40- : Bright Winter / True Winter
+  - 채도 25-40 & warmScore 60+ : Light/Warm/Soft Spring
+  - 채도 25-40 & warmScore 40- : Light/Cool Summer
+  - 채도 <25 & warmScore 40-60 : Soft Summer / Soft Autumn (뮤트 계열)
+  - 채도 40+ & warmScore 60+ (L*명도 낮음): Deep Autumn / True Autumn
+  - 12유형: spring_light/warm/bright, summer_light/cool/mute,
+            autumn_mute/warm/deep, winter_bright/cool/deep
+  - Caygill Theory: 4 Seasons × 3 하위유형 (light/true/deep or light/mute/bright)
+  - 피부 L* 값: >65 밝음, 45-65 중간, <45 어두움 → Light/Deep 판정 기준
+
+■ 체형 3유형 시그니처 (Kibbe + 일본 골격진단 결합)
+  - Straight: 쇄골 뚜렷 + 일직선 어깨 + 볼륨 있는 상체 + 허리 곡선 완만
+    · 판정: body.scores.straight 6+ & (scores.wave < 5) → 직선적 상체 우세
+  - Wave: 처진 어깨 + 얇은 쇄골 + 부드러운 곡선 + 허리 곡선 뚜렷
+    · 판정: scores.wave 6+ & 하체 볼륨 > 상체 → 곡선적 체형
+  - Natural: 골격 두드러짐 + 관절 크고 쇄골 각짐 + 운동 선수형
+    · 판정: scores.natural 6+ & 골격감 강조
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+【 사용 가능한 정량 측정 데이터 】 — 진단 소견 작성 시 반드시 인용
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 `;
     if (localResults) {
@@ -263,20 +307,30 @@ async function handleAiAnalysis(req, res) {
 - localResults.face.detailedRatios: 황금비율 적합도, 좌우 대칭 6항목, 눈/눈썹/코/입 비율, 얼굴 5등분, 세로 배치 등 30+ 정밀 수치
 - localResults.color: warmScore(웜톤 지수 0-100), chroma(채도), confidence(신뢰도)
 - localResults.body.scores: 각 체형(straight/wave/natural)별 점수
-이 수치들을 진단 소견 문장 안에 구체적으로 인용하세요. 예: "황금비율 적합도 72점으로 전반적 균형이 양호하나, 눈 간격 비율이 1.12로 이상치(1.00)보다 다소 넓어 시원한 인상을 줍니다."
+
+이 수치를 위의 참고 지식 베이스(임상 테이블)에 대조하여 판정하고, 진단 소견 문장에 구체적으로 인용하세요.
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 `;
     }
 
-    contextText += `사진과 위 정량 데이터를 결합하여 ${genderText}에 대한 심도 있는 진단 소견을 작성하세요.
+    contextText += `사진과 위 정량 데이터를 참고 지식 베이스와 대조하여 ${genderText}에 대한 심도 있는 진단 소견을 작성하세요.
 
 【 작성 원칙 】
 1. 모든 섹션은 "AI 진단 소견" 톤으로 작성 — 의사 진단서처럼 측정값을 근거로 판단 서술
 2. 각 진단 소견은 최소 5~8문장, 반드시 localResults의 구체 수치를 2개 이상 인용
-3. 수치를 단순 나열하지 말고 "이것이 의미하는 바"를 해석하여 서술
+3. 수치를 단순 나열하지 말고 "이것이 참고 지식 베이스의 어느 범위에 해당하는지" 명시
 4. 일반적 조언이 아닌 이 사람 고유의 데이터에 기반한 개인화된 진단
 5. 전문 용어 사용하되 괄호로 쉽게 풀이 제공
+6. 각 섹션에 반드시 "감별 진단(differentialDiagnosis)" 포함 — 왜 다른 유형이 아닌지 배제 근거
+
+【 사고 과정 가이드 】
+추론 단계에서 다음 순서를 따르세요:
+(1) 관찰(Observation): 사진에서 본 raw feature와 localResults 수치 나열
+(2) 판정(Classification): 참고 지식 베이스의 어느 기준에 해당하는지 매핑
+(3) 감별(Differential): 유사 유형과의 차이 — 왜 이 유형인가
+(4) 확신도 보정(Calibration): 확실한 부분과 불확실한 부분 명시
+(5) 서술(Diagnosis): 위 내용을 통합한 진단 소견 작성
 
 반드시 순수 JSON만 응답하세요. 마크다운 코드 블록이나 부가 설명 절대 없이, 첫 글자 '{', 마지막 글자 '}'.
 
@@ -286,51 +340,80 @@ async function handleAiAnalysis(req, res) {
   "faceShape": {
     "type": "oval|round|square|heart|diamond|oblong|inverted_triangle|rectangle|trapezoid|pear 중 하나",
     "confidence": 0-100,
-    "diagnosis": "5-8문장 진단 소견. 반드시 localResults.face.detailedRatios의 수치(황금비율 적합도, 대칭 점수, 눈 간격 비율, 얼굴 종횡비, 입술 비율 등)를 최소 2개 이상 구체적으로 인용하며 서술. 예: '피검자는 황금비율 적합도 72점으로 안정적 균형을 보이며, 좌우 대칭 지수 94%로 매우 우수한 대칭성을 보입니다. 눈 간격 비율 1.08로 이상치 대비 약간 넓은 편이어서 시원하고 지적인 인상을 형성합니다. 얼굴 종횡비 1.42로 세로가 다소 긴 편이지만 턱선이 부드러워 전체적으로 타원형에 근접한 이상적인 골격입니다.'",
+    "diagnosis": "5-8문장 진단 소견. 반드시 localResults.face.detailedRatios의 수치를 최소 2개 이상 구체 인용하며 참고 지식 베이스의 판정 기준(예: widthToLength > 0.85 → 둥근형)에 대조해 서술. 예: '피검자는 황금비율 적합도 72점으로 참고 기준(80점 이상 타원형)에 근접하나 다소 낮습니다. 좌우 대칭 지수 94%로 매우 우수한 대칭성(85% 이상 자연스러움)을 보이며, 얼굴 종횡비 1.42(이상 1.5~1.6)로 세로가 다소 긴 편입니다. widthToLength 0.71, jawToCheekbone 0.80으로 참고 테이블의 타원형 프로파일에 부합합니다.'",
+    "observationChecklist": ["raw 관찰 5가지 — 사진에서 본 것 + 수치의 기준 대조 (예: '얼굴 종횡비 1.42 → 타원 이상 범위 1.5~1.6 대비 약간 짧음')"],
+    "differentialDiagnosis": {
+      "primaryChoice": "판정한 유형",
+      "rulingOut": [
+        {"type": "배제된 후보 유형", "whyNot": "이 유형이 아닌 이유 — 참고 기준 수치 근거 명시. 예: '둥근형은 widthToLength > 0.85 필요하나 현재 0.71로 기준 미달'"}
+      ]
+    },
+    "confidenceCalibration": {
+      "certain": ["가장 확실한 판단 2-3가지 (수치 근거 포함)"],
+      "uncertain": ["불확실한 영역 1-2가지 + 그 이유 (경계선 수치, 사진 조도 등)"]
+    },
     "keyMetrics": [
-      {"label": "측정 항목명 (예: 황금비율 적합도)", "value": "72점", "interpretation": "이상 범위(80점 이상) 대비 약간 낮으나 전반적 균형 양호"}
+      {"label": "측정 항목명", "value": "72점", "interpretation": "참고 기준 대비 해석"}
     ],
-    "dataInsights": "정량 데이터에서 발견된 특이점 또는 주목할 포인트 2-3문장. localResults 수치의 구체적 의미 해석 중심.",
-    "strengths": ["측정 데이터 기반 매력 포인트 3가지 — 구체 수치 인용"],
-    "avoidPoints": ["수치 데이터를 근거로 피해야 할 스타일링 3가지"],
-    "makeupTips": ["${genderText}에게 맞는 맞춤 팁 5가지 — 얼굴 특징 수치를 근거로 도출"]
+    "dataInsights": "정량 데이터 특이점 2-3문장",
+    "strengths": ["매력 포인트 3가지"],
+    "avoidPoints": ["피해야 할 스타일링 3가지"],
+    "makeupTips": ["${genderText} 맞춤 팁 5가지"]
   },
   "personalColor": {
     "season": "spring|summer|autumn|winter",
     "subtype": "light|warm|bright|cool|mute|deep",
-    "key": "season_subtype 형식",
+    "key": "season_subtype",
     "confidence": 0-100,
-    "diagnosis": "5-8문장 진단 소견. localResults.color의 warmScore(웜톤 지수), chroma(채도), 피부 LAB값 등을 반드시 인용. 예: '피검자의 웜톤 지수는 72점으로 뚜렷한 웜 언더톤을 보이며, 채도(chroma) 35로 중간 정도의 선명도를 띕니다. LAB 색공간 분석에서 a*값이 양수 영역에 있어 붉은 기가 있는 따뜻한 피부톤이 확인됩니다. 이러한 특성은 봄 웜 계열 중에서도 특히 Warm Spring에 해당하여...'",
-    "keyMetrics": [
-      {"label": "웜톤 지수", "value": "72/100", "interpretation": "명확한 웜 계열 언더톤"}
-    ],
-    "dataInsights": "수치 데이터 기반 특이점 2-3문장",
-    "skinTone": "피부톤에 대한 상세 관찰 2문장 — 사진에서 본 것 + LAB 수치 해석",
+    "diagnosis": "5-8문장. warmScore, chroma, 피부 LAB을 참고 지식 베이스의 12유형 시그니처에 대조해 서술. 예: '웜톤 지수 72점으로 참고 기준(60+ 웜 계열)에 명확히 부합하며, 채도 35로 중간 범위(25-40)에 해당합니다. 이는 Warm Spring 시그니처(채도 40+)보다는 True Spring 또는 Light Spring 쪽에 가깝습니다. Caygill Theory의 Warm Light Spring 카테고리에 해당하여...'",
+    "observationChecklist": ["피부/머리카락/입술/눈동자 색감 관찰 + 참고 범위 대조"],
+    "differentialDiagnosis": {
+      "primaryChoice": "판정한 유형",
+      "rulingOut": [
+        {"type": "배제된 시즌/서브타입", "whyNot": "수치 기반 배제 근거. 예: 'Bright Winter는 warmScore < 40 필요하나 현재 72로 웜 영역'"}
+      ]
+    },
+    "confidenceCalibration": {
+      "certain": ["확실한 판단 (수치 근거)"],
+      "uncertain": ["불확실한 영역 + 이유"]
+    },
+    "keyMetrics": [{"label": "웜톤 지수", "value": "72/100", "interpretation": "명확한 웜 계열"}],
+    "dataInsights": "수치 특이점 2-3문장",
+    "skinTone": "피부톤 상세 관찰 2문장",
     "undertone": "warm|cool|neutral",
-    "recommendations": ["${genderText}에게 맞는 컬러 활용 구체적 조언 5가지"],
-    "specificProducts": ["추천 컬러 코디 예시 3가지"],
-    "seasonalWardrobe": "계절별 옷장 구성 조언 2-3문장"
+    "recommendations": ["컬러 활용 조언 5가지"],
+    "specificProducts": ["추천 컬러 코디 3가지"],
+    "seasonalWardrobe": "계절별 옷장 구성 2-3문장"
   },
   "bodyType": {
-    "type": "straight|wave|natural 중 하나",
+    "type": "straight|wave|natural",
     "confidence": 0-100,
-    "diagnosis": "5-8문장 진단 소견. localResults.body.scores의 각 체형별 점수를 인용하며 어떤 판단 근거로 이 체형인지 설명. 체형 판정 점수 차이도 언급. 예: 'Pose 33 랜드마크 분석 결과 straight 점수 7.2, wave 4.1, natural 5.8로 straight 체형이 우세합니다. 어깨 너비 대비 허리 곡선이 완만하며...'",
-    "keyMetrics": [
-      {"label": "체형 판정", "value": "Straight 7.2", "interpretation": "직선적 골격 특성 우세"}
-    ],
-    "dataInsights": "수치 데이터 기반 특이점 2-3문장",
-    "characteristics": ["측정 데이터 기반 체형 특징 4가지"],
-    "strengths": ["체형의 매력 포인트 3가지"],
-    "stylingTips": ["${genderText}에게 맞는 코디 조언 5가지"],
+    "diagnosis": "5-8문장. body.scores를 참고 지식 베이스의 Kibbe/골격진단 시그니처에 대조. 예: 'Pose 분석 결과 straight 7.2, wave 4.1, natural 5.8로 straight 우세(6+ 기준 충족)이며 wave 점수가 낮아(5 미만) 곡선적 체형은 배제됩니다. 어깨 수평감과 허리 곡선 완만함이 관찰되어 Kibbe의 Dramatic/Classic 계열에 해당...'",
+    "observationChecklist": ["어깨 라인/허리 곡선/쇄골/상하체 비율 관찰"],
+    "differentialDiagnosis": {
+      "primaryChoice": "판정한 체형",
+      "rulingOut": [
+        {"type": "배제된 체형", "whyNot": "점수 기반 배제 근거"}
+      ]
+    },
+    "confidenceCalibration": {
+      "certain": ["확실한 판단"],
+      "uncertain": ["불확실한 영역"]
+    },
+    "keyMetrics": [{"label": "Straight 점수", "value": "7.2/10", "interpretation": "직선 우세"}],
+    "dataInsights": "수치 특이점 2-3문장",
+    "characteristics": ["체형 특징 4가지"],
+    "strengths": ["매력 포인트 3가지"],
+    "stylingTips": ["${genderText} 코디 조언 5가지"],
     "avoidPoints": ["피해야 할 옷차림 3가지"]
   },
-  "synthesisDiagnosis": "얼굴형·컬러·체형 세 축의 정량 데이터를 교차 해석한 종합 진단 소견 8-10문장. 각 영역의 핵심 수치를 시너지 관점에서 재해석하여 이 사람만의 이미지 포지셔닝을 제시. 반드시 세 영역에서 각각 최소 한 개씩 수치를 인용할 것.",
-  "signatureStyle": "이 사람에게 가장 어울리는 시그니처 스타일 한 줄 정의 (감각적 카피라이팅)",
-  "overallAdvice": "구체적 스타일링 전략 5-6문장",
-  "shoppingList": ["핵심 아이템 5가지 — 체형/컬러/얼굴형 데이터를 종합해 도출"]
+  "synthesisDiagnosis": "8-10문장 종합 진단 소견. 세 영역 각 수치를 최소 1개씩 인용하며 시너지 관점에서 통합. 예: '얼굴형의 황금비 적합도 72점 + 퍼스널 컬러 웜톤 72점 + 체형 Straight 7.2의 조합은 따뜻하고 차분한 클래식 이미지 프로파일을 형성합니다...'",
+  "signatureStyle": "시그니처 스타일 한 줄 정의 (감각적 카피)",
+  "overallAdvice": "스타일링 전략 5-6문장",
+  "shoppingList": ["핵심 아이템 5가지"]
 }
 
-분석 불가한 항목은 null. 한국어 작성. 반드시 수치 기반 진단 소견 스타일 유지.`;
+분석 불가한 항목은 null. 한국어 작성. 반드시 수치 기반 진단 소견 스타일 + 감별 진단 필수.`;
 
     // 이미지 추가
     if (faceImage) {
@@ -357,16 +440,28 @@ async function handleAiAnalysis(req, res) {
 
     content.push({ type: 'text', text: '위 사진을 분석해 주세요.' });
 
-    console.log('[AI] Claude API 호출 중...');
+    console.log('[AI] Claude API 호출 중... (Extended Thinking 활성)');
     const response = await client.messages.create({
       model: 'claude-sonnet-4-5',
-      max_tokens: 8000,
+      max_tokens: 16000,
+      thinking: {
+        type: 'enabled',
+        budget_tokens: 6000  // 단계별 추론을 위한 thinking 예산
+      },
       system: contextText,
       messages: [{ role: 'user', content }]
     });
 
-    const responseText = response.content[0].text;
-    console.log('[AI] Claude API 응답 수신 (길이: ' + responseText.length + ')');
+    // Extended thinking 사용 시 content 배열에 thinking + text 블록이 섞여 있음
+    // 최종 사용자 응답(text) 블록만 추출
+    let responseText = '';
+    let thinkingSummary = '';
+    for (const block of response.content) {
+      if (block.type === 'text') responseText += block.text;
+      else if (block.type === 'thinking') thinkingSummary = (block.thinking || '').substring(0, 200);
+    }
+    console.log('[AI] Claude API 응답 수신 (thinking 사용, text 길이: ' + responseText.length + ')');
+    if (thinkingSummary) console.log('[AI] Thinking 미리보기:', thinkingSummary + '...');
 
     // JSON 추출 — 여러 방식 시도
     let aiResult = null;
