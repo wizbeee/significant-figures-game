@@ -322,6 +322,10 @@
             showError('세션이 종료되었습니다');
             showScreen('connectScreen');
             break;
+          case 'session:reset':
+            // 노트북이 다음 사람 분석 준비 → 촬영 화면 자동 복귀
+            resetCapture();
+            break;
         }
       };
 

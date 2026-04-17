@@ -596,6 +596,16 @@ function setupWebSocket(server, useHttps) {
           break;
         }
 
+        case 'session:reset': {
+          // 노트북이 다음 사람 분석 준비 요청 → 폰에게 촬영 화면으로 돌아가도록 알림
+          const session = sessions.get(ws._sessionCode);
+          if (session && session.phoneWs) {
+            send(session.phoneWs, { type: 'session:reset' });
+            console.log(`[Session] 리셋 (세션: ${ws._sessionCode}) — 폰 촬영 화면으로 복귀`);
+          }
+          break;
+        }
+
         default:
           send(ws, { type: 'error', message: `알 수 없는 메시지 타입: ${msg.type}` });
       }
