@@ -1,8 +1,11 @@
 {
   "name": "personal-color-analyzer",
-  "version": "1.0.0",
+  "version": "1.3.0",
   "description": "퍼스널 컬러 분석 서비스 - 얼굴형/체형/퍼스널컬러 분석",
   "main": "server.js",
+  "engines": {
+    "node": ">=18.0.0"
+  },
   "scripts": {
     "start": "node server.js",
     "setup": "node -e \"const fs=require('fs'); if(!fs.existsSync('.env')){fs.copyFileSync('.env.example','.env'); console.log('.env created - edit it with your API key');} else {console.log('.env exists');}\" && npm install"

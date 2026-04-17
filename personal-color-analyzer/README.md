@@ -2,6 +2,15 @@
 
 AI 기반 이미지 컨설팅 시스템 — 얼굴형 / 퍼스널 컬러 / 체형 분석
 
+## 🚀 1분 만에 배포하기 (Render.com 무료)
+
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/wizbeee/significant-figures-game/tree/feat/science-lab-admin-v3.2)
+
+배포 후 바로 HTTPS 주소 (예: `https://personal-color-analyzer.onrender.com`)로 접속하면
+**폰과 노트북이 같은 URL**로 접근 가능합니다. QR 스캔만 하면 바로 분석 시작!
+
+> 배포 시 필요한 환경변수: `ANTHROPIC_API_KEY` (Claude API 키)
+
 ## 주요 기능
 
 - **얼굴형 분석** (10종) — MediaPipe 478 랜드마크 기반, 30+ 정밀 비율 측정
@@ -33,7 +42,49 @@ personal-color-analyzer/
 └── README.md
 ```
 
-## 설치 및 실행
+## ☁️ 클라우드 배포 (자세히)
+
+### Render.com (추천 · 무료 플랜 지원)
+
+1. 위의 **Deploy to Render** 버튼 클릭
+2. GitHub 계정으로 로그인 → 리포지토리 연결
+3. Service 설정:
+   - Name: `personal-color-analyzer` (원하는 이름)
+   - Branch: `feat/science-lab-admin-v3.2`
+   - Root Directory: `personal-color-analyzer`
+   - Build Command: `npm install`
+   - Start Command: `node server.js`
+4. Environment Variables 에 **`ANTHROPIC_API_KEY`** 추가
+5. (선택) SMTP 이메일 발송용: `SMTP_HOST`, `SMTP_USER`, `SMTP_PASS` 등
+6. **Create Web Service** 클릭 → 2~3분 후 배포 완료
+
+배포 URL 예시: `https://personal-color-analyzer.onrender.com`
+
+> 무료 플랜은 15분간 사용 없으면 슬립 모드로 전환, 첫 요청 시 깨어나는 데 ~30초 소요
+
+### Railway.app
+
+1. https://railway.app → **New Project** → **Deploy from GitHub repo**
+2. 리포지토리 선택 → Root Directory 를 `personal-color-analyzer`로 설정
+3. Variables 탭에서 `ANTHROPIC_API_KEY` 추가
+4. 자동 빌드/배포 완료
+
+### Fly.io
+
+```bash
+cd personal-color-analyzer
+flyctl launch --name personal-color-analyzer
+flyctl secrets set ANTHROPIC_API_KEY=sk-ant-api03-xxxxx
+flyctl deploy
+```
+
+### 기타 플랫폼
+
+`PORT` 환경변수만 넘어오면 자동으로 클라우드 모드로 전환됩니다.
+Node.js 18+ 지원하는 어떤 호스팅이든 동일하게 동작합니다.
+(Vercel은 WebSocket 서버 지원이 제한적이어서 비권장)
+
+## 🖥️ 로컬 설치 및 실행
 
 ### 1. 클론
 

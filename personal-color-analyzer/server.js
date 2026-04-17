@@ -13,7 +13,11 @@ const { execSync } = require('child_process');
 const Anthropic = require('@anthropic-ai/sdk');
 const nodemailer = require('nodemailer');
 
-const HTTP_PORT = 5000;
+// ── 배포 모드 감지 ──
+// PORT 환경변수가 있으면 클라우드(Render/Railway/Fly.io 등) 모드
+// 이 경우 플랫폼이 HTTPS를 담당하므로 내부적으로는 HTTP만 실행
+const IS_CLOUD = !!process.env.PORT;
+const HTTP_PORT = parseInt(process.env.PORT || '5000');
 const HTTPS_PORT = 5001;
 const DIR = path.resolve(__dirname || process.cwd());
 const CERT_DIR = path.join(DIR, '.certs');
@@ -799,39 +803,71 @@ console.log('='.repeat(60));
 const httpServer = http.createServer(handleRequest);
 setupWebSocket(httpServer, false);
 
-// HTTPS Server (인증서 생성 시도)
-let httpsServer = null;
-let httpsReady = false;
-const certs = generateSelfSignedCert();
+// ── 클라우드 모드 (Render/Railway 등) ──
+// 플랫폼이 HTTPS를 담당하므로 HTTPS 서버 생성 스킵
+if (IS_CLOUD) {
+  httpServer.listen(HTTP_PORT, '0.0.0.0', () => {
+    console.log('');
+    console.log(`  ☁️  클라우드 모드로 실행 중 (PORT=${HTTP_PORT})`);
+    console.log('  🌐 플랫폼이 자동으로 HTTPS를 제공합니다');
+    console.log('  📱 같은 URL로 폰/노트북 모두 접속 가능');
+    console.log('');
+    console.log('='.repeat(60));
+    console.log('');
+  });
+} else {
+  // ── 로컬 모드 — 자체 서명 HTTPS + HTTP 둘 다 ──
+  let httpsServer = null;
+  let httpsReady = false;
+  const certs = generateSelfSignedCert();
 
-if (certs) {
-  try {
-    httpsServer = https.createServer(certs, handleRequest);
-    setupWebSocket(httpsServer, true);
-    httpsReady = true;
-  } catch (err) {
-    console.log(`  ⚠️  HTTPS 서버 생성 실패: ${err.message}`);
+  if (certs) {
+    try {
+      httpsServer = https.createServer(certs, handleRequest);
+      setupWebSocket(httpsServer, true);
+      httpsReady = true;
+    } catch (err) {
+      console.log(`  ⚠️  HTTPS 서버 생성 실패: ${err.message}`);
+    }
   }
-}
 
-// HTTP 시작
-httpServer.listen(HTTP_PORT, '0.0.0.0', () => {
-  const ips = getLocalIPs();
+  // HTTP 시작
+  httpServer.listen(HTTP_PORT, '0.0.0.0', () => {
+    const ips = getLocalIPs();
 
-  console.log('');
-  if (httpsReady) {
-    // HTTPS도 시작
-    httpsServer.listen(HTTPS_PORT, '0.0.0.0', () => {
-      console.log('  📱 폰에서 접속 (HTTPS — 카메라 사용 가능):');
-      if (ips.length === 0) {
-        console.log(`    https://localhost:${HTTPS_PORT}`);
-      } else {
-        for (const ip of ips) {
-          console.log(`    https://${ip.address}:${HTTPS_PORT}  (${ip.name})`);
+    console.log('');
+    if (httpsReady) {
+      // HTTPS도 시작
+      httpsServer.listen(HTTPS_PORT, '0.0.0.0', () => {
+        console.log('  📱 폰에서 접속 (HTTPS — 카메라 사용 가능):');
+        if (ips.length === 0) {
+          console.log(`    https://localhost:${HTTPS_PORT}`);
+        } else {
+          for (const ip of ips) {
+            console.log(`    https://${ip.address}:${HTTPS_PORT}  (${ip.name})`);
+          }
         }
-      }
-      console.log('');
-      console.log('  💻 노트북에서 접속:');
+        console.log('');
+        console.log('  💻 노트북에서 접속:');
+        if (ips.length === 0) {
+          console.log(`    http://localhost:${HTTP_PORT}`);
+        } else {
+          for (const ip of ips) {
+            console.log(`    http://${ip.address}:${HTTP_PORT}  (${ip.name})`);
+          }
+        }
+        console.log('');
+        console.log('  ─────────────────────────────────────────────────');
+        console.log('  📌 폰에서 처음 접속 시 "안전하지 않음" 경고가 나타납니다.');
+        console.log('     → iPhone Safari: "이 웹 사이트 방문" 탭');
+        console.log('     → Android Chrome: "고급" → "안전하지 않은 사이트로 이동"');
+        console.log('  ─────────────────────────────────────────────────');
+        console.log('');
+        console.log('='.repeat(60));
+        console.log('');
+      });
+    } else {
+      console.log('  💻 접속 주소:');
       if (ips.length === 0) {
         console.log(`    http://localhost:${HTTP_PORT}`);
       } else {
@@ -840,31 +876,13 @@ httpServer.listen(HTTP_PORT, '0.0.0.0', () => {
         }
       }
       console.log('');
-      console.log('  ─────────────────────────────────────────────────');
-      console.log('  📌 폰에서 처음 접속 시 "안전하지 않음" 경고가 나타납니다.');
-      console.log('     → iPhone Safari: "이 웹 사이트 방문" 탭');
-      console.log('     → Android Chrome: "고급" → "안전하지 않은 사이트로 이동"');
-      console.log('  ─────────────────────────────────────────────────');
+      console.log('  ⚠️  HTTPS를 사용할 수 없어 폰 카메라가 동작하지 않을 수 있습니다.');
+      console.log('     openssl을 설치하고 서버를 재시작하거나,');
+      console.log('     폰 Chrome에서 아래 설정을 변경하세요:');
+      console.log('     chrome://flags/#unsafely-treat-insecure-origin-as-secure');
       console.log('');
       console.log('='.repeat(60));
       console.log('');
-    });
-  } else {
-    console.log('  💻 접속 주소:');
-    if (ips.length === 0) {
-      console.log(`    http://localhost:${HTTP_PORT}`);
-    } else {
-      for (const ip of ips) {
-        console.log(`    http://${ip.address}:${HTTP_PORT}  (${ip.name})`);
-      }
     }
-    console.log('');
-    console.log('  ⚠️  HTTPS를 사용할 수 없어 폰 카메라가 동작하지 않을 수 있습니다.');
-    console.log('     openssl을 설치하고 서버를 재시작하거나,');
-    console.log('     폰 Chrome에서 아래 설정을 변경하세요:');
-    console.log('     chrome://flags/#unsafely-treat-insecure-origin-as-secure');
-    console.log('');
-    console.log('='.repeat(60));
-    console.log('');
-  }
-});
+  });
+}
