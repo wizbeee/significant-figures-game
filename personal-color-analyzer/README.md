@@ -37,9 +37,21 @@ personal-color-analyzer/
 
 ### 1. 클론
 
+퍼스널 컬러 분석 서비스의 최신 작업은 **`feat/science-lab-admin-v3.2`** 브랜치에 있습니다.
+
 ```bash
-git clone https://github.com/wizbeee/significant-figures-game.git
+# 최신 작업 브랜치 클론 (권장)
+git clone -b feat/science-lab-admin-v3.2 https://github.com/wizbeee/significant-figures-game.git
 cd significant-figures-game/personal-color-analyzer
+```
+
+다른 컴퓨터에서 작업을 이어갈 때는 동일하게 이 브랜치를 체크아웃하세요:
+
+```bash
+# 기존 clone이 있다면
+git fetch origin
+git checkout feat/science-lab-admin-v3.2
+git pull origin feat/science-lab-admin-v3.2
 ```
 
 ### 2. 의존성 설치
@@ -103,6 +115,45 @@ npm start
 - **Node.js** 18 이상
 - **OpenSSL** — 자체 서명 인증서 생성에 필요 (대부분의 OS에 기본 포함, Windows는 Git Bash에 포함)
 - 같은 **Wi-Fi 네트워크**에 폰과 노트북이 연결되어 있어야 함
+
+## 다른 컴퓨터에서 작업 이어가기
+
+### 작업 중 변경사항 커밋 & 푸시
+
+```bash
+git add personal-color-analyzer/
+git commit -m "작업 내용 요약"
+git push origin feat/science-lab-admin-v3.2
+```
+
+### 새 컴퓨터에서 최신 작업 내려받기
+
+```bash
+cd significant-figures-game
+git checkout feat/science-lab-admin-v3.2
+git pull origin feat/science-lab-admin-v3.2
+
+cd personal-color-analyzer
+# .env는 .gitignore에 포함되어 있어 새 컴퓨터에서 다시 만들어야 함
+cp .env.example .env
+# 에디터로 .env 열어 ANTHROPIC_API_KEY 입력
+```
+
+### 중요 — .env 파일과 API 키
+
+- `.env` 파일은 보안상 **GitHub에 올라가지 않습니다** (`.gitignore` 포함)
+- 새 컴퓨터에서는 `.env`를 다시 만들고 Claude API 키를 넣어야 합니다
+- Claude API 키는 같은 걸 여러 컴퓨터에서 공유해 써도 됩니다 (사용량만 합산)
+
+### 현재 기능 수준 (v1.3)
+
+- **얼굴형** 10종 (타원 / 둥근 / 사각 / 하트 / 다이아몬드 / 긴얼굴 / 역삼각 / 직사각 / 사다리꼴 / 배형)
+- **퍼스널 컬러** 12종 (Caygill 4계절 × 3하위유형)
+- **체형** 3종 (Straight / Wave / Natural)
+- **얼굴 정밀 비율** 30+ 항목 (황금비율, 대칭 6항목, 5등분 균형 등)
+- **AI 진단 소견** — Claude Sonnet 4.5 + Extended Thinking + 참고 지식 베이스 + 감별 진단
+- **연속 분석 모드** — 한 번 QR 스캔으로 여러 사람 분석
+- **InBody 스타일 리포트** — 점수 게이지 + 임상 관찰 기록 + 확신도 보정
 
 ## Windows 빠른 설정
 
