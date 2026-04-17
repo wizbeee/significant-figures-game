@@ -6,13 +6,33 @@
 - 👥 **멀티 플레이**: 각자 다른 문제를 독립적으로 풀기
 - ⚔️ **대전 플레이**: 카훗 스타일 실시간 경쟁 (속도전 / 서바이벌)
 - 👩‍🏫 **교사 관리**: 방 승인, 점수판 관리, 학생 전적, 구글 시트 동기화
-- 🎓 **학생 개인 전적**: 승률, 누적 점수, 모드별 통계
+- 🏫 **다중 교실 지원**: **한 URL에서 여러 선생님이 각자 교실을 만들어 독립적으로 수업**
 
 ---
 
-## 🚀 빠른 시작
+## ⭐ 핵심 — 여러 선생님이 하나의 URL 공유
 
-### 로컬 실행 (내 PC에서)
+이 서버는 **"교실(classroom)"** 개념으로 선생님마다 독립된 공간을 제공합니다.
+
+- 한 번만 배포하면 **전 세계 선생님이 모두 같은 URL**로 접속
+- 각 선생님은 본인만의 **교실 코드** (예: `김쌤화학`, `3반과학`)를 만들고 비밀번호 설정
+- 학생들은 그 코드를 입력해서 담당 선생님 교실에만 접속
+- 각 교실의 **학생 DB / 점수판 / 방 / 통계가 완전히 분리**됨
+
+### 선생님 처음 사용 흐름
+1. 교사 페이지(`/teacher.html`) 접속
+2. 원하는 교실 코드 입력 (예: `김쌤화학`) + 교실 이름 + 비밀번호
+3. **"로그인 / 교실 만들기"** 클릭 → 새 교실 생성됨
+4. 학생들에게 그 교실 코드 알려주기
+
+### 학생 접속 흐름
+1. 학생 페이지(`/`) 접속
+2. 선생님이 알려준 **교실 코드 + 학번 + 이름** 입력 → 입장
+3. 해당 교실의 방 목록만 보이고, 다른 선생님 교실과 섞이지 않음
+
+---
+
+## 🚀 로컬 실행 (내 PC에서 테스트)
 
 ```bash
 git clone https://github.com/wizbeee/significant-figures-game.git
@@ -20,86 +40,54 @@ cd significant-figures-game
 node server.js
 ```
 
-접속:
 - 학생: http://localhost:8093/
 - 교사: http://localhost:8093/teacher.html
-- 교사 초기 비밀번호: `3000`
+- 점수판: http://localhost:8093/leaderboard.html
 
 같은 Wi-Fi 학생들은 서버 PC의 IP로 접속 (예: `http://10.1.x.x:8093/`)
 
 ---
 
-## 🌐 인터넷 배포 — 다른 학교/선생님도 사용하려면
+## 🌐 Render.com 무료 배포 — 전 세계 선생님 공유
 
-**Render.com 무료 배포** (추천, 5분 소요)
+**한 번만 배포하면 여러 선생님이 같은 URL에서 각자 교실을 운영할 수 있어요.**
 
-### 준비물
-- GitHub 계정
-- 이 저장소를 **Fork** (우상단 Fork 버튼)
+### 단계 (5분 소요)
+1. [Render.com](https://render.com) 가입 → GitHub 로그인
+2. Fork한 이 저장소를 Render에서 **New + → Blueprint** → 저장소 선택 → **Apply**
+3. `render.yaml`이 자동 감지됨 → 1분 내 배포 완료
+4. 받은 URL (예: `https://sigfig-xxxxx.onrender.com`) 공유
 
-### 단계
+### 동료 선생님에게 안내할 내용
+> 1. `https://본인주소.onrender.com/teacher.html` 접속
+> 2. 원하는 **교실 코드** (영문/한글 2~20자, 예: `kim-chem`) + 이름 + 비밀번호 입력
+> 3. "로그인 / 교실 만들기" 클릭
+> 4. 학생들에게 **교실 코드**만 알려주기 (URL은 전체 공유)
 
-1. [Render.com](https://render.com) 접속 → GitHub 계정으로 가입/로그인
-2. 우상단 **New +** → **Blueprint** 선택
-3. Fork한 저장소 연결 → **Apply** 클릭
-4. `render.yaml`이 자동 감지됨 → 1분 내 배포 완료
-5. 생성된 URL (예: `https://my-sigfig.onrender.com`) 을 학생/동료 교사에게 공유
-
-### 배포 후 접속
-| 대상 | URL |
-|---|---|
-| 학생 | `https://본인주소.onrender.com/` |
-| 교사 | `https://본인주소.onrender.com/teacher.html` |
-| 점수판 | `https://본인주소.onrender.com/leaderboard.html` |
-
-### 교사 비밀번호
-Render가 자동으로 랜덤 비밀번호를 생성합니다.
-- Render 대시보드 → 본인 서비스 → **Environment** → `TEACHER_PASSWORD` 값 확인
-- 로그인 후 교사 페이지 상단에서 원하는 비밀번호로 변경 가능
-
-### 주의사항 (무료 플랜)
-- ⏰ **15분 무활동 시 서버 슬립**: 첫 접속 시 10-30초 로딩 필요 (유료 $7/월로 24시간 상시 가동 가능)
-- 💾 **데이터는 영구 디스크(1GB)에 저장**: 서버 재시작/재배포 시에도 학생 DB/점수판 유지
-- 🌏 **서울 리전 없음**: 싱가포르로 설정됨 (한국에서 ping 50-80ms — 수업 사용 충분)
+### 무료 플랜 유의점
+- ⏰ 15분 무활동 시 슬립 → 첫 접속 시 10~30초 로딩
+- 💾 영구 디스크 1GB — 모든 교실 데이터 보존
+- 🌏 싱가포르 리전 (한국 ping 50~80ms, 수업에 충분)
 
 ---
 
-## 🏫 다른 선생님이 각자 자기 수업에 쓰려면
-
-**각 선생님이 자기만의 서버를 배포**하는 방식을 권장합니다.
-
-이유:
-- 학생 데이터가 선생님별로 분리됨
-- 비밀번호도 선생님마다 다름
-- 한 수업의 점수판이 다른 수업에 섞이지 않음
-
-**방법:** 위 "인터넷 배포" 섹션을 그대로 따라하면 됩니다. Fork → Render Blueprint → 끝.
-
-각 선생님은:
-- 자기만의 URL (예: `https://kim-sigfig.onrender.com`)
-- 자기만의 교사 비밀번호
-- 자기 반 학생 데이터/점수판
-
----
-
-## 💻 다른 컴퓨터에서 이어서 개발
+## 💻 다른 컴퓨터에서 개발 이어가기
 
 ```bash
-# 처음 한 번만
 git clone https://github.com/wizbeee/significant-figures-game.git
 cd significant-figures-game
-
-# 서버 실행
 node server.js
 
-# 코드 수정 후 GitHub에 반영
+# 수정 후
 git add .
 git commit -m "수정 내용"
 git push
 
-# 다른 컴퓨터에서 최신 코드 받기
+# 다른 컴퓨터에서
 git pull
 ```
+
+Render에 연결된 GitHub가 자동으로 감지하고 재배포합니다.
 
 ---
 
@@ -109,17 +97,32 @@ git pull
 |---|---|---|
 | `PORT` | `8093` | 서버 포트 |
 | `HOST` | `0.0.0.0` | 바인딩 주소 |
-| `DATA_DIR` | `./data` | 데이터 저장 폴더 |
-| `TEACHER_PASSWORD` | `3000` | 초기 교사 비밀번호 (첫 실행 시에만 적용) |
+| `DATA_DIR` | `./data` | 데이터 저장 폴더 (영구 디스크 권장) |
+| `TEACHER_PASSWORD` | `3000` | 레거시 `default` 교실 초기 비밀번호 (마이그레이션 용) |
+
+---
+
+## 🏗 데이터 구조
+
+```
+data/
+├── classrooms.json     # 교실 정의 (코드, 이름, 비밀번호 해시, 설정)
+├── students.json       # { [교실코드]: { [학번]: 학생정보 } }
+├── leaderboards.json   # { [교실코드]: { single:[], multi:[], battle:[] } }
+└── attendance.json     # { [교실코드]: { [날짜]: { [학번]: 출석 } } }
+```
+
+- 비밀번호는 SHA-256 해시로 저장 (평문 저장 X)
+- 교실 삭제 API는 없음 (분실 방지) — 필요 시 직접 파일에서 제거
 
 ---
 
 ## 📚 기술 스택
 
-- **Zero-dependency Node.js** (Node 18+) — `package.json`이 있지만 `dependencies`는 없습니다
-- 파일 기반 JSON 저장소 (`data/*.json`)
-- 폴링 기반 실시간 동기화 (HTTP long-poll 대신 1.2초 간격 요청)
-- 순수 HTML/CSS/JS 프론트엔드 (빌드 단계 없음)
+- **Zero-dependency Node.js** (Node 18+)
+- 파일 기반 JSON 저장소
+- 폴링 기반 실시간 동기화 (1.2초 간격)
+- 순수 HTML/CSS/JS 프론트엔드 (빌드 불필요)
 
 ---
 

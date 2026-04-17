@@ -50,13 +50,21 @@
   <div class="login-wrap">
     <div class="icon">🔬</div>
     <h1>유효숫자 마스터</h1>
-    <h2>학번과 이름을 입력하세요</h2>
+    <h2>선생님 교실 코드 + 학번/이름</h2>
+    <input id="in-classroom" type="text" placeholder="교실 코드 (선생님께 받은 코드)" maxlength="20" autocomplete="off" list="classroom-list">
+    <datalist id="classroom-list"></datalist>
     <input id="in-sid" type="text" placeholder="학번" maxlength="10" autocomplete="off">
     <input id="in-name" type="text" placeholder="이름" maxlength="12" autocomplete="off">
     <button class="btn btn-pri btn-lg" style="width:100%" onclick="login()">🚀 입장</button>
     <div id="login-err" class="err-msg"></div>
-    <div style="margin-top:24px;color:var(--txt2);font-size:.85rem">
+    <div style="margin-top:18px;padding:10px 14px;background:var(--bg2);border:1px dashed var(--bg3);border-radius:8px;color:var(--txt2);font-size:.82rem;line-height:1.55">
+      💡 <b>교실 코드</b>는 선생님이 알려주시는 짧은 코드예요 (예: <code>김쌤화학</code>, <code>3반과학</code>).<br>
+      학번/이름은 그 교실 안에서만 저장되고 다른 반과 섞이지 않아요.
+    </div>
+    <div style="margin-top:18px;color:var(--txt2);font-size:.85rem">
       <a href="/leaderboard.html">🏆 점수판 보기</a>
+      ·
+      <a href="/teacher.html">👩‍🏫 선생님 로그인</a>
     </div>
   </div>
 </div>
@@ -257,6 +265,11 @@ function show(id) {
   document.getElementById('login').style.display = 'none';
   document.getElementById('lobby').style.display = 'none';
   document.getElementById(id).style.display = 'block';
+  if (id === 'login') {
+    loadClassroomList();
+    const saved = localStorage.getItem('sigfig-classroom');
+    if (saved) document.getElementById('in-classroom').value = saved;
+  }
 }
 
 async function init() {
@@ -268,7 +281,8 @@ async function init() {
     show('login');
     return;
   }
-  document.getElementById('me-label').textContent = `👤 ${me.name} (${me.studentId})`;
+  const clsLbl = me.classroomCode ? ` · 🏫 ${me.classroomCode}` : '';
+  document.getElementById('me-label').textContent = `👤 ${me.name} (${me.studentId})${clsLbl}`;
   // 이미 방에 있으면 자동 이동
   if (me.currentRoom) {
     location.href = '/room.html?code=' + me.currentRoom;
@@ -308,15 +322,28 @@ async function loadLb() {
   el.innerHTML = `<table><thead><tr><th>순위</th><th>이름(학번)</th><th>점수</th><th>정답</th>${extraHead}<th>게임</th></tr></thead><tbody>${rows}</tbody></table>`;
 }
 
+async function loadClassroomList() {
+  try {
+    const r = await fetch('/api/classrooms').then(r=>r.json());
+    const dl = document.getElementById('classroom-list');
+    if (dl && r.classrooms) {
+      dl.innerHTML = r.classrooms.map(c => `<option value="${c.code}">${c.name}</option>`).join('');
+    }
+  } catch (e) {}
+}
+
 async function login() {
+  const classroomCode = document.getElementById('in-classroom').value.trim();
   const studentId = document.getElementById('in-sid').value.trim();
   const name = document.getElementById('in-name').value.trim();
+  if (!classroomCode) { document.getElementById('login-err').textContent = '선생님이 알려준 교실 코드를 입력하세요.'; return; }
   if (!studentId || !name) { document.getElementById('login-err').textContent = '학번과 이름을 모두 입력하세요.'; return; }
-  const r = await api('/api/student/login', { method: 'POST', body: { studentId, name } });
+  const r = await api('/api/student/login', { method: 'POST', body: { classroomCode, studentId, name } });
   if (r.error) { document.getElementById('login-err').textContent = r.error; return; }
   localStorage.setItem('sigfig-token', r.token);
   localStorage.setItem('sigfig-studentId', r.studentId);
   localStorage.setItem('sigfig-name', r.name);
+  localStorage.setItem('sigfig-classroom', r.classroomCode);
   init();
 }
 
@@ -330,7 +357,10 @@ async function showStatsForStudent(studentId, displayName) {
   m.style.display = 'flex';
   document.getElementById('stats-title').textContent = `📊 ${displayName || studentId}의 전적`;
   document.getElementById('stats-body').innerHTML = '<div class="empty">불러오는 중...</div>';
-  const r = await fetch('/api/student/stats?studentId=' + encodeURIComponent(studentId)).then(r=>r.json());
+  const token = localStorage.getItem('sigfig-token');
+  const r = await fetch('/api/student/stats?studentId=' + encodeURIComponent(studentId), {
+    headers: token ? { 'Authorization': 'Bearer '+token } : {}
+  }).then(r=>r.json());
   if (r.error) { document.getElementById('stats-body').innerHTML = `<div class="empty">${r.error}</div>`; return; }
   const s = r.stats;
   const gm = { 1:'🔢 개수', 2:'🎯 찾기', 3:'📏 측정', 4:'➕ 덧/뺄' };

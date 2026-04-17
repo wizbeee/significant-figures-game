@@ -47,12 +47,19 @@
 <div id="login" style="display:none">
   <div class="login-wrap">
     <div style="font-size:4rem">👨‍🏫</div>
-    <h1>교사 카운터</h1>
-    <h2>관리 비밀번호 입력</h2>
-    <input type="password" id="in-pw" placeholder="비밀번호" style="width:100%;margin-bottom:10px;text-align:center">
-    <button class="btn btn-pri btn-lg" style="width:100%" onclick="login()">로그인</button>
+    <h1>교사 로그인</h1>
+    <h2>내 교실 코드 + 비밀번호</h2>
+    <input type="text" id="in-cls" placeholder="교실 코드 (예: 김쌤화학)" maxlength="20" style="width:100%;margin-bottom:10px;text-align:center" autocomplete="off">
+    <input type="text" id="in-cls-name" placeholder="교실 이름 (처음만 · 예: 김쌤 고2 화학)" maxlength="30" style="width:100%;margin-bottom:10px;text-align:center" autocomplete="off">
+    <input type="password" id="in-pw" placeholder="비밀번호 (4자 이상)" style="width:100%;margin-bottom:10px;text-align:center">
+    <button class="btn btn-pri btn-lg" style="width:100%" onclick="login()">로그인 / 교실 만들기</button>
     <div id="login-err" class="err-msg"></div>
-    <div style="margin-top:20px;color:var(--txt2);font-size:.82rem">
+    <div style="margin-top:16px;padding:10px 14px;background:var(--bg2);border:1px dashed var(--bg3);border-radius:8px;color:var(--txt2);font-size:.8rem;line-height:1.55;text-align:left">
+      💡 <b>교실 코드</b>는 선생님이 정하는 짧은 코드예요 (한글/영문/숫자, 2~20자).<br>
+      처음 로그인하면 그 코드로 <b>새 교실이 만들어지고</b>, 입력한 비밀번호가 관리 비밀번호가 됩니다.<br>
+      이 코드를 학생들에게 알려주시면 같은 교실에 입장할 수 있어요.
+    </div>
+    <div style="margin-top:14px;color:var(--txt2);font-size:.82rem">
       <a href="/">← 학생 로비로</a>
     </div>
   </div>
@@ -61,7 +68,7 @@
 <!-- Counter Dashboard -->
 <div id="counter" style="display:none">
   <div class="top-nav">
-    <div class="brand">🔬 유효숫자 마스터 — 교사 카운터</div>
+    <div class="brand">🔬 유효숫자 마스터 — 교사 카운터 <span id="brand-cls" style="font-size:.8rem;color:var(--acc);font-weight:500;margin-left:8px"></span></div>
     <div class="nav-links">
       <a href="#" onclick="showTab('dash')" id="nav-dash">🖥 카운터</a>
       <a href="#" onclick="showTab('students')" id="nav-students">👤 학생 관리</a>
@@ -248,18 +255,27 @@ async function init() {
   const ov = await teacherApi('/api/teacher/overview');
   if (ov.error) { localStorage.removeItem('sigfig-teacher-token'); show('login'); return; }
   show('counter');
+  const brandCls = document.getElementById('brand-cls');
+  if (brandCls && ov.classroomCode) brandCls.textContent = `🏫 ${ov.classroomName || ov.classroomCode} (${ov.classroomCode})`;
   refresh(ov);
   loadAutoApprove();
   pollTimer = setInterval(() => refresh(), 1500);
 }
 
 async function login() {
+  const classroomCode = document.getElementById('in-cls').value.trim();
+  const name = document.getElementById('in-cls-name').value.trim();
   const password = document.getElementById('in-pw').value;
-  if (!password) return;
-  const r = await fetch('/api/teacher/login', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ password }) });
+  if (!classroomCode) { document.getElementById('login-err').textContent = '교실 코드를 입력하세요.'; return; }
+  if (!password) { document.getElementById('login-err').textContent = '비밀번호를 입력하세요.'; return; }
+  const r = await fetch('/api/teacher/login', {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ classroomCode, password, name }),
+  });
   const j = await r.json();
   if (j.error) { document.getElementById('login-err').textContent = j.error; return; }
   localStorage.setItem('sigfig-teacher-token', j.token);
+  localStorage.setItem('sigfig-teacher-classroom', j.classroomCode);
   init();
 }
 

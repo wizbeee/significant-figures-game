@@ -10,27 +10,123 @@ const PORT = parseInt(process.env.PORT) || 8093;
 const ROOT = __dirname;
 // DATA_DIR을 환경변수로 덮어쓸 수 있음 — 클라우드 배포 시 영구 디스크 경로로 지정
 const DATA_DIR = process.env.DATA_DIR || path.join(ROOT, 'data');
-const CONFIG_FILE = path.join(DATA_DIR, 'config.json');
+const CLASSROOMS_FILE = path.join(DATA_DIR, 'classrooms.json');
 const LB_FILE = path.join(DATA_DIR, 'leaderboards.json');
 const STUDENTS_FILE = path.join(DATA_DIR, 'students.json');
 const ATTEND_FILE = path.join(DATA_DIR, 'attendance.json');
+// (레거시) 단일 교실용 파일 — 있으면 자동으로 default 교실로 이관
+const LEGACY_CONFIG_FILE = path.join(DATA_DIR, 'config.json');
+const DEFAULT_CLASSROOM = 'default';
 
 // ==================== 영구 데이터 ====================
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
-if (!fs.existsSync(CONFIG_FILE)) fs.writeFileSync(CONFIG_FILE, JSON.stringify({ teacherPassword: process.env.TEACHER_PASSWORD || '3000', sheetsUrl: '' }, null, 2));
-if (!fs.existsSync(LB_FILE)) fs.writeFileSync(LB_FILE, JSON.stringify({ single: [], multi: [], battle: [] }, null, 2));
-if (!fs.existsSync(STUDENTS_FILE)) fs.writeFileSync(STUDENTS_FILE, JSON.stringify({}, null, 2));
-if (!fs.existsSync(ATTEND_FILE)) fs.writeFileSync(ATTEND_FILE, JSON.stringify({}, null, 2));
-let cfg = JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8'));
-if (cfg.sheetsUrl === undefined) cfg.sheetsUrl = '';
-if (cfg.autoApproveRooms === undefined) cfg.autoApproveRooms = false;
-let leaderboards = JSON.parse(fs.readFileSync(LB_FILE, 'utf8'));
-let studentsDb = JSON.parse(fs.readFileSync(STUDENTS_FILE, 'utf8'));   // {studentId: {studentId,name,joinedAt,stats,blocked}}
-let attendance = JSON.parse(fs.readFileSync(ATTEND_FILE, 'utf8'));      // {"YYYY-MM-DD": {studentId: {firstSeen,lastSeen,games}}}
+
+// 비밀번호 해싱 (단방향 — sha256)
+function hashPw(pw) { return crypto.createHash('sha256').update(String(pw||'')).digest('hex'); }
+
+// 교실 정의: { [code]: { code, name, passwordHash, createdAt, config: { autoApproveRooms, sheetsUrl } } }
+let classrooms = {};
+if (fs.existsSync(CLASSROOMS_FILE)) {
+  classrooms = JSON.parse(fs.readFileSync(CLASSROOMS_FILE, 'utf8'));
+}
+const saveClassrooms = () => fs.writeFileSync(CLASSROOMS_FILE, JSON.stringify(classrooms, null, 2));
+
+// 레거시 config.json → default 교실로 자동 이관 (첫 실행 시만)
+if (fs.existsSync(LEGACY_CONFIG_FILE) && !classrooms[DEFAULT_CLASSROOM]) {
+  try {
+    const old = JSON.parse(fs.readFileSync(LEGACY_CONFIG_FILE, 'utf8'));
+    classrooms[DEFAULT_CLASSROOM] = {
+      code: DEFAULT_CLASSROOM,
+      name: '기본 교실',
+      passwordHash: hashPw(old.teacherPassword || process.env.TEACHER_PASSWORD || '3000'),
+      createdAt: Date.now(),
+      config: { autoApproveRooms: !!old.autoApproveRooms, sheetsUrl: old.sheetsUrl || '' },
+    };
+    saveClassrooms();
+    console.log('[이관] 레거시 config.json → default 교실로 이전 완료');
+  } catch (e) { /* ignore */ }
+}
+
+// 교실이 하나도 없으면 기본 교실 자동 생성 (초기 설정 친화)
+if (Object.keys(classrooms).length === 0) {
+  classrooms[DEFAULT_CLASSROOM] = {
+    code: DEFAULT_CLASSROOM,
+    name: '기본 교실',
+    passwordHash: hashPw(process.env.TEACHER_PASSWORD || '3000'),
+    createdAt: Date.now(),
+    config: { autoApproveRooms: false, sheetsUrl: '' },
+  };
+  saveClassrooms();
+}
+
+// 교실별 데이터 구조:
+// leaderboards: { [code]: { single, multi, battle } }
+// studentsDb:   { [code]: { [studentId]: {studentId,name,joinedAt,stats,blocked} } }
+// attendance:   { [code]: { [YYYY-MM-DD]: { [studentId]: {firstSeen,lastSeen,games,name} } } }
+let leaderboards = fs.existsSync(LB_FILE) ? JSON.parse(fs.readFileSync(LB_FILE, 'utf8')) : {};
+let studentsDb = fs.existsSync(STUDENTS_FILE) ? JSON.parse(fs.readFileSync(STUDENTS_FILE, 'utf8')) : {};
+let attendance = fs.existsSync(ATTEND_FILE) ? JSON.parse(fs.readFileSync(ATTEND_FILE, 'utf8')) : {};
+
+// 레거시 구조(플랫) 감지 → default 교실로 이관
+function migrateLegacyIfNeeded() {
+  // leaderboards가 { single: [...], multi: [...], battle: [...] } 형태면 레거시
+  if (leaderboards && (Array.isArray(leaderboards.single) || Array.isArray(leaderboards.multi) || Array.isArray(leaderboards.battle))) {
+    leaderboards = { [DEFAULT_CLASSROOM]: leaderboards };
+    fs.writeFileSync(LB_FILE, JSON.stringify(leaderboards, null, 2));
+    console.log('[이관] 레거시 leaderboards → default 교실로 이전 완료');
+  }
+  // students가 { studentId: {...} } 형태면 레거시 (값에 studentId 필드 있음)
+  const sKeys = Object.keys(studentsDb || {});
+  if (sKeys.length > 0 && studentsDb[sKeys[0]] && typeof studentsDb[sKeys[0]].studentId === 'string') {
+    studentsDb = { [DEFAULT_CLASSROOM]: studentsDb };
+    fs.writeFileSync(STUDENTS_FILE, JSON.stringify(studentsDb, null, 2));
+    console.log('[이관] 레거시 studentsDb → default 교실로 이전 완료');
+  }
+  // attendance가 { YYYY-MM-DD: {...} } 형태면 레거시
+  const aKeys = Object.keys(attendance || {});
+  if (aKeys.length > 0 && /^\d{4}-\d{2}-\d{2}$/.test(aKeys[0])) {
+    attendance = { [DEFAULT_CLASSROOM]: attendance };
+    fs.writeFileSync(ATTEND_FILE, JSON.stringify(attendance, null, 2));
+    console.log('[이관] 레거시 attendance → default 교실로 이전 완료');
+  }
+}
+migrateLegacyIfNeeded();
+
 const saveLB = () => fs.writeFileSync(LB_FILE, JSON.stringify(leaderboards, null, 2));
-const saveCfg = () => fs.writeFileSync(CONFIG_FILE, JSON.stringify(cfg, null, 2));
 const saveStudentsDb = () => fs.writeFileSync(STUDENTS_FILE, JSON.stringify(studentsDb, null, 2));
 const saveAttendance = () => fs.writeFileSync(ATTEND_FILE, JSON.stringify(attendance, null, 2));
+
+// 교실별 접근 헬퍼 — 없으면 자동 생성
+function clsroom(code) { return classrooms[code]; }
+function clsLB(code) {
+  if (!leaderboards[code]) leaderboards[code] = { single: [], multi: [], battle: [] };
+  return leaderboards[code];
+}
+function clsStudents(code) {
+  if (!studentsDb[code]) studentsDb[code] = {};
+  return studentsDb[code];
+}
+function clsAttendance(code) {
+  if (!attendance[code]) attendance[code] = {};
+  return attendance[code];
+}
+function clsCfg(code) {
+  const c = classrooms[code];
+  if (!c) return null;
+  if (!c.config) c.config = { autoApproveRooms: false, sheetsUrl: '' };
+  return c.config;
+}
+
+// 교실 코드 정규화 (2~20자, 한글/영문/숫자/하이픈/언더스코어)
+function normCode(v) {
+  return String(v || '').trim().slice(0, 20);
+}
+function validCode(v) {
+  const s = normCode(v);
+  if (s.length < 2 || s.length > 20) return false;
+  // 허용 문자: 한글, 영문, 숫자, -, _
+  return /^[\u3131-\u318E\uAC00-\uD7A3A-Za-z0-9_\-]+$/.test(s);
+}
 
 function todayKey() {
   const d = new Date();
@@ -52,28 +148,31 @@ function ensureStatsShape(s) {
   for (const k of Object.keys(d)) if (s[k] === undefined) s[k] = d[k];
   return s;
 }
-function registerOrTouchStudent(studentId, name) {
-  let rec = studentsDb[studentId];
+function registerOrTouchStudent(classroomCode, studentId, name) {
+  const sdb = clsStudents(classroomCode);
+  let rec = sdb[studentId];
   if (rec) rec.stats = ensureStatsShape(rec.stats);
   if (!rec) {
     rec = { studentId, name, joinedAt: Date.now(), stats: emptyStats(), blocked: false };
-    studentsDb[studentId] = rec;
+    sdb[studentId] = rec;
   } else {
     rec.name = name; // 이름은 최신 로그인으로 갱신
   }
-  // 출결 기록
+  // 출결 기록 (교실별)
+  const adb = clsAttendance(classroomCode);
   const day = todayKey();
-  if (!attendance[day]) attendance[day] = {};
-  const a = attendance[day][studentId] || { firstSeen: Date.now(), lastSeen: Date.now(), games: 0 };
+  if (!adb[day]) adb[day] = {};
+  const a = adb[day][studentId] || { firstSeen: Date.now(), lastSeen: Date.now(), games: 0 };
   a.lastSeen = Date.now();
   a.name = name;
-  attendance[day][studentId] = a;
+  adb[day][studentId] = a;
   saveStudentsDb();
   saveAttendance();
   return rec;
 }
-function accumulateStats(studentId, finalPlayer, roomType, battleResult) {
-  const rec = studentsDb[studentId];
+function accumulateStats(classroomCode, studentId, finalPlayer, roomType, battleResult) {
+  const sdb = clsStudents(classroomCode);
+  const rec = sdb[studentId];
   if (!rec) return;
   const s = ensureStatsShape(rec.stats);
   rec.stats = s;
@@ -91,17 +190,20 @@ function accumulateStats(studentId, finalPlayer, roomType, battleResult) {
     if (battleResult === 'win') s.battleWins += 1;
     else if (battleResult === 'lose') s.battleLosses += 1;
   }
+  const adb = clsAttendance(classroomCode);
   const day = todayKey();
-  if (attendance[day] && attendance[day][studentId]) attendance[day][studentId].games = (attendance[day][studentId].games||0) + 1;
+  if (adb[day] && adb[day][studentId]) adb[day][studentId].games = (adb[day][studentId].games||0) + 1;
   saveStudentsDb();
   saveAttendance();
 }
 
 // ==================== 메모리 상태 ====================
-const rooms = new Map();            // code → room
-const students = new Map();         // studentId → session { studentId, name, token, lastSeen, currentRoom }
-const studentTokens = new Map();    // token → studentId
-const teacherTokens = new Set();    // 교사 토큰
+const rooms = new Map();            // code → room (room.classroomCode 포함)
+const students = new Map();         // (classroomCode + ':' + studentId) → session { classroomCode, studentId, name, token, lastSeen, currentRoom }
+const studentTokens = new Map();    // token → { classroomCode, studentId }
+const teacherTokens = new Map();    // token → classroomCode
+
+function studentSessKey(classroomCode, studentId) { return classroomCode + ':' + studentId; }
 
 // ==================== 유효숫자 로직 ====================
 function analyze(str) {
@@ -495,8 +597,9 @@ function viewQuestion(q, hide) {
   return { gameMode: 3, meas: q.meas };
 }
 
-function pushLB(type, entry) {
-  const list = leaderboards[type] || (leaderboards[type] = []);
+function pushLB(classroomCode, type, entry) {
+  const lb = clsLB(classroomCode);
+  const list = lb[type] || (lb[type] = []);
   list.push({ ...entry, at: Date.now() });
   list.sort((a, b) => b.score - a.score);
   if (list.length > 100) list.length = 100;
@@ -546,9 +649,11 @@ function httpsPost(targetUrl, payload) {
     } catch (e) { reject(e); }
   });
 }
-function maybePushSheets(event, payload) {
-  if (!cfg.sheetsUrl) return;
-  httpsPost(cfg.sheetsUrl, { event, payload, at: Date.now() }).catch(e => {
+function maybePushSheets(classroomCode, event, payload) {
+  const c = classrooms[classroomCode];
+  const url = c?.config?.sheetsUrl;
+  if (!url) return;
+  httpsPost(url, { event, classroomCode, payload, at: Date.now() }).catch(e => {
     console.error('[sheets] push failed:', e.message);
   });
 }
@@ -584,18 +689,22 @@ function getAuth(req) {
 function authStudent(req) {
   const t = getAuth(req);
   if (!t) return null;
-  const sid = studentTokens.get(t);
-  if (!sid) return null;
-  const s = students.get(sid);
+  const info = studentTokens.get(t);
+  if (!info) return null;
+  const s = students.get(studentSessKey(info.classroomCode, info.studentId));
   if (s) s.lastSeen = Date.now();
   return s || null;
 }
 function authTeacher(req) {
-  const t = getAuth(req); return t && teacherTokens.has(t);
+  const t = getAuth(req);
+  if (!t) return null;
+  return teacherTokens.get(t) || null;  // 교실 코드 반환 (없으면 null)
 }
+// 교사가 맞는 교실에만 작업하는지 확인 — 토큰에서 교실 코드 반환, 없으면 false 반환
+function teacherClassroom(req) { return authTeacher(req); }
 
 // ==================== 방 로직 ====================
-function createRoom(type, config, owner, autoApprove = false) {
+function createRoom(classroomCode, type, config, owner, autoApprove = false) {
   const code = genCode();
   const capMap = { single: 1, multi: 35, battle: 10 };
   const minMap = { single: 1, multi: 2, battle: 2 };
@@ -605,6 +714,7 @@ function createRoom(type, config, owner, autoApprove = false) {
   const timedAllowed = [30,60,120,180,300,600];
   const room = {
     code, type,
+    classroomCode,             // 이 방이 속한 교실
     approved: autoApprove,     // 교사가 승인해야 시작 가능
     phase: 'lobby',
     config: {
@@ -973,16 +1083,17 @@ function finalizeRoom(room) {
   if (room.phaseTimer) clearTimeout(room.phaseTimer);
   if (room.multiTick) { clearInterval(room.multiTick); room.multiTick = null; }
   const type = room.type;
+  const cCode = room.classroomCode;
   const players = Object.values(room.players);
   const perPlayerTotal = (p) => type === 'multi' ? (p.correct + p.wrong) : room.questions.length;
   if (type === 'single') {
-    players.forEach(p => pushLB('single', {
+    players.forEach(p => pushLB(cCode, 'single', {
       studentId: p.studentId, name: p.name, score: p.score,
       correct: p.correct, total: room.questions.length, maxStreak: p.maxStreak,
       gameMode: room.config.gameMode, difficulty: room.config.difficulty,
     }));
   } else if (type === 'multi') {
-    players.forEach(p => pushLB('multi', {
+    players.forEach(p => pushLB(cCode, 'multi', {
       studentId: p.studentId, name: p.name, score: p.score,
       correct: p.correct, total: perPlayerTotal(p), maxStreak: p.maxStreak,
       gameMode: room.config.gameMode, difficulty: room.config.difficulty,
@@ -990,7 +1101,7 @@ function finalizeRoom(room) {
     }));
   } else {
     const winner = players.slice().sort((a,b) => b.score - a.score)[0];
-    players.forEach(p => pushLB('battle', {
+    players.forEach(p => pushLB(cCode, 'battle', {
       studentId: p.studentId, name: p.name, score: p.score,
       correct: p.correct, total: room.questions.length, maxStreak: p.maxStreak,
       gameMode: room.config.gameMode, difficulty: room.config.difficulty,
@@ -998,15 +1109,15 @@ function finalizeRoom(room) {
       playerCount: players.length,
     }));
   }
-  // 학생 누적 통계 업데이트 (대전은 승패 포함)
+  // 학생 누적 통계 업데이트 (대전은 승패 포함) — 교실 범위
   if (type === 'battle') {
     const winnerId = players.slice().sort((a,b) => b.score - a.score)[0]?.id;
-    players.forEach(p => accumulateStats(p.studentId, p, 'battle', p.id === winnerId ? 'win' : 'lose'));
+    players.forEach(p => accumulateStats(cCode, p.studentId, p, 'battle', p.id === winnerId ? 'win' : 'lose'));
   } else {
-    players.forEach(p => accumulateStats(p.studentId, p, type));
+    players.forEach(p => accumulateStats(cCode, p.studentId, p, type));
   }
-  // 구글 시트 동기화 (설정돼 있으면)
-  maybePushSheets('game', { type, players: players.map(p => ({
+  // 구글 시트 동기화 (교실별 설정 있을 때)
+  maybePushSheets(cCode, 'game', { type, classroomCode: cCode, players: players.map(p => ({
     studentId: p.studentId, name: p.name, score: p.score, correct: p.correct, total: room.questions.length,
     gameMode: room.config.gameMode, difficulty: room.config.difficulty,
     result: type === 'battle' ? (p.id === Object.values(room.players).sort((a,b)=>b.score-a.score)[0]?.id ? 'win' : 'lose') : null,
@@ -1027,29 +1138,40 @@ function checkAllAnswered(room) {
 async function handleApi(req, res, pathname, query) {
   const method = req.method;
 
+  // ---------- 교실 공개 정보 ----------
+  if (method === 'GET' && pathname === '/api/classrooms') {
+    // 학생이 교실 선택 시 사용 — 이름/코드만 공개 (비밀번호 X)
+    const list = Object.values(classrooms).map(c => ({ code: c.code, name: c.name || c.code }));
+    return sendJSON(res, { classrooms: list });
+  }
   // ---------- 학생 로그인 ----------
   if (method === 'POST' && pathname === '/api/student/login') {
     const body = await readBody(req);
+    const classroomCode = normCode(body.classroomCode || body.classCode);
     const studentId = String(body.studentId || '').trim().slice(0, 10);
     const name = String(body.name || '').trim().slice(0, 12);
+    if (!classroomCode) return sendJSON(res, { error: '교실 코드가 필요해요. 선생님께 문의하세요.' }, 400);
+    if (!clsroom(classroomCode)) return sendJSON(res, { error: '존재하지 않는 교실 코드예요.' }, 404);
     if (!studentId || !name) return sendJSON(res, { error: '학번과 이름을 입력하세요.' }, 400);
     if (!/^[0-9A-Za-z]+$/.test(studentId)) return sendJSON(res, { error: '학번은 숫자/영문만 가능' }, 400);
-    // 차단 확인
-    const rec = studentsDb[studentId];
+    // 차단 확인 (교실별)
+    const sdb = clsStudents(classroomCode);
+    const rec = sdb[studentId];
     if (rec && rec.blocked) return sendJSON(res, { error: '차단된 학생입니다. 교사에게 문의하세요.' }, 403);
     // 기존 세션이 있으면 토큰 갱신
-    let sess = students.get(studentId);
+    const sKey = studentSessKey(classroomCode, studentId);
+    let sess = students.get(sKey);
     if (sess && sess.token) studentTokens.delete(sess.token);
     const token = tok();
-    sess = { studentId, name, token, lastSeen: Date.now(), currentRoom: sess?.currentRoom || null };
-    students.set(studentId, sess);
-    studentTokens.set(token, studentId);
+    sess = { classroomCode, studentId, name, token, lastSeen: Date.now(), currentRoom: sess?.currentRoom || null };
+    students.set(sKey, sess);
+    studentTokens.set(token, { classroomCode, studentId });
     // 영구 DB + 출결 기록
-    const wasNew = !studentsDb[studentId];
-    registerOrTouchStudent(studentId, name);
-    if (wasNew) maybePushSheets('student_register', { studentId, name, at: Date.now() });
-    maybePushSheets('attendance', { studentId, name, date: todayKey(), at: Date.now() });
-    return sendJSON(res, { token, studentId, name });
+    const wasNew = !sdb[studentId];
+    registerOrTouchStudent(classroomCode, studentId, name);
+    if (wasNew) maybePushSheets(classroomCode, 'student_register', { studentId, name, at: Date.now() });
+    maybePushSheets(classroomCode, 'attendance', { studentId, name, date: todayKey(), at: Date.now() });
+    return sendJSON(res, { token, classroomCode, studentId, name });
   }
   if (method === 'POST' && pathname === '/api/student/logout') {
     const s = authStudent(req);
@@ -1060,26 +1182,32 @@ async function handleApi(req, res, pathname, query) {
         const r = rooms.get(s.currentRoom);
         if (r) leaveRoom(r, s);
       }
-      students.delete(s.studentId);
+      students.delete(studentSessKey(s.classroomCode, s.studentId));
     }
     return sendJSON(res, { ok: true });
   }
   if (method === 'GET' && pathname === '/api/me') {
     const s = authStudent(req);
     if (!s) return sendJSON(res, { error: '로그인 필요' }, 401);
-    return sendJSON(res, { studentId: s.studentId, name: s.name, currentRoom: s.currentRoom });
+    return sendJSON(res, { classroomCode: s.classroomCode, studentId: s.studentId, name: s.name, currentRoom: s.currentRoom });
   }
-  // 본인 또는 임의 학생의 누적 전적 조회 (공개 — 학번으로 조회 가능)
+  // 본인 또는 임의 학생의 누적 전적 조회 (공개 — 학번으로 조회 가능, 단 교실 범위 내)
   if (method === 'GET' && pathname === '/api/student/stats') {
     const sid = query.studentId;
+    // 교실 코드 — 로그인된 학생이면 그의 교실, 아니면 쿼리에서 받음
+    const sess = authStudent(req);
+    const code = sess ? sess.classroomCode : normCode(query.classroomCode);
     if (!sid) return sendJSON(res, { error: 'studentId 필요' }, 400);
-    const rec = studentsDb[sid];
+    if (!code || !clsroom(code)) return sendJSON(res, { error: '교실 코드 필요' }, 400);
+    const sdb = clsStudents(code);
+    const rec = sdb[sid];
     if (!rec) return sendJSON(res, { error: '존재하지 않는 학생' }, 404);
     const s = ensureStatsShape(rec.stats);
+    const lb = clsLB(code);
     // 최근 점수판 기록 10개
     const allRecent = [];
     for (const t of ['single','multi','battle']) {
-      for (const e of (leaderboards[t] || [])) {
+      for (const e of (lb[t] || [])) {
         if (e.studentId === sid) allRecent.push({ ...e, _type: t });
       }
     }
@@ -1093,31 +1221,39 @@ async function handleApi(req, res, pathname, query) {
     });
   }
 
-  // ---------- 방 목록 (공개) ----------
+  // ---------- 방 목록 (교실 내에서만) ----------
   if (method === 'GET' && pathname === '/api/rooms') {
-    const list = [...rooms.values()].map(r => ({
-      code: r.code, type: r.type, phase: r.phase,
-      approved: r.approved,
-      label: r.config.label, gameMode: r.config.gameMode,
-      difficulty: r.config.difficulty, questionCount: r.config.questionCount,
-      capacity: r.config.capacity,
-      playerCount: Object.keys(r.players).length,
-      ownerName: (Object.values(r.players).find(p => p.studentId === r.ownerId) || {}).name || '',
-      createdAt: r.createdAt,
-    }));
+    // 요청자의 교실: 학생 세션이면 그 교실, 교사면 교사 교실, 아니면 query.classroomCode (공개 탐색용)
+    const sess = authStudent(req);
+    const teacherCls = teacherClassroom(req);
+    const scope = sess ? sess.classroomCode : (teacherCls || normCode(query.classroomCode));
+    const list = [...rooms.values()]
+      .filter(r => !scope || r.classroomCode === scope)
+      .map(r => ({
+        code: r.code, type: r.type, phase: r.phase,
+        approved: r.approved,
+        label: r.config.label, gameMode: r.config.gameMode,
+        difficulty: r.config.difficulty, questionCount: r.config.questionCount,
+        capacity: r.config.capacity,
+        playerCount: Object.keys(r.players).length,
+        ownerName: (Object.values(r.players).find(p => p.studentId === r.ownerId) || {}).name || '',
+        classroomCode: r.classroomCode,
+        createdAt: r.createdAt,
+      }));
     return sendJSON(res, { rooms: list });
   }
 
   // ---------- 방 생성 (학생 또는 교사) ----------
   if (method === 'POST' && pathname === '/api/room') {
     const s = authStudent(req);
-    const isT = authTeacher(req);
-    if (!s && !isT) return sendJSON(res, { error: '로그인 필요' }, 401);
+    const teacherCls = teacherClassroom(req);
+    if (!s && !teacherCls) return sendJSON(res, { error: '로그인 필요' }, 401);
     const body = await readBody(req);
+    const classroomCode = s ? s.classroomCode : teacherCls;
     const type = ['single','multi','battle'].includes(body.type) ? body.type : 'single';
-    // 교사가 만들면 자동 승인. 학생이 만들어도 autoApproveRooms가 켜져 있으면 자동 승인.
-    const autoApprove = isT || !!cfg.autoApproveRooms;
-    const room = createRoom(type, body.config || {}, s, autoApprove);
+    const cCfg = clsCfg(classroomCode) || {};
+    const autoApprove = !!teacherCls || !!cCfg.autoApproveRooms;
+    const room = createRoom(classroomCode, type, body.config || {}, s, autoApprove);
     if (s) {
       // 학생은 생성 후 자동 입장
       try { joinRoom(room, s); } catch (e) {}
@@ -1134,6 +1270,10 @@ async function handleApi(req, res, pathname, query) {
     const body = await readBody(req);
     const room = rooms.get(String(body.code || ''));
     if (!room) return sendJSON(res, { error: '방을 찾을 수 없습니다' }, 404);
+    // 다른 교실 방에는 입장 불가
+    if (room.classroomCode && room.classroomCode !== s.classroomCode) {
+      return sendJSON(res, { error: '다른 교실의 방에는 입장할 수 없습니다' }, 403);
+    }
     // 이미 다른 방에 있다면 나가기
     if (s.currentRoom && s.currentRoom !== room.code) {
       const old = rooms.get(s.currentRoom);
@@ -1254,51 +1394,64 @@ async function handleApi(req, res, pathname, query) {
     return sendJSON(res, roomView(room, forTeacher, viewerS?.studentId));
   }
 
-  // ---------- 점수판 ----------
+  // ---------- 점수판 (교실별) ----------
+  // 점수판 범위 결정: 학생→본인 교실, 교사→본인 교실, 둘 다 아니면 query.classroomCode 허용
+  function lbScope(req) {
+    const sess = authStudent(req);
+    const tCls = teacherClassroom(req);
+    return sess ? sess.classroomCode : (tCls || normCode(query.classroomCode));
+  }
   if (method === 'GET' && pathname === '/api/leaderboard') {
     const type = query.type;
     if (!['single','multi','battle'].includes(type)) return sendJSON(res, { error: 'type 필요' }, 400);
-    return sendJSON(res, { type, entries: leaderboards[type] || [] });
+    const cls = lbScope(req);
+    if (!cls || !clsroom(cls)) return sendJSON(res, { error: '교실 코드 필요' }, 400);
+    return sendJSON(res, { type, classroomCode: cls, entries: clsLB(cls)[type] || [] });
   }
   if (method === 'POST' && pathname === '/api/leaderboard/clear') {
-    if (!authTeacher(req)) return sendJSON(res, { error: '교사 권한' }, 401);
+    const cls = teacherClassroom(req);
+    if (!cls) return sendJSON(res, { error: '교사 권한' }, 401);
     const body = await readBody(req);
-    if (['single','multi','battle'].includes(body.type)) { leaderboards[body.type] = []; saveLB(); }
+    if (['single','multi','battle'].includes(body.type)) { clsLB(cls)[body.type] = []; saveLB(); }
     return sendJSON(res, { ok: true });
   }
   // 다수 항목 일괄 삭제 — keys: [{at, studentId}, ...]
   if (method === 'POST' && pathname === '/api/leaderboard/entry/bulk-delete') {
-    if (!authTeacher(req)) return sendJSON(res, { error: '교사 권한' }, 401);
+    const cls = teacherClassroom(req);
+    if (!cls) return sendJSON(res, { error: '교사 권한' }, 401);
     const body = await readBody(req);
     if (!['single','multi','battle'].includes(body.type)) return sendJSON(res, { error: 'type 오류' }, 400);
     const keys = Array.isArray(body.keys) ? body.keys : [];
     if (keys.length === 0) return sendJSON(res, { error: '선택된 항목이 없음' }, 400);
     const set = new Set(keys.map(k => k.at + '|' + k.studentId));
-    const list = leaderboards[body.type] || [];
+    const lb = clsLB(cls);
+    const list = lb[body.type] || [];
     const before = list.length;
-    leaderboards[body.type] = list.filter(e => !set.has(e.at + '|' + e.studentId));
-    const removed = before - leaderboards[body.type].length;
+    lb[body.type] = list.filter(e => !set.has(e.at + '|' + e.studentId));
+    const removed = before - lb[body.type].length;
     saveLB();
     return sendJSON(res, { ok: true, removed });
   }
   // 개별 항목 삭제 — at(타임스탬프) + studentId로 식별
   if (method === 'POST' && pathname === '/api/leaderboard/entry/delete') {
-    if (!authTeacher(req)) return sendJSON(res, { error: '교사 권한' }, 401);
+    const cls = teacherClassroom(req);
+    if (!cls) return sendJSON(res, { error: '교사 권한' }, 401);
     const body = await readBody(req);
     if (!['single','multi','battle'].includes(body.type)) return sendJSON(res, { error: 'type 오류' }, 400);
-    const list = leaderboards[body.type] || [];
+    const list = clsLB(cls)[body.type] || [];
     const idx = list.findIndex(e => e.at === body.at && e.studentId === body.studentId);
     if (idx < 0) return sendJSON(res, { error: '항목을 찾을 수 없음' }, 404);
     const removed = list.splice(idx, 1)[0];
     saveLB();
     return sendJSON(res, { ok: true, removed });
   }
-  // 개별 항목 수정 — 이름/학번/점수/정답/총문항/최대콤보/승패
+  // 개별 항목 수정
   if (method === 'POST' && pathname === '/api/leaderboard/entry/update') {
-    if (!authTeacher(req)) return sendJSON(res, { error: '교사 권한' }, 401);
+    const cls = teacherClassroom(req);
+    if (!cls) return sendJSON(res, { error: '교사 권한' }, 401);
     const body = await readBody(req);
     if (!['single','multi','battle'].includes(body.type)) return sendJSON(res, { error: 'type 오류' }, 400);
-    const list = leaderboards[body.type] || [];
+    const list = clsLB(cls)[body.type] || [];
     const idx = list.findIndex(e => e.at === body.at && e.studentId === body.studentId);
     if (idx < 0) return sendJSON(res, { error: '항목을 찾을 수 없음' }, 404);
     const patch = body.patch || {};
@@ -1315,44 +1468,77 @@ async function handleApi(req, res, pathname, query) {
         entry[k] = String(patch[k]).slice(0, 50);
       }
     }
-    // 점수 변경 반영: 리스트 재정렬
     list.sort((a, b) => b.score - a.score);
     saveLB();
     return sendJSON(res, { ok: true, entry });
   }
 
-  // ---------- 교사 인증/관리 ----------
+  // ---------- 교사 인증/관리 (교실 스코프) ----------
+  // 교실 로그인 — 교실이 없으면 이 비밀번호로 새로 생성 (claim 방식)
   if (method === 'POST' && pathname === '/api/teacher/login') {
     const body = await readBody(req);
-    if (String(body.password || '') !== cfg.teacherPassword) return sendJSON(res, { error: '비밀번호 오류' }, 401);
-    const t = tok(); teacherTokens.add(t);
-    return sendJSON(res, { token: t });
+    const code = normCode(body.classroomCode || body.classCode);
+    const pw = String(body.password || '');
+    const name = String(body.name || '').trim().slice(0, 30);
+    if (!validCode(code)) return sendJSON(res, { error: '교실 코드는 2~20자 (한글/영문/숫자/-/_)' }, 400);
+    if (pw.length < 4) return sendJSON(res, { error: '비밀번호는 4자 이상' }, 400);
+    let c = clsroom(code);
+    if (!c) {
+      // 새 교실 생성 (claim)
+      c = classrooms[code] = {
+        code, name: name || code,
+        passwordHash: hashPw(pw), createdAt: Date.now(),
+        config: { autoApproveRooms: false, sheetsUrl: '' },
+      };
+      saveClassrooms();
+    } else {
+      // 비밀번호 확인
+      if (c.passwordHash !== hashPw(pw)) return sendJSON(res, { error: '비밀번호 오류' }, 401);
+    }
+    const t = tok(); teacherTokens.set(t, code);
+    return sendJSON(res, { token: t, classroomCode: code, name: c.name, created: !c.passwordHash ? false : undefined });
   }
   if (method === 'POST' && pathname === '/api/teacher/logout') {
     teacherTokens.delete(getAuth(req));
     return sendJSON(res, { ok: true });
   }
   if (method === 'POST' && pathname === '/api/teacher/password') {
-    if (!authTeacher(req)) return sendJSON(res, { error: '교사 권한' }, 401);
+    const cls = teacherClassroom(req);
+    if (!cls) return sendJSON(res, { error: '교사 권한' }, 401);
     const body = await readBody(req);
     if (!body.newPassword || body.newPassword.length < 4) return sendJSON(res, { error: '4자 이상' }, 400);
-    cfg.teacherPassword = String(body.newPassword); saveCfg();
+    classrooms[cls].passwordHash = hashPw(body.newPassword);
+    saveClassrooms();
     return sendJSON(res, { ok: true });
+  }
+  // 교실 이름 변경
+  if (method === 'POST' && pathname === '/api/teacher/classroom/rename') {
+    const cls = teacherClassroom(req);
+    if (!cls) return sendJSON(res, { error: '교사 권한' }, 401);
+    const body = await readBody(req);
+    const n = String(body.name || '').trim().slice(0, 30);
+    if (!n) return sendJSON(res, { error: '이름 필수' }, 400);
+    classrooms[cls].name = n;
+    saveClassrooms();
+    return sendJSON(res, { ok: true, name: n });
   }
   // 자동 승인 토글 조회/변경
   if (method === 'GET' && pathname === '/api/teacher/auto-approve') {
-    if (!authTeacher(req)) return sendJSON(res, { error: '교사 권한' }, 401);
-    return sendJSON(res, { enabled: !!cfg.autoApproveRooms });
+    const cls = teacherClassroom(req);
+    if (!cls) return sendJSON(res, { error: '교사 권한' }, 401);
+    return sendJSON(res, { enabled: !!clsCfg(cls).autoApproveRooms });
   }
   if (method === 'POST' && pathname === '/api/teacher/auto-approve') {
-    if (!authTeacher(req)) return sendJSON(res, { error: '교사 권한' }, 401);
+    const cls = teacherClassroom(req);
+    if (!cls) return sendJSON(res, { error: '교사 권한' }, 401);
     const body = await readBody(req);
-    cfg.autoApproveRooms = !!body.enabled;
-    saveCfg();
-    // 토글을 켜는 순간 이미 대기중인 방을 모두 일괄 승인
+    const c = clsCfg(cls);
+    c.autoApproveRooms = !!body.enabled;
+    saveClassrooms();
     let approvedCount = 0;
-    if (cfg.autoApproveRooms) {
+    if (c.autoApproveRooms) {
       for (const room of rooms.values()) {
+        if (room.classroomCode !== cls) continue;
         if (!room.approved) {
           room.approved = true;
           approvedCount++;
@@ -1362,17 +1548,18 @@ async function handleApi(req, res, pathname, query) {
         }
       }
     }
-    return sendJSON(res, { ok: true, enabled: cfg.autoApproveRooms, approvedPending: approvedCount });
+    return sendJSON(res, { ok: true, enabled: c.autoApproveRooms, approvedPending: approvedCount });
   }
   if (method === 'GET' && pathname === '/api/teacher/overview') {
-    if (!authTeacher(req)) return sendJSON(res, { error: '교사 권한' }, 401);
+    const cls = teacherClassroom(req);
+    if (!cls) return sendJSON(res, { error: '교사 권한' }, 401);
     const now = Date.now();
-    const studentList = [...students.values()].map(s => ({
+    const studentList = [...students.values()].filter(s => s.classroomCode === cls).map(s => ({
       studentId: s.studentId, name: s.name,
       lastSeen: s.lastSeen, online: now - s.lastSeen < 10000,
       currentRoom: s.currentRoom,
     }));
-    const roomList = [...rooms.values()].map(r => ({
+    const roomList = [...rooms.values()].filter(r => r.classroomCode === cls).map(r => ({
       code: r.code, type: r.type, phase: r.phase,
       approved: r.approved,
       label: r.config.label, gameMode: r.config.gameMode,
@@ -1385,125 +1572,143 @@ async function handleApi(req, res, pathname, query) {
       players: Object.values(r.players).map(p => ({ studentId: p.studentId, name: p.name, score: p.score, correct: p.correct, wrong: p.wrong })),
       createdAt: r.createdAt,
     }));
+    const lb = clsLB(cls);
     return sendJSON(res, {
+      classroomCode: cls, classroomName: classrooms[cls].name,
       students: studentList, rooms: roomList,
       leaderboards: {
-        single: leaderboards.single.length,
-        multi: leaderboards.multi.length,
-        battle: leaderboards.battle.length,
+        single: (lb.single||[]).length,
+        multi: (lb.multi||[]).length,
+        battle: (lb.battle||[]).length,
       },
     });
   }
   if (method === 'POST' && pathname === '/api/teacher/room/approve') {
-    if (!authTeacher(req)) return sendJSON(res, { error: '교사 권한' }, 401);
+    const cls = teacherClassroom(req);
+    if (!cls) return sendJSON(res, { error: '교사 권한' }, 401);
     const body = await readBody(req);
     const room = rooms.get(body.code);
-    if (!room) return sendJSON(res, { error: '방 없음' }, 404);
+    if (!room || room.classroomCode !== cls) return sendJSON(res, { error: '방 없음' }, 404);
     room.approved = body.approved !== false;
-    // single 방이 승인되면 자동 시작 (이미 참여자 있을 때)
     if (room.approved && room.type === 'single' && room.phase === 'lobby' && Object.keys(room.players).length > 0) {
       startRoom(room);
     }
     return sendJSON(res, { ok: true, approved: room.approved });
   }
   if (method === 'POST' && pathname === '/api/teacher/room/stop') {
-    if (!authTeacher(req)) return sendJSON(res, { error: '교사 권한' }, 401);
+    const cls = teacherClassroom(req);
+    if (!cls) return sendJSON(res, { error: '교사 권한' }, 401);
     const body = await readBody(req);
     const room = rooms.get(body.code);
-    if (!room) return sendJSON(res, { error: '방 없음' }, 404);
+    if (!room || room.classroomCode !== cls) return sendJSON(res, { error: '방 없음' }, 404);
     if (room.phaseTimer) clearTimeout(room.phaseTimer);
     room.phase = 'results';
     finalizeRoom(room);
     return sendJSON(res, { ok: true });
   }
   if (method === 'POST' && pathname === '/api/teacher/room/close') {
-    if (!authTeacher(req)) return sendJSON(res, { error: '교사 권한' }, 401);
+    const cls = teacherClassroom(req);
+    if (!cls) return sendJSON(res, { error: '교사 권한' }, 401);
     const body = await readBody(req);
     const room = rooms.get(body.code);
-    if (room) {
+    if (room && room.classroomCode === cls) {
       if (room.phaseTimer) clearTimeout(room.phaseTimer);
+      if (room.multiTick) { clearInterval(room.multiTick); room.multiTick = null; }
       Object.values(room.players).forEach(p => {
-        const s = students.get(p.studentId); if (s) s.currentRoom = null;
+        const s = students.get(studentSessKey(cls, p.studentId));
+        if (s) s.currentRoom = null;
       });
       rooms.delete(body.code);
     }
     return sendJSON(res, { ok: true });
   }
   if (method === 'POST' && pathname === '/api/teacher/kick') {
-    if (!authTeacher(req)) return sendJSON(res, { error: '교사 권한' }, 401);
+    const cls = teacherClassroom(req);
+    if (!cls) return sendJSON(res, { error: '교사 권한' }, 401);
     const body = await readBody(req);
-    const s = students.get(body.studentId);
+    const s = students.get(studentSessKey(cls, body.studentId));
     if (s) {
       if (s.currentRoom) { const r = rooms.get(s.currentRoom); if (r) leaveRoom(r, s); }
       studentTokens.delete(s.token);
-      students.delete(s.studentId);
+      students.delete(studentSessKey(cls, s.studentId));
     }
     return sendJSON(res, { ok: true });
   }
 
-  // ---------- 학생 마스터 관리 ----------
+  // ---------- 학생 마스터 관리 (교실별) ----------
   if (method === 'GET' && pathname === '/api/teacher/students') {
-    if (!authTeacher(req)) return sendJSON(res, { error: '교사 권한' }, 401);
-    const list = Object.values(studentsDb).map(r => ({
-      ...r, stats: ensureStatsShape(r.stats), online: students.has(r.studentId),
+    const cls = teacherClassroom(req);
+    if (!cls) return sendJSON(res, { error: '교사 권한' }, 401);
+    const sdb = clsStudents(cls);
+    const list = Object.values(sdb).map(r => ({
+      ...r, stats: ensureStatsShape(r.stats), online: students.has(studentSessKey(cls, r.studentId)),
     }));
     list.sort((a,b) => (a.studentId > b.studentId ? 1 : -1));
     return sendJSON(res, { students: list });
   }
   if (method === 'POST' && pathname === '/api/teacher/student/delete') {
-    if (!authTeacher(req)) return sendJSON(res, { error: '교사 권한' }, 401);
+    const cls = teacherClassroom(req);
+    if (!cls) return sendJSON(res, { error: '교사 권한' }, 401);
     const body = await readBody(req);
     const sid = String(body.studentId || '');
-    if (!studentsDb[sid]) return sendJSON(res, { error: '존재하지 않는 학생' }, 404);
-    delete studentsDb[sid];
+    const sdb = clsStudents(cls);
+    if (!sdb[sid]) return sendJSON(res, { error: '존재하지 않는 학생' }, 404);
+    delete sdb[sid];
     saveStudentsDb();
-    // 온라인 세션도 종료
-    const s = students.get(sid);
+    const s = students.get(studentSessKey(cls, sid));
     if (s) {
       if (s.currentRoom) { const r = rooms.get(s.currentRoom); if (r) leaveRoom(r, s); }
       studentTokens.delete(s.token);
-      students.delete(sid);
+      students.delete(studentSessKey(cls, sid));
     }
-    maybePushSheets('student_delete', { studentId: sid, at: Date.now() });
+    maybePushSheets(cls, 'student_delete', { studentId: sid, at: Date.now() });
     return sendJSON(res, { ok: true });
   }
   if (method === 'POST' && pathname === '/api/teacher/student/block') {
-    if (!authTeacher(req)) return sendJSON(res, { error: '교사 권한' }, 401);
+    const cls = teacherClassroom(req);
+    if (!cls) return sendJSON(res, { error: '교사 권한' }, 401);
     const body = await readBody(req);
     const sid = String(body.studentId || '');
-    const rec = studentsDb[sid];
+    const sdb = clsStudents(cls);
+    const rec = sdb[sid];
     if (!rec) return sendJSON(res, { error: '존재하지 않는 학생' }, 404);
     rec.blocked = !!body.blocked;
     saveStudentsDb();
     if (rec.blocked) {
-      const s = students.get(sid);
-      if (s) { studentTokens.delete(s.token); students.delete(sid); }
+      const s = students.get(studentSessKey(cls, sid));
+      if (s) { studentTokens.delete(s.token); students.delete(studentSessKey(cls, sid)); }
     }
     return sendJSON(res, { ok: true, blocked: rec.blocked });
   }
   if (method === 'POST' && pathname === '/api/teacher/student/rename') {
-    if (!authTeacher(req)) return sendJSON(res, { error: '교사 권한' }, 401);
+    const cls = teacherClassroom(req);
+    if (!cls) return sendJSON(res, { error: '교사 권한' }, 401);
     const body = await readBody(req);
     const sid = String(body.studentId || '');
     const newName = String(body.name || '').trim().slice(0, 12);
     if (!newName) return sendJSON(res, { error: '이름 필수' }, 400);
-    const rec = studentsDb[sid];
+    const sdb = clsStudents(cls);
+    const rec = sdb[sid];
     if (!rec) return sendJSON(res, { error: '존재하지 않는 학생' }, 404);
     rec.name = newName;
     saveStudentsDb();
-    const s = students.get(sid);
+    const s = students.get(studentSessKey(cls, sid));
     if (s) s.name = newName;
     return sendJSON(res, { ok: true });
   }
 
-  // ---------- 내보내기 / 백업 ----------
+  // ---------- 내보내기 / 백업 (교실 스코프) ----------
   if (method === 'GET' && pathname === '/api/teacher/export') {
-    if (!authTeacher(req)) return sendJSON(res, { error: '교사 권한' }, 401);
+    const cls = teacherClassroom(req);
+    if (!cls) return sendJSON(res, { error: '교사 권한' }, 401);
+    const sdb = clsStudents(cls);
+    const adb = clsAttendance(cls);
+    const lb = clsLB(cls);
     const kind = query.kind || 'students';
     let filename, csv;
     if (kind === 'students') {
       const headers = ['studentId','name','joinedAt','totalGames','totalCorrect','totalWrong','bestScore','maxStreak','lastPlayedAt','blocked'];
-      const rows = Object.values(studentsDb).map(r => ({
+      const rows = Object.values(sdb).map(r => ({
         studentId: r.studentId, name: r.name,
         joinedAt: fmtDate(r.joinedAt),
         totalGames: r.stats?.totalGames||0,
@@ -1515,28 +1720,28 @@ async function handleApi(req, res, pathname, query) {
         blocked: r.blocked ? 'Y' : '',
       }));
       csv = toCsv(headers, rows);
-      filename = `students_${todayKey()}.csv`;
+      filename = `students_${cls}_${todayKey()}.csv`;
     } else if (kind === 'attendance') {
       const day = String(query.date || todayKey());
       const headers = ['date','studentId','name','firstSeen','lastSeen','games'];
       const rows = [];
-      const dayData = attendance[day] || {};
+      const dayData = adb[day] || {};
       for (const sid of Object.keys(dayData)) {
         const a = dayData[sid];
-        rows.push({ date: day, studentId: sid, name: a.name || studentsDb[sid]?.name || '', firstSeen: fmtDate(a.firstSeen), lastSeen: fmtDate(a.lastSeen), games: a.games||0 });
+        rows.push({ date: day, studentId: sid, name: a.name || sdb[sid]?.name || '', firstSeen: fmtDate(a.firstSeen), lastSeen: fmtDate(a.lastSeen), games: a.games||0 });
       }
       csv = toCsv(headers, rows);
-      filename = `attendance_${day}.csv`;
+      filename = `attendance_${cls}_${day}.csv`;
     } else if (kind === 'leaderboard') {
       const type = ['single','multi','battle'].includes(query.type) ? query.type : 'single';
       const headers = ['rank','studentId','name','score','correct','total','maxStreak','gameMode','difficulty','at'];
-      const rows = (leaderboards[type]||[]).map((e,i) => ({
+      const rows = (lb[type]||[]).map((e,i) => ({
         rank: i+1, studentId: e.studentId, name: e.name, score: e.score,
         correct: e.correct, total: e.total, maxStreak: e.maxStreak,
         gameMode: e.gameMode, difficulty: e.difficulty, at: fmtDate(e.at),
       }));
       csv = toCsv(headers, rows);
-      filename = `leaderboard_${type}_${todayKey()}.csv`;
+      filename = `leaderboard_${cls}_${type}_${todayKey()}.csv`;
     } else {
       return sendJSON(res, { error: 'unknown kind' }, 400);
     }
@@ -1549,57 +1754,67 @@ async function handleApi(req, res, pathname, query) {
     return;
   }
   if (method === 'GET' && pathname === '/api/teacher/backup') {
-    if (!authTeacher(req)) return sendJSON(res, { error: '교사 권한' }, 401);
+    const cls = teacherClassroom(req);
+    if (!cls) return sendJSON(res, { error: '교사 권한' }, 401);
     const bundle = {
       exportedAt: new Date().toISOString(),
-      config: { teacherPassword: '***', sheetsUrl: cfg.sheetsUrl || '' },
-      students: studentsDb,
-      attendance,
-      leaderboards,
+      classroomCode: cls,
+      classroomName: classrooms[cls].name,
+      config: { sheetsUrl: clsCfg(cls).sheetsUrl || '', autoApproveRooms: !!clsCfg(cls).autoApproveRooms },
+      students: clsStudents(cls),
+      attendance: clsAttendance(cls),
+      leaderboards: clsLB(cls),
     };
     const json = JSON.stringify(bundle, null, 2);
     res.writeHead(200, {
       'Content-Type': 'application/json; charset=utf-8',
-      'Content-Disposition': `attachment; filename="sigfig_backup_${todayKey()}.json"`,
+      'Content-Disposition': `attachment; filename="sigfig_backup_${cls}_${todayKey()}.json"`,
       'Cache-Control': 'no-cache',
     });
     res.end(json);
     return;
   }
 
-  // ---------- 구글 시트 연동 설정 ----------
+  // ---------- 구글 시트 연동 설정 (교실별) ----------
   if (method === 'GET' && pathname === '/api/teacher/sheets') {
-    if (!authTeacher(req)) return sendJSON(res, { error: '교사 권한' }, 401);
-    return sendJSON(res, { sheetsUrl: cfg.sheetsUrl || '' });
+    const cls = teacherClassroom(req);
+    if (!cls) return sendJSON(res, { error: '교사 권한' }, 401);
+    return sendJSON(res, { sheetsUrl: clsCfg(cls).sheetsUrl || '' });
   }
   if (method === 'POST' && pathname === '/api/teacher/sheets') {
-    if (!authTeacher(req)) return sendJSON(res, { error: '교사 권한' }, 401);
+    const cls = teacherClassroom(req);
+    if (!cls) return sendJSON(res, { error: '교사 권한' }, 401);
     const body = await readBody(req);
     const u = String(body.sheetsUrl || '').trim();
     if (u && !/^https:\/\/script\.google\.com\//.test(u)) {
       return sendJSON(res, { error: 'Google Apps Script URL만 허용 (https://script.google.com/...)' }, 400);
     }
-    cfg.sheetsUrl = u;
-    saveCfg();
-    return sendJSON(res, { ok: true, sheetsUrl: cfg.sheetsUrl });
+    clsCfg(cls).sheetsUrl = u;
+    saveClassrooms();
+    return sendJSON(res, { ok: true, sheetsUrl: u });
   }
   if (method === 'POST' && pathname === '/api/teacher/sheets/test') {
-    if (!authTeacher(req)) return sendJSON(res, { error: '교사 권한' }, 401);
-    if (!cfg.sheetsUrl) return sendJSON(res, { error: '먼저 URL을 저장하세요' }, 400);
+    const cls = teacherClassroom(req);
+    if (!cls) return sendJSON(res, { error: '교사 권한' }, 401);
+    const u = clsCfg(cls).sheetsUrl;
+    if (!u) return sendJSON(res, { error: '먼저 URL을 저장하세요' }, 400);
     try {
-      const r = await httpsPost(cfg.sheetsUrl, { event: 'ping', payload: { msg: 'sigfig test' }, at: Date.now() });
+      const r = await httpsPost(u, { event: 'ping', classroomCode: cls, payload: { msg: 'sigfig test' }, at: Date.now() });
       return sendJSON(res, { ok: true, status: r.status, body: r.body.slice(0, 200) });
     } catch (e) {
       return sendJSON(res, { error: e.message }, 500);
     }
   }
   if (method === 'POST' && pathname === '/api/teacher/sheets/push-all') {
-    if (!authTeacher(req)) return sendJSON(res, { error: '교사 권한' }, 401);
-    if (!cfg.sheetsUrl) return sendJSON(res, { error: '시트 URL 미설정' }, 400);
+    const cls = teacherClassroom(req);
+    if (!cls) return sendJSON(res, { error: '교사 권한' }, 401);
+    const u = clsCfg(cls).sheetsUrl;
+    if (!u) return sendJSON(res, { error: '시트 URL 미설정' }, 400);
     try {
-      const r = await httpsPost(cfg.sheetsUrl, {
+      const r = await httpsPost(u, {
         event: 'full_sync',
-        payload: { students: Object.values(studentsDb), attendance, leaderboards },
+        classroomCode: cls,
+        payload: { students: Object.values(clsStudents(cls)), attendance: clsAttendance(cls), leaderboards: clsLB(cls) },
         at: Date.now(),
       });
       return sendJSON(res, { ok: true, status: r.status });
@@ -1680,5 +1895,6 @@ server.listen(PORT, HOST, () => {
   Object.values(ifs).flat().forEach(i => {
     if (i && i.family === 'IPv4' && !i.internal) console.log(`  네트워크 주소: http://${i.address}:${PORT}`);
   });
-  console.log(`  교사 비밀번호: ${cfg.teacherPassword}\n`);
+  const cList = Object.values(classrooms).map(c => `    - ${c.code} (${c.name})`).join('\n');
+  console.log(`  등록된 교실:\n${cList || '    (아직 없음)'}\n`);
 });
