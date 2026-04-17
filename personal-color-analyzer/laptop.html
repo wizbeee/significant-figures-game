@@ -783,9 +783,12 @@
             <p class="text-zinc-700 text-xs mt-2">Claude Vision API로 사진을 추가 분석합니다</p>
           </div>
           <div id="aiAnalyzing" class="mb-6 hidden">
-            <div class="flex items-center justify-center gap-3">
-              <div class="w-5 h-5 border-2 border-amber-400 border-t-transparent rounded-full animate-spin"></div>
-              <span class="text-amber-400 text-sm">Claude AI가 분석 중입니다...</span>
+            <div class="glass rounded-2xl p-6 border border-amber-500/20">
+              <div class="flex items-center justify-center gap-3 mb-2">
+                <div class="w-5 h-5 border-2 border-amber-400 border-t-transparent rounded-full animate-spin"></div>
+                <span class="text-amber-400 text-sm font-medium">Claude AI가 사진을 정밀 분석하고 있습니다</span>
+              </div>
+              <p class="text-zinc-600 text-xs text-center">보통 10~20초 정도 소요됩니다</p>
             </div>
           </div>
 
@@ -1756,9 +1759,17 @@
         body: bodyClass ? { bodyType: bodyClass.bodyType, confidence: bodyClass.confidence, scores: bodyClass.scores } : null
       };
 
-      // Show AI analysis button if API key exists
+      // AI 분석 자동 실행 (API 키 있으면)
       if (window._hasApiKey) {
-        document.getElementById('aiAnalyzeBtn').classList.remove('hidden');
+        // 버튼은 수동 재시도용으로 숨겨진 채 유지
+        // 사진이 렌더링 된 직후 자동으로 AI 분석 시작
+        setTimeout(() => {
+          if (typeof window._runAiAnalysis === 'function') {
+            window._runAiAnalysis();
+          } else {
+            document.getElementById('aiAnalyzeBtn').classList.remove('hidden');
+          }
+        }, 500);
       }
     }
 
@@ -1923,6 +1934,9 @@
     window._runAiAnalysis = async function() {
       document.getElementById('aiAnalyzeBtn').classList.add('hidden');
       document.getElementById('aiAnalyzing').classList.remove('hidden');
+      // 기존 에러 제거
+      const oldErr = document.getElementById('aiErrorBox');
+      if (oldErr) oldErr.remove();
 
       try {
         const body = {
@@ -1932,6 +1946,7 @@
           gender: userGender
         };
 
+        console.log('[AI] 분석 요청 시작...');
         const response = await fetch('/api/analyze-with-ai', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -1939,20 +1954,38 @@
         });
 
         const result = await response.json();
+        console.log('[AI] 응답:', result);
         document.getElementById('aiAnalyzing').classList.add('hidden');
 
         if (result.success && result.analysis) {
           renderAiResults(result.analysis);
         } else {
-          document.getElementById('aiAnalyzeBtn').classList.remove('hidden');
-          alert(result.error || 'AI 분석에 실패했습니다.');
+          showAiError(result.error || 'AI 분석에 실패했습니다.', result.rawText);
         }
       } catch (err) {
         document.getElementById('aiAnalyzing').classList.add('hidden');
-        document.getElementById('aiAnalyzeBtn').classList.remove('hidden');
-        alert('AI 분석 오류: ' + err.message);
+        showAiError('AI 분석 오류: ' + err.message);
       }
     };
+
+    function showAiError(message, rawText) {
+      const parent = document.getElementById('aiAnalyzing').parentElement;
+      const box = document.createElement('div');
+      box.id = 'aiErrorBox';
+      box.className = 'glass rounded-2xl p-4 mb-6 border border-red-500/30';
+      box.innerHTML = `
+        <div class="flex items-start gap-3">
+          <span class="text-red-400 text-lg">⚠️</span>
+          <div class="flex-1">
+            <p class="text-red-400 text-sm font-medium mb-1">AI 분석 실패</p>
+            <p class="text-zinc-400 text-xs mb-3">${message}</p>
+            ${rawText ? `<details class="text-xs text-zinc-600 mb-3"><summary class="cursor-pointer">원본 응답 보기</summary><pre class="mt-2 p-2 bg-zinc-900/50 rounded overflow-auto max-h-40">${rawText.replace(/</g, '&lt;')}</pre></details>` : ''}
+            <button onclick="window._runAiAnalysis()" class="text-amber-400 text-xs hover:text-amber-300 underline">🔄 다시 시도</button>
+          </div>
+        </div>
+      `;
+      parent.insertBefore(box, document.getElementById('aiAnalyzing'));
+    }
 
     function renderAiResults(analysis) {
       const card = document.getElementById('aiResultCard');

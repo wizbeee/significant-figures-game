@@ -256,7 +256,9 @@ async function handleAiAnalysis(req, res) {
 
     contextText += `사진을 보고 ${genderText}의 외모를 심도 있게 분석해 주세요. 전문 이미지 컨설턴트처럼 구체적이고 개인화된 조언을 제공하세요.
 
-반드시 아래 JSON 형식으로만 응답하세요:
+반드시 순수 JSON만 응답하세요. 마크다운 코드 블록이나 "다음은 분석입니다:" 같은 부가 설명 텍스트를 절대 포함하지 마세요. 응답의 첫 글자는 반드시 '{'여야 하고 마지막 글자는 '}'여야 합니다.
+
+응답 형식:
 
 {
   "faceShape": {
@@ -323,26 +325,51 @@ async function handleAiAnalysis(req, res) {
 
     console.log('[AI] Claude API 호출 중...');
     const response = await client.messages.create({
-      model: 'claude-sonnet-4-20250514',
-      max_tokens: 4000,
+      model: 'claude-sonnet-4-5',
+      max_tokens: 8000,
       system: contextText,
       messages: [{ role: 'user', content }]
     });
 
     const responseText = response.content[0].text;
-    console.log('[AI] Claude API 응답 수신');
+    console.log('[AI] Claude API 응답 수신 (길이: ' + responseText.length + ')');
 
-    // JSON 추출
-    const jsonMatch = responseText.match(/\{[\s\S]*\}/);
-    if (jsonMatch) {
-      const aiResult = JSON.parse(jsonMatch[0]);
+    // JSON 추출 — 여러 방식 시도
+    let aiResult = null;
+    let parseError = null;
+
+    // 1) 마크다운 코드 블록 안에 있는 JSON 시도
+    const codeBlockMatch = responseText.match(/```(?:json)?\s*(\{[\s\S]*?\})\s*```/);
+    if (codeBlockMatch) {
+      try { aiResult = JSON.parse(codeBlockMatch[1]); }
+      catch (e) { parseError = e; }
+    }
+
+    // 2) 가장 바깥 { ... } 매치 (greedy)
+    if (!aiResult) {
+      const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        try { aiResult = JSON.parse(jsonMatch[0]); }
+        catch (e) { parseError = e; }
+      }
+    }
+
+    // 3) 여전히 실패하면 rawText로 반환
+    if (aiResult) {
       return jsonResponse(res, 200, { success: true, analysis: aiResult });
     } else {
-      return jsonResponse(res, 200, { success: true, analysis: null, rawText: responseText });
+      console.error('[AI] JSON 파싱 실패:', parseError?.message);
+      console.error('[AI] 응답 앞부분:', responseText.substring(0, 500));
+      return jsonResponse(res, 200, {
+        success: false,
+        error: 'AI 응답 파싱 실패: ' + (parseError?.message || '유효한 JSON 없음'),
+        rawText: responseText.substring(0, 2000)
+      });
     }
 
   } catch (err) {
     console.error('[AI] Claude API 오류:', err.message);
+    console.error('[AI] 상세:', err.status, err.type);
     return jsonResponse(res, 500, { error: 'AI 분석 중 오류: ' + err.message });
   }
 }
