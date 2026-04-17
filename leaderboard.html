@@ -68,12 +68,17 @@
     <button class="danger" onclick="resetCurrent()">⚠️ 현재 탭 초기화</button>
   </div>
   <div class="filter-row">
-    <label>게임 필터:</label>
+    <label>교실:</label>
+    <select id="flt-cls">
+      <option value="all">🌏 전체 교실</option>
+    </select>
+    <label>게임:</label>
     <select id="flt-gm">
       <option value="all">전체</option>
       <option value="1">🔢 개수 세기</option>
       <option value="2">🎯 유효숫자 찾기</option>
       <option value="3">📏 측정값 읽기</option>
+      <option value="4">➕ 덧셈/뺄셈</option>
     </select>
     <label>난이도:</label>
     <select id="flt-diff">
@@ -100,13 +105,25 @@ const diffLabel = { easy:'쉬움', medium:'보통', hard:'어려움', mixed:'혼
 
 function isAdmin() { return !!localStorage.getItem('sigfig-teacher-token'); }
 
+async function loadClassroomOptions() {
+  try {
+    const r = await fetch('/api/classrooms').then(r=>r.json());
+    const sel = document.getElementById('flt-cls');
+    if (!sel) return;
+    const prev = sel.value;
+    const opts = ['<option value="all">🌏 전체 교실</option>'];
+    (r.classrooms || []).forEach(c => opts.push(`<option value="${c.code}">🏫 ${c.name || c.code}</option>`));
+    sel.innerHTML = opts.join('');
+    if (prev) sel.value = prev;
+  } catch (e) {}
+}
+
 async function load() {
   const r = await api('/api/leaderboard?type=' + currentType);
   entries = r.entries || [];
   const admin = isAdmin();
   document.getElementById('admin-banner').style.display = admin ? 'flex' : 'none';
   document.getElementById('bulk-bar').style.display = admin ? 'flex' : 'none';
-  // 존재하지 않는 키는 선택에서 제거
   const validKeys = new Set(entries.map(e => e.at + '|' + e.studentId));
   for (const k of Array.from(selected)) if (!validKeys.has(k)) selected.delete(k);
   render();
@@ -222,9 +239,11 @@ async function saveEdit(at, sid) {
 function render() {
   const gm = document.getElementById('flt-gm').value;
   const diff = document.getElementById('flt-diff').value;
+  const cls = document.getElementById('flt-cls')?.value || 'all';
   let filtered = entries.filter(e => {
     if (gm !== 'all' && e.gameMode !== parseInt(gm)) return false;
     if (diff !== 'all' && e.difficulty !== diff) return false;
+    if (cls !== 'all' && (e.classroomCode || 'default') !== cls) return false;
     return true;
   });
   filtered.sort((a, b) => b.score - a.score);
@@ -242,6 +261,10 @@ function render() {
     if (!admin) return '';
     const k = e.at + '|' + e.studentId;
     return `<td><input type="checkbox" ${selected.has(k)?'checked':''} onchange="toggleSelect('${k}', this.checked)"></td>`;
+  };
+  const clsCell = (e) => {
+    const code = e.classroomCode || 'default';
+    return `<td style="font-size:.82rem"><span style="display:inline-block;padding:2px 8px;background:var(--bg3);border-radius:6px">${code}</span></td>`;
   };
   const actionCell = (e) => {
     if (!admin) return '';
@@ -261,10 +284,11 @@ function render() {
 
   let colsHead, rowRenderer;
   if (currentType === 'single') {
-    colsHead = `<tr>${selHead}<th>순위</th><th>이름 (학번)</th><th>점수</th><th>정답</th><th>최대 콤보</th><th>게임</th><th>난이도</th><th>일시</th>${adminHead}</tr>`;
+    colsHead = `<tr>${selHead}<th>순위</th><th>이름 (학번)</th><th>🏫 교실</th><th>점수</th><th>정답</th><th>최대 콤보</th><th>게임</th><th>난이도</th><th>일시</th>${adminHead}</tr>`;
     rowRenderer = (e, i) => isEditing(e) ? `<tr>
       ${selCell(e)}<td><span class="rk">${i+1}</span></td>
       <td class="edit-cell"><input id="ed-name" value="${e.name}"> <input id="ed-sid" value="${e.studentId}" style="margin-top:3px"></td>
+      ${clsCell(e)}
       <td class="edit-cell"><input id="ed-score" type="number" value="${e.score}"></td>
       <td class="edit-cell"><input id="ed-correct" type="number" value="${e.correct}" style="width:48%"> / <input id="ed-total" type="number" value="${e.total}" style="width:48%"></td>
       <td class="edit-cell"><input id="ed-streak" type="number" value="${e.maxStreak}"></td>
@@ -275,6 +299,7 @@ function render() {
     </tr>` : `<tr>
       ${selCell(e)}<td><span class="rk">${i+1}</span></td>
       <td><b>${e.name}</b> <span style="color:var(--txt2);font-size:.82rem">${e.studentId}</span></td>
+      ${clsCell(e)}
       <td class="score-cell">${e.score}점</td>
       <td>${e.correct}/${e.total}</td>
       <td>${e.maxStreak}회</td>
@@ -284,10 +309,11 @@ function render() {
       ${actionCell(e)}
     </tr>`;
   } else if (currentType === 'multi') {
-    colsHead = `<tr>${selHead}<th>순위</th><th>이름 (학번)</th><th>점수</th><th>정답</th><th>방 이름</th><th>참여자</th><th>게임</th><th>난이도</th><th>일시</th>${adminHead}</tr>`;
+    colsHead = `<tr>${selHead}<th>순위</th><th>이름 (학번)</th><th>🏫 교실</th><th>점수</th><th>정답</th><th>방 이름</th><th>참여자</th><th>게임</th><th>난이도</th><th>일시</th>${adminHead}</tr>`;
     rowRenderer = (e, i) => isEditing(e) ? `<tr>
       ${selCell(e)}<td><span class="rk">${i+1}</span></td>
       <td class="edit-cell"><input id="ed-name" value="${e.name}"> <input id="ed-sid" value="${e.studentId}" style="margin-top:3px"></td>
+      ${clsCell(e)}
       <td class="edit-cell"><input id="ed-score" type="number" value="${e.score}"></td>
       <td class="edit-cell"><input id="ed-correct" type="number" value="${e.correct}" style="width:48%"> / <input id="ed-total" type="number" value="${e.total}" style="width:48%"></td>
       <td>${e.roomLabel || '-'}</td>
@@ -300,6 +326,7 @@ function render() {
     </tr>` : `<tr>
       ${selCell(e)}<td><span class="rk">${i+1}</span></td>
       <td><b>${e.name}</b> <span style="color:var(--txt2);font-size:.82rem">${e.studentId}</span></td>
+      ${clsCell(e)}
       <td class="score-cell">${e.score}점</td>
       <td>${e.correct}/${e.total}</td>
       <td>${e.roomLabel || '-'}</td>
@@ -310,10 +337,11 @@ function render() {
       ${actionCell(e)}
     </tr>`;
   } else {
-    colsHead = `<tr>${selHead}<th>순위</th><th>이름 (학번)</th><th>점수</th><th>승패</th><th>정답</th><th>참여자</th><th>게임</th><th>난이도</th><th>일시</th>${adminHead}</tr>`;
+    colsHead = `<tr>${selHead}<th>순위</th><th>이름 (학번)</th><th>🏫 교실</th><th>점수</th><th>승패</th><th>정답</th><th>참여자</th><th>게임</th><th>난이도</th><th>일시</th>${adminHead}</tr>`;
     rowRenderer = (e, i) => isEditing(e) ? `<tr>
       ${selCell(e)}<td><span class="rk">${i+1}</span></td>
       <td class="edit-cell"><input id="ed-name" value="${e.name}"> <input id="ed-sid" value="${e.studentId}" style="margin-top:3px"></td>
+      ${clsCell(e)}
       <td class="edit-cell"><input id="ed-score" type="number" value="${e.score}"></td>
       <td class="edit-cell"><select id="ed-result"><option value="win" ${e.result==='win'?'selected':''}>승</option><option value="lose" ${e.result==='lose'?'selected':''}>패</option></select></td>
       <td class="edit-cell"><input id="ed-correct" type="number" value="${e.correct}" style="width:48%"> / <input id="ed-total" type="number" value="${e.total}" style="width:48%"></td>
@@ -326,6 +354,7 @@ function render() {
     </tr>` : `<tr>
       ${selCell(e)}<td><span class="rk">${i+1}</span></td>
       <td><b>${e.name}</b> <span style="color:var(--txt2);font-size:.82rem">${e.studentId}</span></td>
+      ${clsCell(e)}
       <td class="score-cell">${e.score}점</td>
       <td>${e.result === 'win' ? '<span class="badge ok">승</span>' : '<span class="badge no">패</span>'}</td>
       <td>${e.correct}/${e.total}</td>
@@ -354,6 +383,8 @@ function switchTab(type) {
 
 document.getElementById('flt-gm').addEventListener('change', render);
 document.getElementById('flt-diff').addEventListener('change', render);
+document.getElementById('flt-cls').addEventListener('change', render);
+loadClassroomOptions();
 load();
 setInterval(() => { if (editingIdx === -1 && selected.size === 0) load(); }, 5000);
 </script>

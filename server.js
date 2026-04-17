@@ -59,36 +59,54 @@ if (Object.keys(classrooms).length === 0) {
   saveClassrooms();
 }
 
-// 교실별 데이터 구조:
-// leaderboards: { [code]: { single, multi, battle } }
-// studentsDb:   { [code]: { [studentId]: {studentId,name,joinedAt,stats,blocked} } }
-// attendance:   { [code]: { [YYYY-MM-DD]: { [studentId]: {firstSeen,lastSeen,games,name} } } }
-let leaderboards = fs.existsSync(LB_FILE) ? JSON.parse(fs.readFileSync(LB_FILE, 'utf8')) : {};
+// 데이터 구조:
+// leaderboards (글로벌): { single: [...entries], multi: [...entries], battle: [...entries] } — 각 entry에 classroomCode 포함
+// studentsDb  (교실별): { [code]: { [studentId]: {studentId,name,joinedAt,stats,blocked} } }
+// attendance  (교실별): { [code]: { [YYYY-MM-DD]: { [studentId]: {firstSeen,lastSeen,games,name} } } }
+let leaderboards = fs.existsSync(LB_FILE) ? JSON.parse(fs.readFileSync(LB_FILE, 'utf8')) : { single: [], multi: [], battle: [] };
 let studentsDb = fs.existsSync(STUDENTS_FILE) ? JSON.parse(fs.readFileSync(STUDENTS_FILE, 'utf8')) : {};
 let attendance = fs.existsSync(ATTEND_FILE) ? JSON.parse(fs.readFileSync(ATTEND_FILE, 'utf8')) : {};
 
-// 레거시 구조(플랫) 감지 → default 교실로 이관
+// 레거시 → 새 구조로 이관
 function migrateLegacyIfNeeded() {
-  // leaderboards가 { single: [...], multi: [...], battle: [...] } 형태면 레거시
-  if (leaderboards && (Array.isArray(leaderboards.single) || Array.isArray(leaderboards.multi) || Array.isArray(leaderboards.battle))) {
-    leaderboards = { [DEFAULT_CLASSROOM]: leaderboards };
-    fs.writeFileSync(LB_FILE, JSON.stringify(leaderboards, null, 2));
-    console.log('[이관] 레거시 leaderboards → default 교실로 이전 완료');
-  }
-  // students가 { studentId: {...} } 형태면 레거시 (값에 studentId 필드 있음)
+  // 1) 학생/출결: 플랫 → default 교실 감싸기
   const sKeys = Object.keys(studentsDb || {});
   if (sKeys.length > 0 && studentsDb[sKeys[0]] && typeof studentsDb[sKeys[0]].studentId === 'string') {
     studentsDb = { [DEFAULT_CLASSROOM]: studentsDb };
     fs.writeFileSync(STUDENTS_FILE, JSON.stringify(studentsDb, null, 2));
     console.log('[이관] 레거시 studentsDb → default 교실로 이전 완료');
   }
-  // attendance가 { YYYY-MM-DD: {...} } 형태면 레거시
   const aKeys = Object.keys(attendance || {});
   if (aKeys.length > 0 && /^\d{4}-\d{2}-\d{2}$/.test(aKeys[0])) {
     attendance = { [DEFAULT_CLASSROOM]: attendance };
     fs.writeFileSync(ATTEND_FILE, JSON.stringify(attendance, null, 2));
     console.log('[이관] 레거시 attendance → default 교실로 이전 완료');
   }
+  // 2) 점수판: 교실별({code:{single:...}}) → 글로벌 플랫으로 다시 평탄화
+  if (leaderboards && !Array.isArray(leaderboards.single) && !Array.isArray(leaderboards.multi) && !Array.isArray(leaderboards.battle)) {
+    // 현재 형태가 { [code]: { single, multi, battle } }인 경우
+    const keys = Object.keys(leaderboards);
+    const isClassroomScoped = keys.length > 0 && leaderboards[keys[0]] && Array.isArray(leaderboards[keys[0]].single);
+    if (isClassroomScoped) {
+      const flat = { single: [], multi: [], battle: [] };
+      for (const code of keys) {
+        for (const type of ['single','multi','battle']) {
+          (leaderboards[code][type] || []).forEach(e => {
+            flat[type].push({ ...e, classroomCode: e.classroomCode || code });
+          });
+        }
+      }
+      for (const t of ['single','multi','battle']) flat[t].sort((a,b) => b.score - a.score);
+      leaderboards = flat;
+      fs.writeFileSync(LB_FILE, JSON.stringify(leaderboards, null, 2));
+      console.log('[이관] 점수판 → 글로벌 구조로 평탄화 완료 (' + (flat.single.length+flat.multi.length+flat.battle.length) + '건)');
+    } else {
+      // 완전히 비어있는 경우 기본값 세팅
+      leaderboards = { single: [], multi: [], battle: [] };
+    }
+  }
+  // 안전망: 누락된 타입 채우기
+  for (const t of ['single','multi','battle']) if (!Array.isArray(leaderboards[t])) leaderboards[t] = [];
 }
 migrateLegacyIfNeeded();
 
@@ -98,10 +116,6 @@ const saveAttendance = () => fs.writeFileSync(ATTEND_FILE, JSON.stringify(attend
 
 // 교실별 접근 헬퍼 — 없으면 자동 생성
 function clsroom(code) { return classrooms[code]; }
-function clsLB(code) {
-  if (!leaderboards[code]) leaderboards[code] = { single: [], multi: [], battle: [] };
-  return leaderboards[code];
-}
 function clsStudents(code) {
   if (!studentsDb[code]) studentsDb[code] = {};
   return studentsDb[code];
@@ -598,11 +612,11 @@ function viewQuestion(q, hide) {
 }
 
 function pushLB(classroomCode, type, entry) {
-  const lb = clsLB(classroomCode);
-  const list = lb[type] || (lb[type] = []);
-  list.push({ ...entry, at: Date.now() });
+  const list = leaderboards[type] || (leaderboards[type] = []);
+  list.push({ ...entry, classroomCode, at: Date.now() });
   list.sort((a, b) => b.score - a.score);
-  if (list.length > 100) list.length = 100;
+  // 글로벌 점수판 — 상위 500건까지 유지
+  if (list.length > 500) list.length = 500;
   saveLB();
 }
 
@@ -1203,12 +1217,11 @@ async function handleApi(req, res, pathname, query) {
     const rec = sdb[sid];
     if (!rec) return sendJSON(res, { error: '존재하지 않는 학생' }, 404);
     const s = ensureStatsShape(rec.stats);
-    const lb = clsLB(code);
-    // 최근 점수판 기록 10개
+    // 글로벌 점수판에서 본인 기록 — 같은 교실 것만
     const allRecent = [];
     for (const t of ['single','multi','battle']) {
-      for (const e of (lb[t] || [])) {
-        if (e.studentId === sid) allRecent.push({ ...e, _type: t });
+      for (const e of (leaderboards[t] || [])) {
+        if (e.studentId === sid && (e.classroomCode || DEFAULT_CLASSROOM) === code) allRecent.push({ ...e, _type: t });
       }
     }
     allRecent.sort((a,b) => (b.at||0) - (a.at||0));
@@ -1394,28 +1407,33 @@ async function handleApi(req, res, pathname, query) {
     return sendJSON(res, roomView(room, forTeacher, viewerS?.studentId));
   }
 
-  // ---------- 점수판 (교실별) ----------
-  // 점수판 범위 결정: 학생→본인 교실, 교사→본인 교실, 둘 다 아니면 query.classroomCode 허용
-  function lbScope(req) {
-    const sess = authStudent(req);
-    const tCls = teacherClassroom(req);
-    return sess ? sess.classroomCode : (tCls || normCode(query.classroomCode));
-  }
+  // ---------- 점수판 (글로벌) ----------
+  // GET: 전체 교실의 기록을 모두 보여줌 — 누구나 조회 가능. classroomCode 쿼리로 필터 가능.
   if (method === 'GET' && pathname === '/api/leaderboard') {
     const type = query.type;
     if (!['single','multi','battle'].includes(type)) return sendJSON(res, { error: 'type 필요' }, 400);
-    const cls = lbScope(req);
-    if (!cls || !clsroom(cls)) return sendJSON(res, { error: '교실 코드 필요' }, 400);
-    return sendJSON(res, { type, classroomCode: cls, entries: clsLB(cls)[type] || [] });
+    let list = leaderboards[type] || [];
+    if (query.classroomCode) {
+      const f = normCode(query.classroomCode);
+      list = list.filter(e => (e.classroomCode || DEFAULT_CLASSROOM) === f);
+    }
+    return sendJSON(res, { type, entries: list });
   }
+  // 교사 수정/삭제는 "본인 교실의 기록"에만 가능
   if (method === 'POST' && pathname === '/api/leaderboard/clear') {
     const cls = teacherClassroom(req);
     if (!cls) return sendJSON(res, { error: '교사 권한' }, 401);
     const body = await readBody(req);
-    if (['single','multi','battle'].includes(body.type)) { clsLB(cls)[body.type] = []; saveLB(); }
+    if (['single','multi','battle'].includes(body.type)) {
+      // 본인 교실 기록만 제거 (다른 교실은 보존)
+      const before = leaderboards[body.type].length;
+      leaderboards[body.type] = leaderboards[body.type].filter(e => (e.classroomCode || DEFAULT_CLASSROOM) !== cls);
+      const removed = before - leaderboards[body.type].length;
+      saveLB();
+      return sendJSON(res, { ok: true, removed, scope: cls });
+    }
     return sendJSON(res, { ok: true });
   }
-  // 다수 항목 일괄 삭제 — keys: [{at, studentId}, ...]
   if (method === 'POST' && pathname === '/api/leaderboard/entry/bulk-delete') {
     const cls = teacherClassroom(req);
     if (!cls) return sendJSON(res, { error: '교사 권한' }, 401);
@@ -1423,39 +1441,46 @@ async function handleApi(req, res, pathname, query) {
     if (!['single','multi','battle'].includes(body.type)) return sendJSON(res, { error: 'type 오류' }, 400);
     const keys = Array.isArray(body.keys) ? body.keys : [];
     if (keys.length === 0) return sendJSON(res, { error: '선택된 항목이 없음' }, 400);
-    const set = new Set(keys.map(k => k.at + '|' + k.studentId));
-    const lb = clsLB(cls);
-    const list = lb[body.type] || [];
+    const keySet = new Set(keys.map(k => k.at + '|' + k.studentId));
+    const list = leaderboards[body.type] || [];
     const before = list.length;
-    lb[body.type] = list.filter(e => !set.has(e.at + '|' + e.studentId));
-    const removed = before - lb[body.type].length;
+    // 내 교실의 기록만 삭제 허용
+    leaderboards[body.type] = list.filter(e => {
+      const k = e.at + '|' + e.studentId;
+      if (!keySet.has(k)) return true;  // 선택되지 않음 → 유지
+      if ((e.classroomCode || DEFAULT_CLASSROOM) !== cls) return true;  // 다른 교실 → 유지
+      return false;  // 내 교실 + 선택됨 → 삭제
+    });
+    const removed = before - leaderboards[body.type].length;
+    const denied = keys.length - removed;
     saveLB();
-    return sendJSON(res, { ok: true, removed });
+    return sendJSON(res, { ok: true, removed, denied, note: denied > 0 ? '다른 교실의 기록은 삭제할 수 없습니다' : undefined });
   }
-  // 개별 항목 삭제 — at(타임스탬프) + studentId로 식별
   if (method === 'POST' && pathname === '/api/leaderboard/entry/delete') {
     const cls = teacherClassroom(req);
     if (!cls) return sendJSON(res, { error: '교사 권한' }, 401);
     const body = await readBody(req);
     if (!['single','multi','battle'].includes(body.type)) return sendJSON(res, { error: 'type 오류' }, 400);
-    const list = clsLB(cls)[body.type] || [];
+    const list = leaderboards[body.type] || [];
     const idx = list.findIndex(e => e.at === body.at && e.studentId === body.studentId);
     if (idx < 0) return sendJSON(res, { error: '항목을 찾을 수 없음' }, 404);
+    const entry = list[idx];
+    if ((entry.classroomCode || DEFAULT_CLASSROOM) !== cls) return sendJSON(res, { error: '다른 교실의 기록은 삭제할 수 없습니다' }, 403);
     const removed = list.splice(idx, 1)[0];
     saveLB();
     return sendJSON(res, { ok: true, removed });
   }
-  // 개별 항목 수정
   if (method === 'POST' && pathname === '/api/leaderboard/entry/update') {
     const cls = teacherClassroom(req);
     if (!cls) return sendJSON(res, { error: '교사 권한' }, 401);
     const body = await readBody(req);
     if (!['single','multi','battle'].includes(body.type)) return sendJSON(res, { error: 'type 오류' }, 400);
-    const list = clsLB(cls)[body.type] || [];
+    const list = leaderboards[body.type] || [];
     const idx = list.findIndex(e => e.at === body.at && e.studentId === body.studentId);
     if (idx < 0) return sendJSON(res, { error: '항목을 찾을 수 없음' }, 404);
-    const patch = body.patch || {};
     const entry = list[idx];
+    if ((entry.classroomCode || DEFAULT_CLASSROOM) !== cls) return sendJSON(res, { error: '다른 교실의 기록은 수정할 수 없습니다' }, 403);
+    const patch = body.patch || {};
     const allowed = ['name','studentId','score','correct','total','maxStreak','result','roomLabel','playerCount'];
     for (const k of allowed) {
       if (patch[k] === undefined) continue;
@@ -1572,14 +1597,15 @@ async function handleApi(req, res, pathname, query) {
       players: Object.values(r.players).map(p => ({ studentId: p.studentId, name: p.name, score: p.score, correct: p.correct, wrong: p.wrong })),
       createdAt: r.createdAt,
     }));
-    const lb = clsLB(cls);
+    // 점수판 숫자 — 본인 교실 기록만 카운트
+    const myCount = t => (leaderboards[t] || []).filter(e => (e.classroomCode || DEFAULT_CLASSROOM) === cls).length;
     return sendJSON(res, {
       classroomCode: cls, classroomName: classrooms[cls].name,
       students: studentList, rooms: roomList,
       leaderboards: {
-        single: (lb.single||[]).length,
-        multi: (lb.multi||[]).length,
-        battle: (lb.battle||[]).length,
+        single: myCount('single'),
+        multi: myCount('multi'),
+        battle: myCount('battle'),
       },
     });
   }
@@ -1703,7 +1729,12 @@ async function handleApi(req, res, pathname, query) {
     if (!cls) return sendJSON(res, { error: '교사 권한' }, 401);
     const sdb = clsStudents(cls);
     const adb = clsAttendance(cls);
-    const lb = clsLB(cls);
+    // 점수판은 글로벌 — 본인 교실만 필터
+    const lb = {
+      single: (leaderboards.single||[]).filter(e => (e.classroomCode || DEFAULT_CLASSROOM) === cls),
+      multi: (leaderboards.multi||[]).filter(e => (e.classroomCode || DEFAULT_CLASSROOM) === cls),
+      battle: (leaderboards.battle||[]).filter(e => (e.classroomCode || DEFAULT_CLASSROOM) === cls),
+    };
     const kind = query.kind || 'students';
     let filename, csv;
     if (kind === 'students') {
@@ -1763,7 +1794,11 @@ async function handleApi(req, res, pathname, query) {
       config: { sheetsUrl: clsCfg(cls).sheetsUrl || '', autoApproveRooms: !!clsCfg(cls).autoApproveRooms },
       students: clsStudents(cls),
       attendance: clsAttendance(cls),
-      leaderboards: clsLB(cls),
+      leaderboards: {
+        single: (leaderboards.single||[]).filter(e => (e.classroomCode || DEFAULT_CLASSROOM) === cls),
+        multi: (leaderboards.multi||[]).filter(e => (e.classroomCode || DEFAULT_CLASSROOM) === cls),
+        battle: (leaderboards.battle||[]).filter(e => (e.classroomCode || DEFAULT_CLASSROOM) === cls),
+      },
     };
     const json = JSON.stringify(bundle, null, 2);
     res.writeHead(200, {
@@ -1814,7 +1849,15 @@ async function handleApi(req, res, pathname, query) {
       const r = await httpsPost(u, {
         event: 'full_sync',
         classroomCode: cls,
-        payload: { students: Object.values(clsStudents(cls)), attendance: clsAttendance(cls), leaderboards: clsLB(cls) },
+        payload: {
+          students: Object.values(clsStudents(cls)),
+          attendance: clsAttendance(cls),
+          leaderboards: {
+            single: (leaderboards.single||[]).filter(e => (e.classroomCode || DEFAULT_CLASSROOM) === cls),
+            multi: (leaderboards.multi||[]).filter(e => (e.classroomCode || DEFAULT_CLASSROOM) === cls),
+            battle: (leaderboards.battle||[]).filter(e => (e.classroomCode || DEFAULT_CLASSROOM) === cls),
+          },
+        },
         at: Date.now(),
       });
       return sendJSON(res, { ok: true, status: r.status });
