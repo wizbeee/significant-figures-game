@@ -7,6 +7,7 @@
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.min.js"></script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Pretendard:wght@300;400;500;600;700;800&display=swap');
 * { font-family: 'Pretendard', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif; }
@@ -45,6 +46,53 @@ th.sortable.sort-active .sort-arrow { opacity: 1; color: #2563eb; }
 .year-btn:not(.active) { background: #fff; color: #64748b; border-color: #e2e8f0; }
 .year-btn:not(.active):hover { background: #eff6ff; color: #1d4ed8; }
 .report-editable:focus { outline: 2px solid #3b82f6; outline-offset: 2px; border-radius: 4px; }
+
+/* ── Dark mode ── */
+body.dark { background: #0f172a; color: #e2e8f0; }
+body.dark .card { background: #1e293b; border-color: #334155; box-shadow: 0 1px 3px rgba(0,0,0,.4); }
+body.dark aside { background: #1e293b; border-color: #334155; }
+body.dark .nav-btn { color: #cbd5e1; }
+body.dark .nav-btn.active { background: #1e3a8a; color: #dbeafe; }
+body.dark .nav-btn:hover:not(.active) { background: #334155; }
+body.dark .text-gray-900 { color: #f1f5f9; }
+body.dark .text-gray-800 { color: #e2e8f0; }
+body.dark .text-gray-700 { color: #cbd5e1; }
+body.dark .text-gray-600 { color: #94a3b8; }
+body.dark .text-gray-500 { color: #94a3b8; }
+body.dark .text-gray-400 { color: #64748b; }
+body.dark .bg-gray-50, body.dark .bg-gray-50\/80, body.dark .bg-gray-50\/50 { background: #334155 !important; }
+body.dark .bg-white { background: #1e293b !important; }
+body.dark .border-gray-100, body.dark .border-gray-200 { border-color: #334155 !important; }
+body.dark table th { background: #334155; color: #cbd5e1; }
+body.dark input, body.dark select, body.dark textarea { background: #0f172a; color: #e2e8f0; border-color: #334155; }
+body.dark .tab-btn:not(.active) { background: #334155; color: #cbd5e1; }
+body.dark .tab-btn:not(.active):hover { background: #475569; }
+body.dark .year-filter-bar { background: #1e293b; border-color: #334155; }
+body.dark .year-btn:not(.active) { background: #0f172a; border-color: #334155; color: #cbd5e1; }
+body.dark .hover\:bg-gray-50:hover { background: #334155 !important; }
+body.dark .hover\:bg-blue-50\/30:hover { background: rgba(30,58,138,.3) !important; }
+body.dark .bg-blue-50, body.dark .bg-blue-50\/50, body.dark .bg-blue-50\/30 { background: rgba(30,58,138,.25) !important; }
+body.dark .bg-green-50 { background: rgba(22,101,52,.25) !important; }
+body.dark .bg-red-50 { background: rgba(153,27,27,.25) !important; }
+body.dark .bg-yellow-50, body.dark .bg-amber-50 { background: rgba(133,77,14,.25) !important; }
+body.dark .bg-purple-50, body.dark .bg-violet-50 { background: rgba(88,28,135,.25) !important; }
+
+/* ── Toast notifications ── */
+#toast-stack { position: fixed; top: 20px; right: 20px; z-index: 9999; display: flex; flex-direction: column; gap: 8px; pointer-events: none; max-width: 360px; }
+.toast { pointer-events: auto; padding: 12px 16px; border-radius: 12px; font-size: 13px; font-weight: 500; box-shadow: 0 10px 25px rgba(0,0,0,.1); animation: toastIn .2s ease-out; display: flex; align-items: center; gap: 8px; }
+.toast-success { background: #dcfce7; color: #166534; border: 1px solid #86efac; }
+.toast-error { background: #fee2e2; color: #991b1b; border: 1px solid #fca5a5; }
+.toast-info { background: #dbeafe; color: #1e40af; border: 1px solid #93c5fd; }
+.toast-warn { background: #fef3c7; color: #92400e; border: 1px solid #fcd34d; }
+body.dark .toast-success { background: #14532d; color: #bbf7d0; border-color: #166534; }
+body.dark .toast-error { background: #7f1d1d; color: #fecaca; border-color: #991b1b; }
+body.dark .toast-info { background: #1e3a8a; color: #bfdbfe; border-color: #1e40af; }
+body.dark .toast-warn { background: #78350f; color: #fde68a; border-color: #92400e; }
+@keyframes toastIn { from { transform: translateX(20px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+
+/* ── Keyboard shortcut hint ── */
+kbd { display: inline-block; padding: 2px 6px; background: #f1f5f9; border: 1px solid #cbd5e1; border-bottom-width: 2px; border-radius: 4px; font-family: 'SF Mono', Consolas, monospace; font-size: 11px; color: #475569; }
+body.dark kbd { background: #334155; border-color: #475569; color: #cbd5e1; }
 </style>
 </head>
 <body class="min-h-screen">
@@ -61,7 +109,18 @@ th.sortable.sort-active .sort-arrow { opacity: 1; color: #2563eb; }
       </div>
     </div>
     <nav class="flex-1 py-3 px-3 space-y-1" id="nav-menu"></nav>
-    <div class="p-3 border-t border-gray-100">
+    <div class="p-3 border-t border-gray-100 space-y-2">
+      <div class="flex gap-1">
+        <button onclick="undoOnce()" title="되돌리기 (Ctrl+Z)" class="flex-1 px-2 py-1.5 rounded-lg border border-gray-200 text-xs text-gray-600 hover:bg-gray-50 transition flex items-center justify-center gap-1">
+          <span>↶</span><span>되돌리기</span>
+        </button>
+        <button onclick="redoOnce()" title="다시 실행 (Ctrl+Y)" class="flex-1 px-2 py-1.5 rounded-lg border border-gray-200 text-xs text-gray-600 hover:bg-gray-50 transition flex items-center justify-center gap-1">
+          <span>↷</span><span>다시실행</span>
+        </button>
+      </div>
+      <button id="dark-toggle" onclick="toggleDark()" class="w-full px-2 py-1.5 rounded-lg border border-gray-200 text-xs text-gray-600 hover:bg-gray-50 transition">🌙 다크</button>
+      <button onclick="showShortcutsHelp()" class="w-full px-2 py-1.5 rounded-lg border border-gray-200 text-xs text-gray-500 hover:bg-gray-50 transition">⌨ 단축키 (?)</button>
+      <div class="text-[10px] text-gray-400 text-center" id="history-badge">실행취소 0 · 다시실행 0</div>
       <div class="text-[10px] text-gray-400 text-center" id="data-count">데이터 없음</div>
     </div>
   </aside>
@@ -70,10 +129,135 @@ th.sortable.sort-active .sort-arrow { opacity: 1; color: #2563eb; }
 
 <script>
 // ══════════════════════════════════════════════
+// CORE HELPERS (escapeHtml, toast, history, stats)
+// ══════════════════════════════════════════════
+function escapeHtml(s) {
+  if (s == null) return '';
+  return String(s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+function escapeAttr(s) {
+  if (s == null) return '';
+  return String(s).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+}
+
+// Toast notifications
+function toast(msg, type = 'info', ms = 3000) {
+  let stack = document.getElementById('toast-stack');
+  if (!stack) { stack = document.createElement('div'); stack.id = 'toast-stack'; document.body.appendChild(stack); }
+  const t = document.createElement('div');
+  t.className = `toast toast-${type}`;
+  t.textContent = msg;
+  stack.appendChild(t);
+  setTimeout(() => { t.style.opacity = '0'; t.style.transition = 'opacity .3s'; setTimeout(() => t.remove(), 300); }, ms);
+}
+
+// Undo/Redo history (snapshot-based, applicants store only)
+const HISTORY_MAX = 20;
+let historyStack = [];   // past snapshots
+let redoStack = [];      // future snapshots
+let historyBusy = false;
+async function pushHistory(label) {
+  if (historyBusy) return;
+  try {
+    const snap = await getAllApplicants();
+    historyStack.push({ label, ts: Date.now(), data: snap.map(r => { const { id, ...rest } = r; return rest; }) });
+    if (historyStack.length > HISTORY_MAX) historyStack.shift();
+    redoStack = [];
+    updateHistoryBadge();
+  } catch (e) { console.warn('pushHistory failed', e); }
+}
+async function undoOnce() {
+  if (!historyStack.length) { toast('되돌릴 작업이 없습니다', 'warn'); return; }
+  historyBusy = true;
+  try {
+    const current = await getAllApplicants();
+    redoStack.push({ label: '현재', ts: Date.now(), data: current.map(r => { const { id, ...rest } = r; return rest; }) });
+    const prev = historyStack.pop();
+    await replaceApplicants(prev.data);
+    allData = await getAllApplicants();
+    toast(`되돌리기: ${prev.label}`, 'success');
+    navigateTo(currentPage);
+  } catch (e) { toast('되돌리기 실패: ' + e.message, 'error'); }
+  finally { historyBusy = false; updateHistoryBadge(); }
+}
+async function redoOnce() {
+  if (!redoStack.length) { toast('다시 실행할 작업이 없습니다', 'warn'); return; }
+  historyBusy = true;
+  try {
+    const current = await getAllApplicants();
+    historyStack.push({ label: '이전 상태', ts: Date.now(), data: current.map(r => { const { id, ...rest } = r; return rest; }) });
+    const next = redoStack.pop();
+    await replaceApplicants(next.data);
+    allData = await getAllApplicants();
+    toast('다시 실행 완료', 'success');
+    navigateTo(currentPage);
+  } catch (e) { toast('다시 실행 실패: ' + e.message, 'error'); }
+  finally { historyBusy = false; updateHistoryBadge(); }
+}
+function updateHistoryBadge() {
+  const el = document.getElementById('history-badge');
+  if (el) el.textContent = `실행취소 ${historyStack.length} · 다시실행 ${redoStack.length}`;
+}
+
+// Dark mode
+function isDark() { return document.body.classList.contains('dark'); }
+function toggleDark() {
+  document.body.classList.toggle('dark');
+  try { localStorage.setItem('goip-theme', isDark() ? 'dark' : 'light'); } catch {}
+  const btn = document.getElementById('dark-toggle');
+  if (btn) btn.textContent = isDark() ? '☀️ 라이트' : '🌙 다크';
+  // Redraw charts so they pick up colors
+  destroyCharts();
+  if (typeof currentPage !== 'undefined' && currentPage) navigateTo(currentPage);
+}
+function applySavedTheme() {
+  try {
+    const t = localStorage.getItem('goip-theme');
+    if (t === 'dark') document.body.classList.add('dark');
+  } catch {}
+}
+
+// Statistics helpers
+function mean(arr) { return arr.length ? arr.reduce((s, v) => s + v, 0) / arr.length : 0; }
+function stdDev(arr) {
+  if (arr.length < 2) return 0;
+  const m = mean(arr);
+  return Math.sqrt(arr.reduce((s, v) => s + (v - m) ** 2, 0) / arr.length);
+}
+function percentile(sortedAsc, p) {
+  if (!sortedAsc.length) return null;
+  const idx = (sortedAsc.length - 1) * p;
+  const lo = Math.floor(idx), hi = Math.ceil(idx);
+  if (lo === hi) return sortedAsc[lo];
+  return sortedAsc[lo] + (sortedAsc[hi] - sortedAsc[lo]) * (idx - lo);
+}
+function percentileRank(sortedAsc, value) {
+  if (!sortedAsc.length) return null;
+  let count = 0;
+  for (const v of sortedAsc) { if (v < value) count++; else break; }
+  return (count / sortedAsc.length) * 100;
+}
+function zScore(value, m, sd) { return sd > 0 ? (value - m) / sd : 0; }
+function iqrOutliers(vals) {
+  if (vals.length < 4) return { low: -Infinity, high: Infinity };
+  const sorted = [...vals].sort((a, b) => a - b);
+  const q1 = percentile(sorted, 0.25);
+  const q3 = percentile(sorted, 0.75);
+  const iqr = q3 - q1;
+  return { low: q1 - 1.5 * iqr, high: q3 + 1.5 * iqr, q1, q3 };
+}
+
+// Chart color palette (dark mode aware)
+function chartTextColor() { return isDark() ? '#cbd5e1' : '#334155'; }
+function chartGridColor() { return isDark() ? '#334155' : '#e2e8f0'; }
+
+// ══════════════════════════════════════════════
 // DATA LAYER - IndexedDB
 // ══════════════════════════════════════════════
 const DB_NAME = 'goip-admission';
-const DB_VER = 3;
+const DB_VER = 4;
 let db = null;
 
 function openDB() {
@@ -83,6 +267,8 @@ function openDB() {
     r.onupgradeneeded = e => {
       const d = e.target.result;
       const tx = e.currentTarget.transaction;
+      const oldV = e.oldVersion;
+      // v1~v2 → v3 (initial stores)
       if (!d.objectStoreNames.contains('applicants')) {
         const s = d.createObjectStore('applicants', { keyPath: 'id', autoIncrement: true });
         s.createIndex('exam_number', '수험번호');
@@ -105,10 +291,49 @@ function openDB() {
         m.createIndex('이름', '이름');
         m.createIndex('dedupe', '_dedupe', { unique: false });
       }
+      // v4: settings store for preferences
+      if (oldV < 4 && !d.objectStoreNames.contains('settings')) {
+        d.createObjectStore('settings', { keyPath: 'key' });
+      }
     };
-    r.onsuccess = () => { db = r.result; res(db); };
+    r.onsuccess = () => {
+      db = r.result;
+      db.onversionchange = () => { db.close(); toast('다른 탭에서 DB가 업데이트되어 연결이 끊겼습니다. 새로고침하세요.', 'warn', 6000); };
+      res(db);
+    };
     r.onerror = () => rej(r.error);
+    r.onblocked = () => toast('다른 탭에서 DB를 사용 중입니다. 다른 탭을 닫아주세요.', 'warn', 6000);
   });
+}
+
+// Quota-aware write wrapper: catches QuotaExceededError and informs user
+async function safeWrite(fn, label = '쓰기') {
+  try {
+    return await fn();
+  } catch (err) {
+    if (err && (err.name === 'QuotaExceededError' || /quota/i.test(err.message || ''))) {
+      toast('저장소 용량 초과! 백업 후 일부 데이터를 삭제하세요.', 'error', 7000);
+      throw new Error('저장소 용량이 부족합니다. 데이터 업로드 → 백업 다운로드 후 전체 초기화하거나, 오래된 학년도를 정리하세요.');
+    }
+    if (err && err.name === 'InvalidStateError') {
+      toast('DB 연결이 끊겼습니다. 페이지를 새로고침하세요.', 'error', 7000);
+    }
+    console.error(label, err);
+    throw err;
+  }
+}
+
+// Helper used by undo/redo: replace entire applicants store
+async function replaceApplicants(records) {
+  await openDB();
+  return safeWrite(async () => {
+    const store = txStore('applicants', 'readwrite');
+    await pr(store.clear());
+    for (const r of records) await pr(store.add(r));
+    const total = await pr(txStore('applicants').count());
+    const meta = txStore('meta', 'readwrite');
+    await pr(meta.put({ key: 'lastUpload', date: new Date().toISOString(), count: total }));
+  }, '데이터 교체');
 }
 
 function txStore(name, mode = 'readonly') {
@@ -125,31 +350,39 @@ async function getAllApplicants() {
 
 async function clearAndImport(records) {
   await openDB();
-  const store = txStore('applicants', 'readwrite');
-  await pr(store.clear());
-  for (const r of records) await pr(store.add(r));
-  const total = await pr(txStore('applicants').count());
-  const meta = txStore('meta', 'readwrite');
-  await pr(meta.put({ key: 'lastUpload', date: new Date().toISOString(), count: total }));
+  return safeWrite(async () => {
+    const store = txStore('applicants', 'readwrite');
+    await pr(store.clear());
+    for (const r of records) await pr(store.add(r));
+    const total = await pr(txStore('applicants').count());
+    const meta = txStore('meta', 'readwrite');
+    await pr(meta.put({ key: 'lastUpload', date: new Date().toISOString(), count: total }));
+  }, '전체 교체');
 }
 
 async function appendRecords(records) {
   await openDB();
-  const existing = await pr(txStore('applicants').getAll());
-  const keySet = new Set(existing.map(r => r['수험번호'] ? `${r['_학년도']||''}_${r['수험번호']}` : `${r['_학년도']||''}_${r['성명']}__${r['출신중']}`));
-  const store = txStore('applicants', 'readwrite');
-  let added = 0, skipped = 0;
-  for (const r of records) {
-    const key = r['수험번호'] ? `${r['_학년도']||''}_${r['수험번호']}` : `${r['_학년도']||''}_${r['성명']}__${r['출신중']}`;
-    if (keySet.has(key)) { skipped++; continue; }
-    keySet.add(key);
-    await pr(store.add(r));
-    added++;
-  }
-  const total = await pr(txStore('applicants').count());
-  const meta = txStore('meta', 'readwrite');
-  await pr(meta.put({ key: 'lastUpload', date: new Date().toISOString(), count: total }));
-  return { added, skipped, total };
+  return safeWrite(async () => {
+    const existing = await pr(txStore('applicants').getAll());
+    const keySet = new Set(existing.map(r => r['수험번호'] ? `${r['_학년도']||''}_${r['수험번호']}` : `${r['_학년도']||''}_${r['성명']}__${r['출신중']}`));
+    const store = txStore('applicants', 'readwrite');
+    let added = 0, skipped = 0, skippedSamples = [];
+    for (const r of records) {
+      const key = r['수험번호'] ? `${r['_학년도']||''}_${r['수험번호']}` : `${r['_학년도']||''}_${r['성명']}__${r['출신중']}`;
+      if (keySet.has(key)) {
+        skipped++;
+        if (skippedSamples.length < 5) skippedSamples.push(`${r['_학년도']||'?'} · ${r['성명']||'?'}`);
+        continue;
+      }
+      keySet.add(key);
+      await pr(store.add(r));
+      added++;
+    }
+    const total = await pr(txStore('applicants').count());
+    const meta = txStore('meta', 'readwrite');
+    await pr(meta.put({ key: 'lastUpload', date: new Date().toISOString(), count: total }));
+    return { added, skipped, total, skippedSamples };
+  }, '누적 추가');
 }
 
 async function clearAllData() {
@@ -270,14 +503,34 @@ function readFileAsWorkbook(file) {
 
 function parseSheet(wb, sheetName) {
   const ws = wb.Sheets[sheetName];
+  if (!ws) throw new Error(`시트 "${sheetName}"를 찾을 수 없습니다.`);
   const rows = XLSX.utils.sheet_to_json(ws, { defval: '' });
   const year = extractYearFromSheetName(sheetName);
-  return rows.map(r => {
-    const nr = normalizeRecord(r);
-    nr['_학년도'] = year;
-    nr['_시트명'] = sheetName;
-    return nr;
-  }).filter(r => r['성명'] && r['성명'].trim());
+  const results = [];
+  const skippedRows = [];
+  rows.forEach((r, idx) => {
+    try {
+      const nr = normalizeRecord(r);
+      nr['_학년도'] = year;
+      nr['_시트명'] = sheetName;
+      if (nr['성명'] && nr['성명'].trim()) {
+        results.push(nr);
+      } else {
+        const hasAnyValue = Object.values(r).some(v => v != null && String(v).trim());
+        if (hasAnyValue) skippedRows.push(idx + 2);
+      }
+    } catch (err) {
+      skippedRows.push(idx + 2);
+    }
+  });
+  if (skippedRows.length && results.length === 0) {
+    throw new Error(`시트 "${sheetName}"에서 유효한 데이터가 없습니다. '성명' 컬럼이 있는지 확인하세요. (건너뛴 행: ${skippedRows.length})`);
+  }
+  if (skippedRows.length) {
+    console.warn(`[${sheetName}] 건너뛴 행 ${skippedRows.length}개:`, skippedRows.slice(0, 20));
+  }
+  results._skipped = skippedRows.length;
+  return results;
 }
 
 let pendingFiles = [];
@@ -592,6 +845,7 @@ const PAGES = [
   { id: 'analysis', label: '데이터 분석', icon: 'M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z' },
   { id: 'compare', label: '비교 분석', icon: 'M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4' },
   { id: 'school', label: '중학교별 분석', icon: 'M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4' },
+  { id: 'pivot', label: '교차분석', icon: 'M3 10h18M3 14h18M10 3v18M14 3v18' },
   { id: 'mock', label: '모의고사', icon: 'M3 4h18M3 10h18M3 16h18M3 22h18' },
   { id: 'report', label: '보고서', icon: 'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z' },
 ];
@@ -624,6 +878,7 @@ async function navigateTo(page) {
     case 'analysis': renderAnalysis(main); break;
     case 'compare': renderCompare(main); break;
     case 'school': renderSchool(main); break;
+    case 'pivot': renderPivot(main); break;
     case 'mock': renderMock(main); break;
     case 'report': renderReport(main); break;
   }
@@ -697,7 +952,7 @@ function renderUpload(el) {
           <button onclick="document.getElementById('restore-input').click()" class="px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-xl text-sm font-medium hover:bg-gray-50 transition flex items-center gap-2">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
             복원하기 (누적)</button>
-          <button onclick="if(confirm('모든 데이터를 삭제하시겠습니까?\\n이 작업은 되돌릴 수 없습니다.')){clearAllData().then(()=>{allData=[];updateDataCount();renderUpload(document.getElementById('main-content'));})}" class="px-4 py-2 bg-white border border-red-200 text-red-600 rounded-xl text-sm font-medium hover:bg-red-50 transition">전체 초기화</button>
+          <button onclick="if(confirm('모든 데이터를 삭제하시겠습니까?\\n\\n※ Ctrl+Z로 되돌릴 수 있습니다.')){pushHistory('전체 초기화 이전').then(()=>clearAllData()).then(()=>{allData=[];updateDataCount();renderUpload(document.getElementById('main-content'));toast('전체 초기화 완료 (Ctrl+Z로 복구 가능)','warn',5000);})}" class="px-4 py-2 bg-white border border-red-200 text-red-600 rounded-xl text-sm font-medium hover:bg-red-50 transition">전체 초기화</button>
           <input type="file" id="restore-input" accept=".json" class="hidden" onchange="restoreBackup(event)">
         </div>
       </div>
@@ -796,14 +1051,23 @@ async function executeUpload() {
   try {
     let allRecords = [];
     const fileResults = [];
+    const parseWarnings = [];
     for (const pf of pendingFiles) {
       for (const sheetName of pf.selectedSheets) {
-        const records = parseSheet(pf.wb, sheetName);
-        fileResults.push({ name: pf.file.name, sheet: sheetName, count: records.length, year: extractYearFromSheetName(sheetName) });
-        allRecords = allRecords.concat(records);
+        try {
+          const records = parseSheet(pf.wb, sheetName);
+          fileResults.push({ name: pf.file.name, sheet: sheetName, count: records.length, year: extractYearFromSheetName(sheetName), skipped: records._skipped || 0 });
+          if (records._skipped) parseWarnings.push(`${pf.file.name} / ${sheetName}: ${records._skipped}개 행 건너뜀(성명 없음)`);
+          allRecords = allRecords.concat(records);
+        } catch (parseErr) {
+          parseWarnings.push(`❌ ${pf.file.name} / ${sheetName}: ${parseErr.message}`);
+        }
       }
     }
-    if (allRecords.length === 0) throw new Error('유효한 데이터가 없습니다.');
+    if (allRecords.length === 0) throw new Error('유효한 데이터가 없습니다.' + (parseWarnings.length ? '\n\n' + parseWarnings.join('\n') : ''));
+
+    // Snapshot before destructive write
+    await pushHistory(mode === 'replace' ? '전체 교체 이전' : '누적 추가 이전');
 
     let result;
     if (mode === 'replace') {
@@ -818,23 +1082,39 @@ async function executeUpload() {
     pendingFiles = [];
     renderPendingFiles();
 
+    const sampleHtml = (result.skippedSamples && result.skippedSamples.length)
+      ? `<details class="mt-2"><summary class="cursor-pointer text-xs text-gray-600 hover:underline">건너뛴 중복 샘플 보기</summary><ul class="mt-1 text-xs text-gray-500 pl-4 list-disc">${result.skippedSamples.map(s => `<li>${escapeHtml(s)}</li>`).join('')}${result.skipped > result.skippedSamples.length ? `<li>… 외 ${result.skipped - result.skippedSamples.length}건</li>` : ''}</ul></details>`
+      : '';
+    const warnHtml = parseWarnings.length
+      ? `<details class="mt-2"><summary class="cursor-pointer text-xs text-amber-700 font-medium hover:underline">⚠️ 파싱 경고 ${parseWarnings.length}건</summary><ul class="mt-1 text-xs text-amber-700 pl-4 list-disc">${parseWarnings.map(w => `<li>${escapeHtml(w)}</li>`).join('')}</ul></details>`
+      : '';
+
     statusEl.innerHTML = `
       <div class="card p-5 border-green-200 bg-green-50 space-y-3">
         <div class="flex items-center gap-2">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#16a34a" stroke-width="2"><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
           <span class="font-semibold text-green-800">업로드 완료!</span>
         </div>
+        <div class="grid grid-cols-3 gap-2 text-sm">
+          <div class="bg-white rounded-lg p-2 text-center border border-green-200"><div class="text-xs text-gray-500">신규 추가</div><div class="text-xl font-bold text-green-700">${result.added}</div></div>
+          <div class="bg-white rounded-lg p-2 text-center border border-green-200"><div class="text-xs text-gray-500">중복 스킵</div><div class="text-xl font-bold text-amber-600">${result.skipped||0}</div></div>
+          <div class="bg-white rounded-lg p-2 text-center border border-green-200"><div class="text-xs text-gray-500">전체</div><div class="text-xl font-bold text-blue-700">${result.total}</div></div>
+        </div>
         <div class="text-sm text-green-700 space-y-1">
-          ${fileResults.map(fr => `<div>- ${fr.name} / ${fr.sheet} (${fr.year}학년도) : ${fr.count}명</div>`).join('')}
+          ${fileResults.map(fr => `<div>- ${escapeHtml(fr.name)} / ${escapeHtml(fr.sheet)} (${escapeHtml(fr.year)}학년도) : ${fr.count}명${fr.skipped ? ` <span class="text-amber-700">(빈행 ${fr.skipped}개 스킵)</span>` : ''}</div>`).join('')}
         </div>
-        <div class="text-sm font-medium text-green-900 pt-2 border-t border-green-200">
-          추가: ${result.added}명 ${result.skipped > 0 ? `· 중복 건너뜀: ${result.skipped}명` : ''} · 전체: ${result.total}명
+        ${sampleHtml}
+        ${warnHtml}
+        <div class="flex gap-2 pt-2 border-t border-green-200">
+          <button onclick="navigateTo('dashboard')" class="px-4 py-2 bg-green-600 text-white rounded-xl text-sm font-medium hover:bg-green-700 transition">대시보드 보기</button>
+          <button onclick="undoOnce()" class="px-4 py-2 bg-white border border-green-300 text-green-700 rounded-xl text-sm font-medium hover:bg-green-100 transition">↶ 업로드 취소</button>
         </div>
-        <button onclick="navigateTo('dashboard')" class="mt-1 px-4 py-2 bg-green-600 text-white rounded-xl text-sm font-medium hover:bg-green-700 transition">대시보드 보기</button>
       </div>`;
+    toast(`업로드 완료: 신규 ${result.added}명 · 전체 ${result.total}명`, 'success');
     renderUploadMeta();
   } catch (err) {
-    statusEl.innerHTML = `<div class="card p-4 border-red-200 bg-red-50 text-red-700 text-sm">오류: ${err.message}</div>`;
+    statusEl.innerHTML = `<div class="card p-4 border-red-200 bg-red-50 text-red-700 text-sm whitespace-pre-wrap">오류: ${escapeHtml(err.message)}</div>`;
+    toast('업로드 실패', 'error');
   }
 }
 
@@ -870,28 +1150,75 @@ async function exportBackup() {
   a.download = `고입전형_백업_${new Date().toISOString().slice(0,10)}.json`; a.click();
 }
 
+function validateBackup(backup) {
+  const errors = [];
+  const warnings = [];
+  if (!backup || typeof backup !== 'object') errors.push('JSON 형식이 객체가 아닙니다.');
+  if (backup.version != null && (typeof backup.version !== 'number' || backup.version < 1)) errors.push('version 필드가 유효하지 않습니다.');
+  if (backup.version != null && backup.version > 4) warnings.push(`미래 버전의 백업(v${backup.version})입니다. 일부 필드가 무시될 수 있습니다.`);
+  const hasApplicants = Array.isArray(backup.applicants);
+  const hasMocks = Array.isArray(backup.mockExams);
+  if (!hasApplicants && !hasMocks) errors.push('applicants 또는 mockExams 배열이 없습니다.');
+  if (hasApplicants && backup.applicants.length > 0) {
+    const first = backup.applicants[0];
+    if (typeof first !== 'object' || first == null) errors.push('applicants[0]이 객체가 아닙니다.');
+    else {
+      const hasName = '성명' in first || '이름' in first;
+      if (!hasName) warnings.push("applicants 레코드에 '성명' 키가 없습니다. 데이터가 누락될 수 있습니다.");
+    }
+  }
+  if (hasMocks && backup.mockExams.length > 0) {
+    const first = backup.mockExams[0];
+    if (typeof first !== 'object' || first == null) errors.push('mockExams[0]이 객체가 아닙니다.');
+    else if (!('이름' in first)) warnings.push("mockExams 레코드에 '이름' 키가 없습니다.");
+  }
+  return { errors, warnings, applicantCount: hasApplicants ? backup.applicants.length : 0, mockCount: hasMocks ? backup.mockExams.length : 0 };
+}
+
 async function restoreBackup(e) {
   const file = e.target.files[0];
   if (!file) return;
   try {
+    if (file.size > 100 * 1024 * 1024) {
+      if (!confirm(`파일 크기가 큽니다 (${(file.size/1024/1024).toFixed(1)}MB). 계속하시겠습니까?`)) { e.target.value = ''; return; }
+    }
     const text = await file.text();
-    const backup = JSON.parse(text);
+    let backup;
+    try { backup = JSON.parse(text); }
+    catch (parseErr) { throw new Error('JSON 파싱 실패: 손상되거나 잘못된 파일일 수 있습니다.\n' + parseErr.message); }
+
+    const v = validateBackup(backup);
+    if (v.errors.length) {
+      alert('백업 파일 오류:\n\n' + v.errors.map(e => '• ' + e).join('\n'));
+      e.target.value = ''; return;
+    }
+    if (v.warnings.length) {
+      if (!confirm('경고:\n\n' + v.warnings.map(w => '• ' + w).join('\n') + '\n\n그래도 복원하시겠습니까?')) { e.target.value = ''; return; }
+    }
+
+    const confirmMsg = `복원 대상:\n- 지원자 ${v.applicantCount}명\n- 모의고사 ${v.mockCount}건\n\n현재 데이터에 누적 추가됩니다. 진행하시겠습니까?`;
+    if (!confirm(confirmMsg)) { e.target.value = ''; return; }
+
+    await pushHistory('백업 복원 이전');
     let msg = [];
-    if (backup.applicants && Array.isArray(backup.applicants)) {
+    if (Array.isArray(backup.applicants)) {
       const result = await appendRecords(backup.applicants);
       allData = await getAllApplicants();
       msg.push(`지원자 추가 ${result.added}명, 중복 ${result.skipped}명 (총 ${result.total}명)`);
     }
-    if (backup.mockExams && Array.isArray(backup.mockExams)) {
+    if (Array.isArray(backup.mockExams)) {
       const res2 = await addMockExams(backup.mockExams);
       allMockExams = await getAllMockExams();
       msg.push(`모의고사 추가 ${res2.added}건, 갱신 ${res2.updated}건`);
     }
-    if (!msg.length) { alert('유효하지 않은 백업 파일입니다.'); return; }
     updateDataCount();
-    alert('복원 완료!\n' + msg.join('\n'));
+    toast('복원 완료', 'success');
+    alert('복원 완료!\n\n' + msg.join('\n'));
     navigateTo('upload');
-  } catch (err) { alert('복원 오류: ' + err.message); }
+  } catch (err) {
+    toast('복원 실패', 'error');
+    alert('복원 오류:\n\n' + err.message);
+  }
   e.target.value = '';
 }
 
@@ -1197,6 +1524,28 @@ function renderAnalysis(el) {
 
       <div class="card p-5"><h3 class="font-semibold text-gray-900 mb-4">합격 vs 불합격 평균 비교</h3><div class="chart-container"><canvas id="chart-compare"></canvas></div></div>
       <div class="card p-5"><h3 class="font-semibold text-gray-900 mb-4">1단계 점수 vs 최종점수 산점도</h3><div class="chart-container" style="height:400px"><canvas id="chart-scatter"></canvas></div></div>
+
+      <!-- ── 컷오프 What-if 시뮬레이터 ── -->
+      <div class="card p-5 space-y-3" id="whatif-card">
+        <div class="flex items-center justify-between flex-wrap gap-2">
+          <h3 class="font-semibold text-gray-900">컷오프 What-if 시뮬레이터</h3>
+          <span class="text-xs text-gray-400">최종점수 임계값을 조정하여 가상 합격/불합격을 시뮬레이션</span>
+        </div>
+        ${renderWhatIf(data)}
+      </div>
+
+      <!-- ── 백분위 / Z-점수 ── -->
+      <div class="card p-5 space-y-3">
+        <h3 class="font-semibold text-gray-900">백분위 · Z점수 (최종점수 기준 상위 20명)</h3>
+        ${renderPercentileTable(data)}
+      </div>
+
+      <!-- ── 이상치 탐지 (IQR) ── -->
+      <div class="card p-5 space-y-3">
+        <h3 class="font-semibold text-gray-900">이상치 탐지 (IQR 방법)</h3>
+        <p class="text-xs text-gray-500">데이터 입력 오류 또는 특이 케이스 점검에 활용하세요 (예: 1단계 만점이지만 최종 탈락).</p>
+        ${renderOutliers(data)}
+      </div>
     </div>`;
 
   setTimeout(() => {
@@ -1222,6 +1571,180 @@ function renderAnalysis(el) {
       { label: '불합격', data: scatterData.filter(r => r['합불여부']!=='합격').map(r => ({ x: num(r['1단계 최종점수']), y: num(r['최종점수']) })), backgroundColor: '#ef444488', borderColor: '#ef4444', pointRadius: 4 },
     ]}, options: { responsive: true, maintainAspectRatio: false, scales: { x: { title: { display: true, text: '1단계 최종점수' } }, y: { title: { display: true, text: '최종점수' } } } } });
   }, 50);
+}
+
+// ── What-if Cutoff Simulator ──
+let whatIfCutoff = null; // filled lazily
+function renderWhatIf(data) {
+  const vals = data.map(r => num(r['최종점수'])).filter(v => v > 0).sort((a, b) => b - a);
+  if (!vals.length) return '<p class="text-sm text-gray-400">최종점수 데이터가 없습니다.</p>';
+  const minV = Math.floor(vals[vals.length - 1]);
+  const maxV = Math.ceil(vals[0]);
+  const actualPass = data.filter(r => r['합불여부'] === '합격').length;
+  // Use cached or median
+  if (whatIfCutoff == null || whatIfCutoff < minV || whatIfCutoff > maxV) {
+    whatIfCutoff = vals.length ? vals[Math.min(actualPass, vals.length - 1)] : (minV + maxV) / 2;
+  }
+  const step = Math.max(0.1, ((maxV - minV) / 200)).toFixed(2);
+  return `
+    <div class="flex items-center gap-4 flex-wrap">
+      <input type="range" id="whatif-slider" min="${minV}" max="${maxV}" step="${step}" value="${whatIfCutoff}" oninput="updateWhatIf(this.value)" class="flex-1" style="min-width: 300px;">
+      <input type="number" id="whatif-input" value="${whatIfCutoff.toFixed(2)}" step="0.1" oninput="updateWhatIf(this.value)" class="w-24 text-right">
+    </div>
+    <div id="whatif-result" class="mt-3"></div>
+    <script>setTimeout(() => updateWhatIf(${whatIfCutoff}), 10);<\/script>
+  `;
+}
+function updateWhatIf(cutoff) {
+  whatIfCutoff = parseFloat(cutoff);
+  const slider = document.getElementById('whatif-slider');
+  const input = document.getElementById('whatif-input');
+  if (slider && document.activeElement !== slider) slider.value = whatIfCutoff;
+  if (input && document.activeElement !== input) input.value = whatIfCutoff.toFixed(2);
+  const data = getFilteredData();
+  const withScore = data.filter(r => num(r['최종점수']) > 0);
+  const wouldPass = withScore.filter(r => num(r['최종점수']) >= whatIfCutoff);
+  const wouldFail = withScore.filter(r => num(r['최종점수']) < whatIfCutoff);
+  const actualPass = withScore.filter(r => r['합불여부'] === '합격');
+  const actualFail = withScore.filter(r => r['합불여부'] === '불합격');
+  // Confusion matrix
+  const tp = wouldPass.filter(r => r['합불여부'] === '합격').length; // would pass & actually passed
+  const fp = wouldPass.filter(r => r['합불여부'] !== '합격').length; // would pass & actually failed
+  const fn = wouldFail.filter(r => r['합불여부'] === '합격').length;
+  const tn = wouldFail.filter(r => r['합불여부'] !== '합격').length;
+  const delta = wouldPass.length - actualPass.length;
+  const deltaText = delta === 0 ? '변동 없음' : (delta > 0 ? `합격자 +${delta}명 증가` : `합격자 ${delta}명 감소`);
+  const deltaColor = delta === 0 ? 'text-gray-600' : (delta > 0 ? 'text-green-600' : 'text-red-600');
+  const el = document.getElementById('whatif-result');
+  if (!el) return;
+  el.innerHTML = `
+    <div class="grid grid-cols-4 gap-3 mt-2">
+      <div class="bg-green-50 rounded-lg p-3 text-center"><div class="text-xs text-green-600">가상 합격</div><div class="text-xl font-bold text-green-700">${wouldPass.length}명</div></div>
+      <div class="bg-red-50 rounded-lg p-3 text-center"><div class="text-xs text-red-500">가상 불합격</div><div class="text-xl font-bold text-red-600">${wouldFail.length}명</div></div>
+      <div class="bg-gray-50 rounded-lg p-3 text-center"><div class="text-xs text-gray-500">실제 합격</div><div class="text-xl font-bold text-gray-800">${actualPass.length}명</div></div>
+      <div class="bg-blue-50 rounded-lg p-3 text-center"><div class="text-xs text-blue-600">차이</div><div class="text-xl font-bold ${deltaColor}">${deltaText}</div></div>
+    </div>
+    <div class="mt-3 text-xs text-gray-500">실제 결과와의 일치도:</div>
+    <table class="w-full text-xs mt-1">
+      <thead><tr class="border-b text-gray-500"><th class="py-1 text-left">항목</th><th class="py-1 text-center">수</th><th class="py-1 text-left text-gray-400">설명</th></tr></thead>
+      <tbody>
+        <tr class="border-b border-gray-50"><td class="py-1 text-green-700 font-medium">일치 (합격→합격)</td><td class="py-1 text-center font-mono">${tp}</td><td class="py-1 text-gray-400">가상 통과 & 실제 합격</td></tr>
+        <tr class="border-b border-gray-50"><td class="py-1 text-amber-700 font-medium">신규 합격 전환</td><td class="py-1 text-center font-mono">${fp}</td><td class="py-1 text-gray-400">가상 통과 · 실제 불합격</td></tr>
+        <tr class="border-b border-gray-50"><td class="py-1 text-red-600 font-medium">탈락 전환</td><td class="py-1 text-center font-mono">${fn}</td><td class="py-1 text-gray-400">가상 탈락 · 실제 합격</td></tr>
+        <tr class="border-b border-gray-50"><td class="py-1 text-gray-600">일치 (불합격→불합격)</td><td class="py-1 text-center font-mono">${tn}</td><td class="py-1 text-gray-400">가상 탈락 & 실제 탈락</td></tr>
+      </tbody>
+    </table>
+  `;
+}
+
+// ── Percentile / Z-score Table ──
+function renderPercentileTable(data) {
+  const rows = data.filter(r => num(r['최종점수']) > 0).map(r => ({ r, v: num(r['최종점수']) }));
+  if (!rows.length) return '<p class="text-sm text-gray-400">최종점수 데이터가 없습니다.</p>';
+  const vals = rows.map(x => x.v);
+  const sortedAsc = [...vals].sort((a, b) => a - b);
+  const m = mean(vals), sd = stdDev(vals);
+  const enriched = rows.map(({ r, v }) => ({
+    r, v,
+    percentile: percentileRank(sortedAsc, v),
+    z: zScore(v, m, sd),
+  })).sort((a, b) => b.v - a.v);
+  const top = enriched.slice(0, 20);
+  return `
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead><tr class="border-b">
+          <th class="py-2 text-left text-xs text-gray-500">순위</th>
+          <th class="py-2 text-left text-xs text-gray-500">성명</th>
+          <th class="py-2 text-left text-xs text-gray-500">학년도</th>
+          <th class="py-2 text-left text-xs text-gray-500">전형</th>
+          <th class="py-2 text-center text-xs text-gray-500">최종점수</th>
+          <th class="py-2 text-center text-xs text-gray-500">백분위</th>
+          <th class="py-2 text-center text-xs text-gray-500">Z점수</th>
+          <th class="py-2 text-center text-xs text-gray-500">결과</th>
+        </tr></thead>
+        <tbody>
+          ${top.map((x, i) => `<tr class="border-b border-gray-50">
+            <td class="py-1.5 font-mono">${i + 1}</td>
+            <td class="py-1.5 font-semibold">${escapeHtml(x.r['성명'])}</td>
+            <td class="py-1.5 text-gray-500 text-xs">${escapeHtml(x.r['_학년도']||'-')}</td>
+            <td class="py-1.5 text-gray-600 text-xs">${escapeHtml(x.r['전형구분']||'-')}</td>
+            <td class="py-1.5 text-center font-mono font-semibold text-purple-700">${x.v.toFixed(2)}</td>
+            <td class="py-1.5 text-center font-mono text-blue-600">${x.percentile.toFixed(1)}%</td>
+            <td class="py-1.5 text-center font-mono ${x.z >= 1 ? 'text-green-600 font-semibold' : x.z <= -1 ? 'text-red-600' : 'text-gray-600'}">${x.z >= 0 ? '+' : ''}${x.z.toFixed(2)}</td>
+            <td class="py-1.5 text-center"><span class="badge ${x.r['합불여부']==='합격'?'badge-pass':x.r['합불여부']==='불합격'?'badge-fail':'badge-wait'}">${escapeHtml(x.r['합불여부']||'-')}</span></td>
+          </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>
+    <p class="text-xs text-gray-400 mt-2">전체 평균: ${m.toFixed(2)} · 표준편차: ${sd.toFixed(2)} · 표본 수: ${vals.length}</p>
+  `;
+}
+
+// ── Outlier Detection ──
+function renderOutliers(data) {
+  const metrics = [
+    { key: '교과성적', label: '교과성적' },
+    { key: '1단계 최종점수', label: '1단계' },
+    { key: '면접점수', label: '면접' },
+    { key: '최종점수', label: '최종' },
+  ];
+  const outliers = [];
+  metrics.forEach(m => {
+    const withVal = data.filter(r => num(r[m.key]) > 0);
+    const vals = withVal.map(r => num(r[m.key]));
+    if (vals.length < 10) return;
+    const { low, high, q1, q3 } = iqrOutliers(vals);
+    withVal.forEach(r => {
+      const v = num(r[m.key]);
+      if (v < low || v > high) {
+        outliers.push({ r, metric: m.label, key: m.key, value: v, type: v > high ? '상단' : '하단', bound: v > high ? high : low });
+      }
+    });
+  });
+
+  // Edge case: 1단계 상위권 탈락자 (1단계 > 상위 30% cutoff AND fail)
+  const stage1 = data.map(r => num(r['1단계 최종점수'])).filter(v => v > 0).sort((a, b) => b - a);
+  if (stage1.length >= 10) {
+    const top30 = stage1[Math.floor(stage1.length * 0.3)];
+    data.forEach(r => {
+      if (num(r['1단계 최종점수']) >= top30 && r['합불여부'] === '불합격') {
+        outliers.push({ r, metric: '1단계 상위권 탈락', key: '합격여부', value: num(r['1단계 최종점수']), type: '역설', bound: top30 });
+      }
+    });
+  }
+
+  if (!outliers.length) return '<p class="text-sm text-gray-400">이상치가 감지되지 않았습니다.</p>';
+  outliers.sort((a, b) => Math.abs(b.value - b.bound) - Math.abs(a.value - a.bound));
+  return `
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead><tr class="border-b">
+          <th class="py-2 text-left text-xs text-gray-500">항목</th>
+          <th class="py-2 text-left text-xs text-gray-500">성명</th>
+          <th class="py-2 text-left text-xs text-gray-500">학교</th>
+          <th class="py-2 text-left text-xs text-gray-500">전형</th>
+          <th class="py-2 text-center text-xs text-gray-500">값</th>
+          <th class="py-2 text-center text-xs text-gray-500">경계</th>
+          <th class="py-2 text-center text-xs text-gray-500">유형</th>
+          <th class="py-2 text-center text-xs text-gray-500">결과</th>
+        </tr></thead>
+        <tbody>
+          ${outliers.slice(0, 30).map(o => `<tr class="border-b border-gray-50 ${o.type === '역설' ? 'bg-amber-50/40' : ''}">
+            <td class="py-1.5 text-gray-700">${escapeHtml(o.metric)}</td>
+            <td class="py-1.5 font-semibold">${escapeHtml(o.r['성명'])}</td>
+            <td class="py-1.5 text-gray-600 text-xs">${escapeHtml(o.r['출신중']||'-')}</td>
+            <td class="py-1.5 text-gray-600 text-xs">${escapeHtml(o.r['전형구분']||'-')}</td>
+            <td class="py-1.5 text-center font-mono font-semibold">${o.value.toFixed(2)}</td>
+            <td class="py-1.5 text-center font-mono text-gray-500 text-xs">${o.bound.toFixed(2)}</td>
+            <td class="py-1.5 text-center"><span class="badge ${o.type === '역설' ? 'badge-wait' : o.type === '상단' ? 'badge-pass' : 'badge-fail'}">${o.type}</span></td>
+            <td class="py-1.5 text-center"><span class="badge ${o.r['합불여부']==='합격'?'badge-pass':o.r['합불여부']==='불합격'?'badge-fail':'badge-wait'}">${escapeHtml(o.r['합불여부']||'-')}</span></td>
+          </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>
+    <p class="text-xs text-gray-400 mt-2">IQR 방법: 제1사분위(Q1) - 1.5×IQR 미만 또는 제3사분위(Q3) + 1.5×IQR 초과를 이상치로 판정. 최대 30건 표시.</p>
+  `;
 }
 
 // ══════════════════════════════════════════════
@@ -1609,6 +2132,172 @@ function filterSchoolList() {
 }
 
 // ══════════════════════════════════════════════
+// PAGE: PIVOT (교차분석) — 출신중/전형/학년도 × 합격률/평균
+// ══════════════════════════════════════════════
+let pivotRow = 'school';   // school | type | year
+let pivotCol = 'type';     // type | year | result
+let pivotMetric = 'rate';  // rate | count | pass | fail | avgFinal | avg1st | avgInterview
+let pivotTopN = 15;        // limit row count
+
+function renderPivot(el) {
+  const data = getFilteredData();
+  if (!data.length) { el.innerHTML = '<div class="p-8 text-gray-400 text-center">데이터를 먼저 업로드하세요.</div>'; return; }
+
+  const dims = {
+    school: { label: '출신중학교', get: r => r['출신중'] || '미지정' },
+    type: { label: '전형구분', get: r => r['전형구분'] || '미지정' },
+    year: { label: '학년도', get: r => r['_학년도'] || '미지정' },
+    result: { label: '합불', get: r => r['합불여부'] || '기타' },
+  };
+  if (pivotRow === pivotCol) pivotCol = pivotRow === 'school' ? 'type' : 'school';
+
+  const metrics = {
+    rate: { label: '합격률(%)', fmt: v => v == null ? '-' : v.toFixed(1), color: v => v >= 50 ? 'text-green-600 font-semibold' : v >= 20 ? 'text-orange-600' : 'text-red-600' },
+    count: { label: '지원자 수', fmt: v => v ?? '-', color: () => '' },
+    pass: { label: '합격자 수', fmt: v => v ?? '-', color: () => 'text-green-700' },
+    fail: { label: '불합격자 수', fmt: v => v ?? '-', color: () => 'text-red-600' },
+    avgFinal: { label: '최종점수 평균', fmt: v => v == null ? '-' : v.toFixed(2), color: () => 'text-purple-700' },
+    avg1st: { label: '1단계 평균', fmt: v => v == null ? '-' : v.toFixed(2), color: () => 'text-blue-600' },
+    avgInterview: { label: '면접 평균', fmt: v => v == null ? '-' : v.toFixed(2), color: () => 'text-indigo-600' },
+  };
+
+  const rowKey = dims[pivotRow].get;
+  const colKey = dims[pivotCol].get;
+
+  const cellsByRowCol = {};
+  const rowTotals = {};
+  const colTotals = {};
+  let grandTotal = [];
+  data.forEach(r => {
+    const rk = rowKey(r), ck = colKey(r);
+    if (!cellsByRowCol[rk]) cellsByRowCol[rk] = {};
+    if (!cellsByRowCol[rk][ck]) cellsByRowCol[rk][ck] = [];
+    cellsByRowCol[rk][ck].push(r);
+    rowTotals[rk] = rowTotals[rk] || []; rowTotals[rk].push(r);
+    colTotals[ck] = colTotals[ck] || []; colTotals[ck].push(r);
+    grandTotal.push(r);
+  });
+
+  const computeMetric = (arr) => {
+    if (!arr || !arr.length) return null;
+    const pass = arr.filter(r => r['합불여부'] === '합격').length;
+    const fail = arr.filter(r => r['합불여부'] === '불합격').length;
+    const avgOf = key => {
+      const vs = arr.map(r => num(r[key])).filter(v => v > 0);
+      return vs.length ? vs.reduce((s,v)=>s+v,0)/vs.length : null;
+    };
+    switch (pivotMetric) {
+      case 'rate': return arr.length ? (pass / arr.length) * 100 : null;
+      case 'count': return arr.length;
+      case 'pass': return pass;
+      case 'fail': return fail;
+      case 'avgFinal': return avgOf('최종점수');
+      case 'avg1st': return avgOf('1단계 최종점수');
+      case 'avgInterview': return avgOf('면접점수');
+    }
+    return null;
+  };
+
+  // Sort rows by total count desc, limit topN
+  let rowKeys = Object.keys(rowTotals).sort((a, b) => rowTotals[b].length - rowTotals[a].length);
+  const totalRows = rowKeys.length;
+  if (pivotRow === 'school' && pivotTopN > 0) rowKeys = rowKeys.slice(0, pivotTopN);
+  const colKeys = Object.keys(colTotals).sort();
+
+  const dimOpts = (cur, exclude) => Object.entries(dims).filter(([k]) => k !== exclude).map(([k, d]) => `<option value="${k}" ${cur===k?'selected':''}>${d.label}</option>`).join('');
+  const metOpts = Object.entries(metrics).map(([k, m]) => `<option value="${k}" ${pivotMetric===k?'selected':''}>${m.label}</option>`).join('');
+
+  const met = metrics[pivotMetric];
+  const heatmapColor = (v, isRate) => {
+    if (v == null) return '';
+    if (isRate) {
+      if (v >= 75) return 'background: rgba(34,197,94,.25);';
+      if (v >= 50) return 'background: rgba(34,197,94,.15);';
+      if (v >= 25) return 'background: rgba(251,191,36,.18);';
+      return 'background: rgba(239,68,68,.12);';
+    }
+    return '';
+  };
+  const isRate = pivotMetric === 'rate';
+
+  el.innerHTML = `
+    <div class="p-6 max-w-7xl mx-auto space-y-5">
+      <div class="flex items-center justify-between flex-wrap gap-2">
+        <h1 class="text-2xl font-bold text-gray-900">교차분석 (피벗 테이블)</h1>
+        <button onclick="exportPivotCsv()" class="px-3 py-1.5 bg-white border border-gray-200 text-gray-700 rounded-lg text-xs font-medium hover:bg-gray-50 transition">CSV 내보내기</button>
+      </div>
+      ${yearFilterHtml()}
+      <div class="card p-4 flex flex-wrap items-center gap-3 text-sm">
+        <div class="flex items-center gap-2"><span class="text-gray-500 text-xs font-semibold">행:</span>
+          <select onchange="pivotRow=this.value; navigateTo('pivot')">${dimOpts(pivotRow, pivotCol)}</select></div>
+        <div class="flex items-center gap-2"><span class="text-gray-500 text-xs font-semibold">열:</span>
+          <select onchange="pivotCol=this.value; navigateTo('pivot')">${dimOpts(pivotCol, pivotRow)}</select></div>
+        <div class="flex items-center gap-2"><span class="text-gray-500 text-xs font-semibold">값:</span>
+          <select onchange="pivotMetric=this.value; navigateTo('pivot')">${metOpts}</select></div>
+        ${pivotRow === 'school' ? `<div class="flex items-center gap-2"><span class="text-gray-500 text-xs font-semibold">상위:</span>
+          <select onchange="pivotTopN=parseInt(this.value); navigateTo('pivot')">
+            <option value="10" ${pivotTopN===10?'selected':''}>10</option>
+            <option value="15" ${pivotTopN===15?'selected':''}>15</option>
+            <option value="30" ${pivotTopN===30?'selected':''}>30</option>
+            <option value="0" ${pivotTopN===0?'selected':''}>전체</option>
+          </select> <span class="text-xs text-gray-400">/ 총 ${totalRows}개</span></div>` : ''}
+      </div>
+      <div class="card overflow-x-auto">
+        <table class="w-full text-sm" id="pivot-table">
+          <thead>
+            <tr class="border-b bg-gray-50/80">
+              <th class="px-3 py-2.5 text-left text-xs font-semibold text-gray-500">${dims[pivotRow].label} \\ ${dims[pivotCol].label}</th>
+              ${colKeys.map(c => `<th class="px-3 py-2.5 text-center text-xs font-semibold text-gray-500">${escapeHtml(c)}</th>`).join('')}
+              <th class="px-3 py-2.5 text-center text-xs font-semibold text-gray-700 border-l bg-gray-100">전체</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rowKeys.map(rk => `<tr class="border-b border-gray-50 hover:bg-blue-50/30">
+              <td class="px-3 py-2 font-semibold text-gray-800">${escapeHtml(rk)}</td>
+              ${colKeys.map(ck => {
+                const v = computeMetric(cellsByRowCol[rk] && cellsByRowCol[rk][ck]);
+                return `<td class="px-3 py-2 text-center font-mono ${met.color(v)}" style="${heatmapColor(v, isRate)}">${met.fmt(v)}</td>`;
+              }).join('')}
+              <td class="px-3 py-2 text-center font-mono font-semibold border-l bg-gray-50 ${met.color(computeMetric(rowTotals[rk]))}" style="${heatmapColor(computeMetric(rowTotals[rk]), isRate)}">${met.fmt(computeMetric(rowTotals[rk]))}</td>
+            </tr>`).join('')}
+            <tr class="border-t-2 border-gray-300 bg-gray-50 font-semibold">
+              <td class="px-3 py-2 text-gray-800">전체</td>
+              ${colKeys.map(ck => {
+                const v = computeMetric(colTotals[ck]);
+                return `<td class="px-3 py-2 text-center font-mono ${met.color(v)}">${met.fmt(v)}</td>`;
+              }).join('')}
+              <td class="px-3 py-2 text-center font-mono bg-gray-100 ${met.color(computeMetric(grandTotal))}">${met.fmt(computeMetric(grandTotal))}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="text-xs text-gray-400">※ 합격률 셀은 히트맵으로 표시됩니다 (초록=높음, 빨강=낮음). "합격률 / 인원" 조합이 가장 유용합니다.</p>
+    </div>`;
+
+  // Cache for CSV export
+  window._pivotCache = { rowKeys, colKeys, cellsByRowCol, rowTotals, colTotals, grandTotal, computeMetric, met, dimsLabel: { row: dims[pivotRow].label, col: dims[pivotCol].label } };
+}
+
+function exportPivotCsv() {
+  const c = window._pivotCache;
+  if (!c) return;
+  const header = [`${c.dimsLabel.row} \\ ${c.dimsLabel.col}`, ...c.colKeys, '전체'];
+  const rows = c.rowKeys.map(rk => {
+    const cells = c.colKeys.map(ck => {
+      const v = c.computeMetric(c.cellsByRowCol[rk] && c.cellsByRowCol[rk][ck]);
+      return v == null ? '' : (typeof v === 'number' ? v.toFixed(2) : v);
+    });
+    const total = c.computeMetric(c.rowTotals[rk]);
+    return [rk, ...cells, total == null ? '' : (typeof total === 'number' ? total.toFixed(2) : total)];
+  });
+  const totalRow = ['전체', ...c.colKeys.map(ck => { const v = c.computeMetric(c.colTotals[ck]); return v == null ? '' : (typeof v === 'number' ? v.toFixed(2) : v); }), (c.computeMetric(c.grandTotal) ?? '')];
+  const csv = '\uFEFF' + [header, ...rows, totalRow].map(r => r.map(v => { const s = String(v ?? ''); return s.includes(',') || s.includes('"') ? `"${s.replace(/"/g,'""')}"` : s; }).join(',')).join('\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `교차분석_${c.met.label}_${new Date().toISOString().slice(0,10)}.csv`; a.click();
+  toast('CSV 다운로드 완료', 'success');
+}
+
+// ══════════════════════════════════════════════
 // PAGE: REPORT (editable + chart insertion)
 // ══════════════════════════════════════════════
 function renderReport(el) {
@@ -1643,6 +2332,9 @@ function renderReport(el) {
           <button onclick="insertReportChart()" class="px-4 py-2 bg-indigo-600 text-white rounded-xl text-sm font-medium hover:bg-indigo-700 transition flex items-center gap-2">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M8 16V12M12 16V8M16 16V11"/></svg>
             그래프 삽입</button>
+          <button onclick="exportReportPptx()" class="px-4 py-2 bg-orange-600 text-white rounded-xl text-sm font-medium hover:bg-orange-700 transition flex items-center gap-2">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M7 7h10M7 11h10M7 15h6"/></svg>
+            PPTX</button>
           <button onclick="printReport()" class="px-4 py-2 bg-blue-600 text-white rounded-xl text-sm font-medium hover:bg-blue-700 transition flex items-center gap-2">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9V2h12v7M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2M6 14h12v8H6z"/></svg>
             인쇄</button>
@@ -1767,6 +2459,117 @@ function drawReportChart(chartId) {
     const schools = getSchoolList(data).slice(0, 10);
     new Chart(canvas, { type: 'bar', data: { labels: schools.map(s=>s[0]), datasets: [{ label: '합격', data: schools.map(s=>s[1].pass), backgroundColor: '#22c55e' }, { label: '불합격', data: schools.map(s=>s[1].fail), backgroundColor: '#ef4444' }] }, options: { responsive: true, maintainAspectRatio: false, scales: { x: { stacked: true }, y: { stacked: true } } } });
   }
+}
+
+async function exportReportPptx() {
+  if (typeof PptxGenJS === 'undefined') { alert('PPTX 라이브러리 로드 실패. 인터넷 연결을 확인하세요.'); return; }
+  const data = getFilteredData();
+  if (!data.length) { alert('데이터가 없습니다.'); return; }
+  toast('PPTX 생성 중...', 'info', 2000);
+
+  const total = data.length;
+  const pass = data.filter(r => r['합불여부']==='합격');
+  const fail = data.filter(r => r['합불여부']==='불합격');
+  const types = {};
+  data.forEach(r => { const t = r['전형구분']||'미지정'; types[t] = (types[t]||0)+1; });
+  const schools = getSchoolList(data);
+  const yearLabel = yearFilter ? `${yearFilter}학년도 ` : '';
+
+  const pptx = new PptxGenJS();
+  pptx.layout = 'LAYOUT_WIDE'; // 13.33 x 7.5 inches
+  pptx.defineSlideMaster({
+    title: 'MASTER',
+    background: { fill: 'FFFFFF' },
+    objects: [
+      { rect: { x: 0, y: 7.1, w: 13.33, h: 0.4, fill: { color: 'F1F5F9' } } },
+      { text: { text: `고입전형 결과 보고서 · ${new Date().toLocaleDateString('ko-KR')}`, options: { x: 0.3, y: 7.15, w: 12, h: 0.3, fontSize: 9, color: '64748B' } } },
+    ],
+  });
+
+  // Slide 1: Title
+  const s1 = pptx.addSlide({ masterName: 'MASTER' });
+  s1.addText(`${yearLabel}입학전형 결과 보고서`, { x: 0.5, y: 2.5, w: 12.3, h: 1.5, fontSize: 44, bold: true, color: '1E40AF', align: 'center' });
+  s1.addText('자율형사립고등학교', { x: 0.5, y: 4.0, w: 12.3, h: 0.5, fontSize: 20, color: '64748B', align: 'center' });
+  s1.addText(new Date().toLocaleDateString('ko-KR'), { x: 0.5, y: 5.5, w: 12.3, h: 0.4, fontSize: 14, color: '94A3B8', align: 'center' });
+
+  // Slide 2: Overview stats
+  const s2 = pptx.addSlide({ masterName: 'MASTER' });
+  s2.addText('1. 지원 현황', { x: 0.5, y: 0.3, w: 12, h: 0.6, fontSize: 28, bold: true, color: '1E293B' });
+  const cards = [
+    { label: '총 지원자', value: `${total}명`, color: '1E40AF' },
+    { label: '합격', value: `${pass.length}명`, color: '16A34A' },
+    { label: '불합격', value: `${fail.length}명`, color: 'DC2626' },
+    { label: '경쟁률', value: `${pass.length ? (total/pass.length).toFixed(2) : '-'} : 1`, color: '7C3AED' },
+    { label: '출신중', value: `${schools.length}개교`, color: 'EA580C' },
+  ];
+  cards.forEach((c, i) => {
+    const x = 0.5 + i * 2.5, y = 1.2;
+    s2.addShape(pptx.ShapeType.roundRect, { x, y, w: 2.3, h: 2.0, fill: { color: 'F8FAFC' }, line: { color: 'E2E8F0', width: 1 }, rectRadius: 0.1 });
+    s2.addText(c.label, { x, y: y + 0.2, w: 2.3, h: 0.4, fontSize: 12, color: '64748B', align: 'center' });
+    s2.addText(c.value, { x, y: y + 0.7, w: 2.3, h: 0.9, fontSize: 24, bold: true, color: c.color, align: 'center' });
+  });
+
+  // Slide 3: Type breakdown
+  const s3 = pptx.addSlide({ masterName: 'MASTER' });
+  s3.addText('2. 전형구분별 현황', { x: 0.5, y: 0.3, w: 12, h: 0.6, fontSize: 28, bold: true, color: '1E293B' });
+  const tRows = [[
+    { text: '전형구분', options: { bold: true, fill: { color: 'E2E8F0' } } },
+    { text: '인원', options: { bold: true, fill: { color: 'E2E8F0' }, align: 'center' } },
+    { text: '비율', options: { bold: true, fill: { color: 'E2E8F0' }, align: 'center' } },
+    { text: '합격', options: { bold: true, fill: { color: 'E2E8F0' }, align: 'center' } },
+    { text: '합격률', options: { bold: true, fill: { color: 'E2E8F0' }, align: 'center' } },
+  ]];
+  Object.entries(types).forEach(([t, c]) => {
+    const typePass = data.filter(r => (r['전형구분']||'미지정') === t && r['합불여부'] === '합격').length;
+    tRows.push([
+      { text: t, options: {} },
+      { text: `${c}명`, options: { align: 'center' } },
+      { text: `${(c/total*100).toFixed(1)}%`, options: { align: 'center' } },
+      { text: `${typePass}명`, options: { align: 'center', color: '16A34A' } },
+      { text: `${c ? (typePass/c*100).toFixed(1) : 0}%`, options: { align: 'center', bold: true } },
+    ]);
+  });
+  s3.addTable(tRows, { x: 0.5, y: 1.2, w: 12.3, fontSize: 14, border: { type: 'solid', pt: 0.5, color: 'CBD5E1' } });
+
+  // Chart slide: use doughnut
+  const s4 = pptx.addSlide({ masterName: 'MASTER' });
+  s4.addText('3. 합격/불합격 분포', { x: 0.5, y: 0.3, w: 12, h: 0.6, fontSize: 28, bold: true, color: '1E293B' });
+  s4.addChart(pptx.ChartType.doughnut, [
+    { name: '결과', labels: ['합격', '불합격', '기타'], values: [pass.length, fail.length, total - pass.length - fail.length] }
+  ], { x: 2, y: 1.2, w: 9, h: 5.5, showLegend: true, legendPos: 'b', chartColors: ['22C55E', 'EF4444', '94A3B8'] });
+
+  // Slide: School top 10 bar chart
+  const s5 = pptx.addSlide({ masterName: 'MASTER' });
+  s5.addText('4. 출신중학교 TOP 10', { x: 0.5, y: 0.3, w: 12, h: 0.6, fontSize: 28, bold: true, color: '1E293B' });
+  const top10 = schools.slice(0, 10);
+  s5.addChart(pptx.ChartType.bar, [
+    { name: '합격', labels: top10.map(s => s[0]), values: top10.map(s => s[1].pass) },
+    { name: '불합격', labels: top10.map(s => s[0]), values: top10.map(s => s[1].fail) },
+  ], { x: 0.5, y: 1.2, w: 12.3, h: 5.5, showLegend: true, legendPos: 'b', chartColors: ['22C55E', 'EF4444'], barGrouping: 'stacked' });
+
+  // Slide: Score averages
+  const s6 = pptx.addSlide({ masterName: 'MASTER' });
+  s6.addText('5. 성적 분석 (합격 vs 불합격 평균)', { x: 0.5, y: 0.3, w: 12, h: 0.6, fontSize: 28, bold: true, color: '1E293B' });
+  const keys = ['교과성적', '1단계 최종점수', '면접점수', '최종점수'];
+  const avgOf = (arr, key) => { const vs = arr.map(r => num(r[key])).filter(v => v > 0); return vs.length ? vs.reduce((s,v)=>s+v,0)/vs.length : 0; };
+  s6.addChart(pptx.ChartType.bar, [
+    { name: '합격 평균', labels: keys, values: keys.map(k => +avgOf(pass, k).toFixed(2)) },
+    { name: '불합격 평균', labels: keys, values: keys.map(k => +avgOf(fail, k).toFixed(2)) },
+  ], { x: 0.5, y: 1.2, w: 12.3, h: 5.5, showLegend: true, legendPos: 'b', chartColors: ['22C55E', 'EF4444'] });
+
+  // Insert any user-created report charts as images
+  const reportCharts = document.querySelectorAll('#report-charts canvas');
+  for (const canvas of reportCharts) {
+    const slide = pptx.addSlide({ masterName: 'MASTER' });
+    slide.addText('추가 차트', { x: 0.5, y: 0.3, w: 12, h: 0.6, fontSize: 28, bold: true, color: '1E293B' });
+    try {
+      slide.addImage({ data: canvas.toDataURL('image/png'), x: 1, y: 1, w: 11, h: 6 });
+    } catch (e) { console.warn('chart export failed', e); }
+  }
+
+  const fname = `고입전형_보고서_${new Date().toISOString().slice(0,10)}.pptx`;
+  await pptx.writeFile({ fileName: fname });
+  toast('PPTX 내보내기 완료: ' + fname, 'success');
 }
 
 function printReport() {
@@ -2450,14 +3253,100 @@ function renderMockTypeAnalysis(el) {
 }
 
 // ══════════════════════════════════════════════
+// KEYBOARD SHORTCUTS
+// ══════════════════════════════════════════════
+const SHORTCUTS = [
+  { keys: ['Ctrl+Z / ⌘+Z'], desc: '되돌리기' },
+  { keys: ['Ctrl+Y / ⌘+Shift+Z'], desc: '다시 실행' },
+  { keys: ['Ctrl+U'], desc: '업로드 탭' },
+  { keys: ['Ctrl+D'], desc: '대시보드' },
+  { keys: ['Ctrl+L'], desc: '지원자 목록' },
+  { keys: ['Ctrl+E'], desc: '내보내기(목록 탭)' },
+  { keys: ['Ctrl+K'], desc: '검색 포커스(목록 탭)' },
+  { keys: ['Ctrl+.'], desc: '다크모드 전환' },
+  { keys: ['1 – 9'], desc: '페이지 빠른 이동' },
+  { keys: ['?'], desc: '이 도움말 표시' },
+  { keys: ['Esc'], desc: '모달/검색 닫기' },
+];
+function showShortcutsHelp() {
+  const modal = document.createElement('div');
+  modal.className = 'fixed inset-0 z-50 flex items-center justify-center bg-black/40';
+  modal.onclick = e => { if (e.target === modal) modal.remove(); };
+  modal.innerHTML = `
+    <div class="card p-6 w-[480px] max-w-[90vw] space-y-4" onclick="event.stopPropagation()">
+      <div class="flex items-center justify-between">
+        <h2 class="text-lg font-bold text-gray-900">⌨ 키보드 단축키</h2>
+        <button onclick="this.closest('.fixed').remove()" class="p-1.5 rounded-lg hover:bg-gray-100 text-xl">&times;</button>
+      </div>
+      <table class="w-full text-sm">
+        <tbody>
+          ${SHORTCUTS.map(s => `<tr class="border-b border-gray-100"><td class="py-2">${s.keys.map(k => `<kbd>${k}</kbd>`).join(' ')}</td><td class="py-2 text-gray-600">${s.desc}</td></tr>`).join('')}
+        </tbody>
+      </table>
+      <p class="text-xs text-gray-400">페이지 번호: 1=업로드, 2=대시보드, 3=목록, 4=분석, 5=비교, 6=학교, 7=피벗, 8=모의고사, 9=보고서</p>
+    </div>`;
+  document.body.appendChild(modal);
+}
+function handleKeydown(e) {
+  // Ignore shortcuts while typing in inputs (except Ctrl+Z etc.)
+  const inInput = /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName) || e.target.isContentEditable;
+  const meta = e.ctrlKey || e.metaKey;
+  const k = e.key.toLowerCase();
+
+  // Esc closes modals / clears search
+  if (e.key === 'Escape') {
+    const modal = document.querySelector('.fixed.inset-0.z-50');
+    if (modal) { modal.remove(); e.preventDefault(); return; }
+    if (inInput) e.target.blur();
+    return;
+  }
+
+  // ? help (not while typing)
+  if (!inInput && e.key === '?') { showShortcutsHelp(); e.preventDefault(); return; }
+
+  if (meta) {
+    if (k === 'z' && !e.shiftKey) { undoOnce(); e.preventDefault(); return; }
+    if (k === 'y' || (k === 'z' && e.shiftKey)) { redoOnce(); e.preventDefault(); return; }
+    if (k === '.') { toggleDark(); e.preventDefault(); return; }
+    if (k === 'u') { navigateTo('upload'); e.preventDefault(); return; }
+    if (k === 'd') { navigateTo('dashboard'); e.preventDefault(); return; }
+    if (k === 'l') { navigateTo('list'); e.preventDefault(); return; }
+    if (k === 'e' && currentPage === 'list') { exportFiltered(); e.preventDefault(); return; }
+    if (k === 'k' && currentPage === 'list') {
+      const input = document.getElementById('list-search');
+      if (input) { input.focus(); input.select(); e.preventDefault(); }
+      return;
+    }
+  }
+
+  // Number keys for page nav (not in input, not with modifier)
+  if (!inInput && !meta && !e.shiftKey && !e.altKey) {
+    const pageMap = ['upload','dashboard','list','analysis','compare','school','pivot','mock','report'];
+    const n = parseInt(e.key);
+    if (n >= 1 && n <= 9 && pageMap[n-1]) { navigateTo(pageMap[n-1]); e.preventDefault(); }
+  }
+}
+
+// ══════════════════════════════════════════════
 // INIT
 // ══════════════════════════════════════════════
 (async () => {
-  await openDB();
-  allData = await getAllApplicants();
-  allMockExams = await getAllMockExams();
+  applySavedTheme();
+  document.addEventListener('keydown', handleKeydown);
+  try {
+    await openDB();
+    allData = await getAllApplicants();
+    allMockExams = await getAllMockExams();
+  } catch (err) {
+    toast('DB 초기화 실패: ' + err.message, 'error', 8000);
+    console.error(err);
+  }
+  const savedDark = document.body.classList.contains('dark');
+  const btn = document.getElementById('dark-toggle');
+  if (btn) btn.textContent = savedDark ? '☀️ 라이트' : '🌙 다크';
   renderNav();
   updateDataCount();
+  updateHistoryBadge();
   if (allData.length > 0) navigateTo('dashboard');
   else navigateTo('upload');
 })();
