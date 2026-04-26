@@ -94,6 +94,13 @@
     .style-tag.bad { background: rgba(248,113,113,0.08); border-color: rgba(248,113,113,0.2); color: #fca5a5; }
 
     .scroll-smooth { scroll-behavior: smooth; }
+
+    /* Reference Data 아코디언 (로컬 측정값 — AI 학습 입력 데이터) */
+    summary::-webkit-details-marker { display: none; }
+    summary { list-style: none; }
+    details[open] > summary .details-arrow { transform: rotate(180deg); }
+    .details-arrow { transition: transform 0.25s ease; }
+    details[open] > summary .details-toggle-label { color: rgba(167, 139, 250, 0.85); }
   </style>
 </head>
 <body class="scroll-smooth">
@@ -590,6 +597,28 @@
             </div>
           </div>
         </div>
+
+        <!-- ===== Reference Data Accordion (로컬 측정값 — AI 학습 입력 데이터) ===== -->
+        <!-- AI 진단이 메인 결과이며, 아래 측정값/스타일 가이드는 Claude의 진단 근거로 사용됩니다.
+             신뢰성 검토용으로 접이식으로 보관합니다. -->
+        <details id="referenceDataAccordion" class="mb-6">
+          <summary class="glass-card p-5 md:p-6 cursor-pointer flex items-center justify-between hover:bg-white/[0.02] transition-colors rounded-2xl">
+            <div class="flex items-center gap-3">
+              <span class="text-[10px] text-zinc-500 tracking-widest uppercase">Reference Data</span>
+              <div class="w-8 h-px bg-zinc-700"></div>
+              <span class="text-zinc-300 text-sm details-toggle-label">원본 측정값 및 스타일 가이드</span>
+            </div>
+            <div class="flex items-center gap-3">
+              <span class="text-zinc-600 text-[11px] hidden md:inline">AI 진단 입력 데이터 · 클릭하여 펼치기</span>
+              <svg class="w-4 h-4 text-zinc-500 details-arrow" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+              </svg>
+            </div>
+          </summary>
+          <div class="mt-6 space-y-8">
+            <p class="text-zinc-600 text-[11px] text-center -mt-2">
+              ⓘ 아래 측정값과 스타일 가이드는 MediaPipe 분석 결과로, 위의 AI 진단을 생성할 때 참고 데이터로 사용된 원본입니다.
+            </p>
 
         <!-- ===== CHAPTER 1: Face Shape ===== -->
         <div id="faceResultCard" class="hidden">
@@ -1109,6 +1138,10 @@
             </div>
           </div>
         </div>
+
+          </div>
+        </details>
+        <!-- ===== End Reference Data Accordion ===== -->
 
 <!-- aiResultCard moved to top (between summary and chapters) -->
 
