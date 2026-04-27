@@ -1191,6 +1191,57 @@
     </div>
   </div>
 
+  <!-- ====== API 키 설정 마법사 (최초 실행 시) ====== -->
+  <div id="apiKeySetupModal" class="fixed inset-0 z-[60] hidden">
+    <div class="absolute inset-0 bg-black/70 backdrop-blur-sm"></div>
+    <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-lg">
+      <div class="glass-card p-8 mx-4">
+        <div class="flex items-center gap-3 mb-2">
+          <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-500/30 to-orange-500/20 flex items-center justify-center">
+            <svg class="w-5 h-5 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"/>
+            </svg>
+          </div>
+          <h3 class="text-lg font-light text-white">Claude API 키 설정</h3>
+        </div>
+        <p class="text-zinc-400 text-sm mb-6 leading-relaxed">
+          AI 진단 기능을 사용하려면 Anthropic Claude API 키가 필요합니다.<br>
+          <span class="text-zinc-500 text-xs">키는 본인 컴퓨터의 <code class="text-amber-400">.env</code> 파일에만 저장되며 외부 전송되지 않습니다.</span>
+        </p>
+
+        <div class="space-y-4">
+          <div>
+            <label class="text-xs text-zinc-500 mb-1.5 block">Anthropic API Key</label>
+            <input id="apiKeyInput" type="password" autocomplete="off" spellcheck="false"
+              placeholder="sk-ant-api03-xxxxxxxxxxxxxxxxxxxx"
+              class="w-full glass rounded-xl px-4 py-3 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-amber-500/50 font-mono">
+            <p id="apiKeyError" class="text-red-400 text-xs mt-2 hidden"></p>
+          </div>
+
+          <div class="glass rounded-xl p-3 border-l-2 border-amber-500/40">
+            <p class="text-zinc-400 text-xs leading-relaxed">
+              💡 <span class="text-amber-300">키 발급 방법:</span><br>
+              1. <a href="https://console.anthropic.com/settings/keys" target="_blank" class="text-amber-400 underline">console.anthropic.com</a> 접속 →<br>
+              2. <span class="text-zinc-300">API Keys</span> → <span class="text-zinc-300">Create Key</span><br>
+              3. 생성된 <code class="text-amber-400">sk-ant-...</code> 형태의 키를 복사해 위에 붙여넣기
+            </p>
+          </div>
+        </div>
+
+        <div class="flex gap-2 mt-6">
+          <button onclick="window._skipApiKey()" class="flex-1 glass rounded-xl py-3 text-zinc-500 text-sm hover:bg-white/5 transition-colors">
+            나중에 (AI 분석 비활성)
+          </button>
+          <button onclick="window._saveApiKey()" id="saveApiKeyBtn" class="flex-1 rounded-xl py-3 text-sm font-medium bg-gradient-to-r from-amber-500 to-orange-500 text-black hover:from-amber-400 hover:to-orange-400 transition-all">
+            저장하고 시작하기
+          </button>
+        </div>
+
+        <p id="apiKeySaveStatus" class="text-emerald-400 text-xs text-center mt-4 hidden"></p>
+      </div>
+    </div>
+  </div>
+
   <!-- ====== 이메일 모달 ====== -->
   <div id="emailModal" class="fixed inset-0 z-50 hidden">
     <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" onclick="window._closeEmailModal()"></div>
@@ -2665,10 +2716,77 @@
       card.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
 
-    // Check config on load
+    // ============================================================
+    //  API 키 설정 마법사 (최초 실행 시 자동 표시)
+    // ============================================================
+    function _showApiKeyModal() {
+      document.getElementById('apiKeySetupModal').classList.remove('hidden');
+      setTimeout(() => document.getElementById('apiKeyInput')?.focus(), 100);
+    }
+    function _hideApiKeyModal() {
+      document.getElementById('apiKeySetupModal').classList.add('hidden');
+    }
+    window._skipApiKey = function() {
+      _hideApiKeyModal();
+      console.warn('[Setup] API 키 입력을 건너뜀 — AI 분석은 비활성 상태입니다.');
+    };
+    window._saveApiKey = async function() {
+      const input = document.getElementById('apiKeyInput');
+      const errEl = document.getElementById('apiKeyError');
+      const btn = document.getElementById('saveApiKeyBtn');
+      const statusEl = document.getElementById('apiKeySaveStatus');
+      const key = (input.value || '').trim();
+
+      errEl.classList.add('hidden');
+      statusEl.classList.add('hidden');
+
+      if (!key.startsWith('sk-ant-')) {
+        errEl.textContent = 'API 키는 sk-ant- 로 시작해야 합니다. 형식을 다시 확인해 주세요.';
+        errEl.classList.remove('hidden');
+        return;
+      }
+
+      btn.disabled = true;
+      btn.textContent = '저장 중...';
+
+      try {
+        const r = await fetch('/api/save-key', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ key })
+        });
+        const data = await r.json();
+        if (!r.ok || !data.success) {
+          errEl.textContent = data.error || '저장 실패';
+          errEl.classList.remove('hidden');
+          btn.disabled = false;
+          btn.textContent = '저장하고 시작하기';
+          return;
+        }
+        // 성공 — 상태 갱신 후 모달 닫기
+        statusEl.textContent = '✅ API 키가 저장되었습니다. 잠시 후 분석 화면으로 이동합니다.';
+        statusEl.classList.remove('hidden');
+        window._hasApiKey = true;
+        setTimeout(() => {
+          _hideApiKeyModal();
+          input.value = '';
+        }, 1200);
+      } catch (e) {
+        errEl.textContent = '네트워크 오류: ' + e.message;
+        errEl.classList.remove('hidden');
+        btn.disabled = false;
+        btn.textContent = '저장하고 시작하기';
+      }
+    };
+
+    // Check config on load — API 키 없으면 setup wizard 자동 표시
     fetch('/api/check-config').then(r => r.json()).then(cfg => {
       window._hasApiKey = cfg.hasApiKey;
       window._hasSmtp = cfg.hasSmtp;
+      // canSaveKey가 true(=로컬 모드) 이고 키가 없으면 setup wizard 표시
+      if (!cfg.hasApiKey && cfg.canSaveKey !== false) {
+        _showApiKeyModal();
+      }
     }).catch(() => {});
   </script>
 </body>
