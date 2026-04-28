@@ -34,8 +34,15 @@
 .bulk-bar button.danger:hover{background:var(--err);color:#fff}
 .bulk-bar button:disabled{opacity:.4;cursor:not-allowed}
 </style>
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" type="image/svg+xml" href="/icon.svg">
+<meta name="theme-color" content="#6366f1">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+
 </head>
 <body>
+<a href="#main-content" class="skip-link">본문 바로가기</a>
 <div class="top-nav">
   <div class="brand">🏆 유효숫자 마스터 점수판</div>
   <div class="nav-links">
@@ -64,6 +71,7 @@
     <button id="bulk-del-btn" class="danger" onclick="bulkDelete()" disabled>🗑 선택 삭제</button>
     <button onclick="selectAll(true)">전체 선택</button>
     <button onclick="selectAll(false)">선택 해제</button>
+    <button onclick="bulkBonus()" style="border-color:var(--acc);color:var(--acc)">⭐ +/− 보너스</button>
     <span style="flex:1"></span>
     <button class="danger" onclick="resetCurrent()">⚠️ 현재 탭 초기화</button>
   </div>
@@ -177,6 +185,21 @@ async function bulkDelete() {
   selected.clear();
   load();
 }
+
+async function bulkBonus() {
+  if (selected.size === 0) return;
+  const v = await promptDialog('선택한 ${selected.size}건에 부여할 점수 (음수 가능). 예: +50, -30', '50', { title: '⭐ 점수 일괄 보너스', okLabel: '적용' });
+  if (v === null || v === '') return;
+  const bonus = parseInt(String(v).replace(/^\+/, ''));
+  if (isNaN(bonus)) { toast('숫자를 입력하세요', 'err'); return; }
+  if (!await confirmDialog('선택한 ' + selected.size + '건에 ' + (bonus >= 0 ? '+' : '') + bonus + '점을 적용할까요?')) return;
+  const keys = Array.from(selected).map(k => { const [at, sid] = k.split('|'); return { at: parseInt(at), studentId: sid }; });
+  const r = await teacherReq('/api/leaderboard/entry/bulk-bonus', { type: currentType, keys, bonus });
+  if (r.error) { toast(r.error, 'err'); return; }
+  toast(r.count + '건 보너스 적용 완료', 'ok');
+  selected.clear(); load();
+}
+
 
 async function resetCurrent() {
   const label = { single: '싱글', multi: '멀티', battle: '대전' }[currentType];
@@ -298,7 +321,7 @@ function render() {
       ${actionCell(e)}
     </tr>` : `<tr>
       ${selCell(e)}<td><span class="rk">${i+1}</span></td>
-      <td><b>${e.name}</b> <span style="color:var(--txt2);font-size:.82rem">${e.studentId}</span></td>
+      <td><b>${_h(e.name)}</b> <span style="color:var(--txt2);font-size:.82rem">${_h(e.studentId)}</span></td>
       ${clsCell(e)}
       <td class="score-cell">${e.score}점</td>
       <td>${e.correct}/${e.total}</td>
@@ -316,7 +339,7 @@ function render() {
       ${clsCell(e)}
       <td class="edit-cell"><input id="ed-score" type="number" value="${e.score}"></td>
       <td class="edit-cell"><input id="ed-correct" type="number" value="${e.correct}" style="width:48%"> / <input id="ed-total" type="number" value="${e.total}" style="width:48%"></td>
-      <td>${e.roomLabel || '-'}</td>
+      <td>${_h(e.roomLabel || '-')}</td>
       <td>${e.playerCount||'-'}명</td>
       <td>${gmLabel[e.gameMode]||''}</td>
       <td>${diffLabel[e.difficulty]||''}</td>
@@ -325,11 +348,11 @@ function render() {
       <input type="hidden" id="ed-streak" value="${e.maxStreak}">
     </tr>` : `<tr>
       ${selCell(e)}<td><span class="rk">${i+1}</span></td>
-      <td><b>${e.name}</b> <span style="color:var(--txt2);font-size:.82rem">${e.studentId}</span></td>
+      <td><b>${_h(e.name)}</b> <span style="color:var(--txt2);font-size:.82rem">${_h(e.studentId)}</span></td>
       ${clsCell(e)}
       <td class="score-cell">${e.score}점</td>
       <td>${e.correct}/${e.total}</td>
-      <td>${e.roomLabel || '-'}</td>
+      <td>${_h(e.roomLabel || '-')}</td>
       <td>${e.playerCount||'-'}명</td>
       <td>${gmLabel[e.gameMode]||''}</td>
       <td>${diffLabel[e.difficulty]||''}</td>
@@ -353,7 +376,7 @@ function render() {
       <input type="hidden" id="ed-streak" value="${e.maxStreak}">
     </tr>` : `<tr>
       ${selCell(e)}<td><span class="rk">${i+1}</span></td>
-      <td><b>${e.name}</b> <span style="color:var(--txt2);font-size:.82rem">${e.studentId}</span></td>
+      <td><b>${_h(e.name)}</b> <span style="color:var(--txt2);font-size:.82rem">${_h(e.studentId)}</span></td>
       ${clsCell(e)}
       <td class="score-cell">${e.score}점</td>
       <td>${e.result === 'win' ? '<span class="badge ok">승</span>' : '<span class="badge no">패</span>'}</td>
@@ -365,7 +388,17 @@ function render() {
       ${actionCell(e)}
     </tr>`;
   }
-  document.getElementById('lb-area').innerHTML = `<table class="lb-table"><thead>${colsHead}</thead><tbody>${filtered.slice(0, 100).map(rowRenderer).join('')}</tbody></table>`;
+  const PAGE = 50;
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE));
+  if (window._lbPage === undefined) window._lbPage = 0;
+  if (window._lbPage >= totalPages) window._lbPage = 0;
+  const slice = filtered.slice(window._lbPage * PAGE, (window._lbPage + 1) * PAGE);
+  const pager = totalPages > 1 ? `<div style="display:flex;gap:6px;justify-content:center;margin-top:14px;flex-wrap:wrap">
+    <button class="btn btn-ghost btn-sm" onclick="window._lbPage=Math.max(0,window._lbPage-1);render()" ${window._lbPage===0?'disabled':''}>← 이전</button>
+    <span style="padding:7px 12px;color:var(--txt2);font-size:.88rem">${window._lbPage+1} / ${totalPages} 페이지 (총 ${filtered.length}건)</span>
+    <button class="btn btn-ghost btn-sm" onclick="window._lbPage=Math.min(totalPages-1,window._lbPage+1);render()" ${window._lbPage>=totalPages-1?'disabled':''}>다음 →</button>
+  </div>` : '';
+  document.getElementById('lb-area').innerHTML = '<table class="lb-table"><thead>' + colsHead + '</thead><tbody>' + slice.map(rowRenderer).join('') + '</tbody></table>' + pager;
   updateSelCount();
 }
 
@@ -388,5 +421,7 @@ loadClassroomOptions();
 load();
 setInterval(() => { if (editingIdx === -1 && selected.size === 0) load(); }, 5000);
 </script>
+<script>if('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(()=>{});</script>
+
 </body>
 </html>

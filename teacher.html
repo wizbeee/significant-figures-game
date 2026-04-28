@@ -40,8 +40,15 @@
 .type-pick button{flex:1;padding:14px 8px;background:var(--bg);border:2px solid var(--bg3);color:var(--txt);border-radius:var(--r);cursor:pointer;font-weight:600;font-size:.9rem}
 .type-pick button.sel{border-color:var(--pri);background:rgba(99,102,241,.15)}
 </style>
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" type="image/svg+xml" href="/icon.svg">
+<meta name="theme-color" content="#6366f1">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+
 </head>
 <body>
+<a href="#main-content" class="skip-link">본문 바로가기</a>
 
 <!-- Login -->
 <div id="login" style="display:none">
@@ -68,11 +75,16 @@
 <!-- Counter Dashboard -->
 <div id="counter" style="display:none">
   <div class="top-nav">
-    <div class="brand">🔬 유효숫자 마스터 — 교사 카운터 <span id="brand-cls" style="font-size:.8rem;color:var(--acc);font-weight:500;margin-left:8px"></span></div>
-    <div class="nav-links">
+    <div class="brand">🔬 유효숫자 마스터 — 교사 카운터 <span id="brand-cls" style="font-size:.8rem;color:var(--acc);font-weight:500;margin-left:8px"></span> <button class="btn btn-ghost btn-sm" style="margin-left:8px" onclick="shareClassroom()" title="교실 공유">🔗 공유</button></div>
+    <button class="mobile-menu-toggle" onclick="document.getElementById('teacher-nav-links').classList.toggle('open')" aria-label="메뉴 열기">☰</button>
+    <div id="teacher-nav-links" class="nav-links">
       <a href="#" onclick="showTab('dash')" id="nav-dash">🖥 카운터</a>
       <a href="#" onclick="showTab('students')" id="nav-students">👤 학생 관리</a>
+      <a href="#" onclick="showTab('analytics')" id="nav-analytics">📈 분석</a>
+      <a href="#" onclick="showTab('attendance')" id="nav-attendance">📅 출결</a>
       <a href="#" onclick="showTab('data')" id="nav-data">💾 데이터/시트</a>
+      <a href="#" onclick="toggleTheme();return false" id="theme-toggle" title="테마 변경">🌙</a>
+      <a href="#" onclick="toggleSound();return false" id="sound-toggle" title="사운드 토글">🔊</a>
       <a href="/leaderboard.html">🏆 점수판</a>
       <a href="#" onclick="changePassword()">🔑 비밀번호</a>
     </div>
@@ -100,10 +112,74 @@
         <div class="grid">
           <div>
             <label>게임 종류</label>
-            <select id="m-gm">
+            <select id="m-gm" onchange="onMGmChange()">
               <option value="1">🔢 개수 세기</option>
               <option value="2">🎯 유효숫자 찾기</option>
               <option value="3">📏 측정값 읽기</option>
+              <option value="4">➕ 덧셈/뺄셈</option>
+              <option value="5">🔬 과학적 표기법 변환</option>
+              <option value="6">🎯 유효숫자 반올림</option>
+            </select>
+          </div>
+          <div id="m-addsub-wrap" style="display:none">
+            <label>덧셈/뺄셈 세부</label>
+            <select id="m-addsub">
+              <option value="mixed">🎲 모두 혼합</option>
+              <option value="plainOnly">🔢 일반 표기만</option>
+              <option value="sciOnly">🔬 과학적 표기만</option>
+              <option value="sameDP">📍 소수자릿수 같음</option>
+              <option value="diffDP">📍 소수자릿수 다름</option>
+              <option value="sameExp">🔬 지수 같음</option>
+              <option value="diffExp">🔬 지수 다름</option>
+            </select>
+          </div>
+          <div id="m-singlemode-wrap" style="display:none">
+            <label>싱글 모드</label>
+            <select id="m-single-mode" onchange="onMSingleChange()">
+              <option value="count">🎯 문제 수 (빨리 끝내기)</option>
+              <option value="timed">⏱ 시간 제한 (많이 맞히기)</option>
+            </select>
+          </div>
+          <div id="m-timelimit-wrap" style="display:none">
+            <label>제한시간</label>
+            <select id="m-timelimit">
+              <option value="30">30초</option>
+              <option value="60" selected>1분</option>
+              <option value="120">2분</option>
+              <option value="180">3분</option>
+              <option value="300">5분</option>
+              <option value="600">10분</option>
+            </select>
+          </div>
+          <div id="m-multimode-wrap" style="display:none">
+            <label>멀티 방식</label>
+            <select id="m-multi-mode" onchange="onMMultiChange()">
+              <option value="class">👥 학급 협동 (전원 콤보)</option>
+              <option value="team">🛡 조별 협동</option>
+              <option value="individual">👤 개인별</option>
+            </select>
+          </div>
+          <div id="m-team-wrap" style="display:none">
+            <label>조 수</label>
+            <select id="m-team-count">
+              <option value="2">2조</option><option value="3">3조</option>
+              <option value="4" selected>4조</option><option value="5">5조</option>
+              <option value="6">6조</option><option value="8">8조</option>
+            </select>
+          </div>
+          <div id="m-battlemode-wrap" style="display:none">
+            <label>대전 방식</label>
+            <select id="m-battle-mode" onchange="onMBattleChange()">
+              <option value="survival">❤️ 서바이벌 (HP)</option>
+              <option value="speed">⚡ 속도전 (선착순)</option>
+            </select>
+          </div>
+          <div id="m-hp-wrap" style="display:none">
+            <label>시작 HP</label>
+            <select id="m-hp">
+              <option value="1">❤ 1 (원샷)</option><option value="2">❤❤ 2</option>
+              <option value="3" selected>❤❤❤ 3</option><option value="5">❤×5</option>
+              <option value="8">❤×8</option><option value="10">❤×10</option>
             </select>
           </div>
           <div>
@@ -139,6 +215,7 @@
         <div id="m-err" class="err-msg"></div>
         <div class="actions">
           <button class="btn btn-ghost" onclick="closeCreateModal()">취소</button>
+          <button class="btn btn-sec" onclick="savePresetFromModal()" title="현재 설정을 프리셋으로 저장">💾 프리셋 저장</button>
           <button class="btn btn-pri" onclick="submitCreateRoom()">✅ 방 만들기</button>
         </div>
       </div>
@@ -149,6 +226,9 @@
         <div class="panel">
           <h3>🚪 방 관리
             <button class="btn btn-pri btn-sm" onclick="createRoomDialog()">+ 방 직접 만들기</button>
+            <button class="btn btn-sec btn-sm" onclick="showPresetsModal()" title="자주 쓰는 설정">⭐ 프리셋</button>
+            <button class="btn btn-ghost btn-sm" onclick="bulkRoomOp('approve-all')" title="대기 중인 방 모두 승인">✅ 일괄 승인</button>
+            <button class="btn btn-ghost btn-sm" onclick="bulkRoomOp('stop-all')" title="진행 중인 모든 방 종료">⏹ 일괄 종료</button>
             <label id="auto-approve-wrap" style="display:inline-flex;align-items:center;gap:6px;margin-left:10px;font-size:.88rem;font-weight:600;cursor:pointer">
               <input type="checkbox" id="auto-approve-tog" onchange="toggleAutoApprove()" style="width:18px;height:18px;cursor:pointer">
               <span id="auto-approve-label" style="color:var(--txt2)">🔁 자동 승인</span>
@@ -168,13 +248,56 @@
 
     <div id="tab-students" style="display:none">
       <div class="panel">
-        <h3>👤 학생 명단 <button class="btn btn-ghost btn-sm" onclick="loadStudentsDb()">🔄 새로고침</button></h3>
+        <h3>👤 학생 명단
+          <button class="btn btn-ghost btn-sm" onclick="loadStudentsDb()">🔄 새로고침</button>
+          <button class="btn btn-pri btn-sm" onclick="showImportModal()">📥 CSV 가져오기</button>
+          <button class="btn btn-acc btn-sm" onclick="bulkStudentOp('block')" title="선택 학생 차단">🚫 일괄 차단</button>
+          <button class="btn btn-sec btn-sm" onclick="bulkStudentOp('unblock')" title="선택 학생 차단 해제">✅ 일괄 해제</button>
+          <button class="btn btn-err btn-sm" onclick="bulkStudentOp('delete')" title="선택 학생 삭제">🗑 일괄 삭제</button>
+        </h3>
         <div class="filter-row" style="display:flex;gap:10px;margin-bottom:12px;flex-wrap:wrap">
-          <input type="text" id="stu-search" placeholder="학번 또는 이름 검색" style="flex:1;min-width:200px" oninput="renderStudentsDb()">
+          <input type="text" id="stu-search" placeholder="학번 또는 이름 검색" style="flex:1;min-width:180px" oninput="renderStudentsDb()">
+          <select id="stu-filter" onchange="renderStudentsDb()" style="min-width:120px">
+            <option value="all">전체 학생</option>
+            <option value="online">🟢 접속 중</option>
+            <option value="blocked">🚫 차단됨</option>
+            <option value="active">🎮 게임 1회 이상</option>
+            <option value="inactive">😴 미플레이</option>
+          </select>
+          <select id="stu-sort" onchange="renderStudentsDb()" style="min-width:140px">
+            <option value="sid">학번 순</option>
+            <option value="name">이름 순</option>
+            <option value="score">점수 높은 순</option>
+            <option value="games">게임 많은 순</option>
+            <option value="lastPlayed">최근 플레이 순</option>
+          </select>
           <button class="btn btn-sec btn-sm" onclick="downloadCsv('students')">📥 학생 명단 CSV</button>
           <button class="btn btn-sec btn-sm" onclick="downloadCsv('attendance')">📅 오늘 출결 CSV</button>
         </div>
         <div id="students-db-area"></div>
+      </div>
+    </div>
+
+    <div id="tab-analytics" style="display:none">
+      <div class="panel">
+        <h3>📈 학습 분석 대시보드 <button class="btn btn-ghost btn-sm" onclick="loadAnalytics()">🔄 새로고침</button></h3>
+        <div id="analytics-area"><div class="empty">불러오는 중...</div></div>
+      </div>
+      <div class="panel" style="margin-top:16px">
+        <h3>🔥 자주 틀리는 문제 TOP 30</h3>
+        <div id="wrong-stats-area"><div class="empty">불러오는 중...</div></div>
+      </div>
+    </div>
+
+    <div id="tab-attendance" style="display:none">
+      <div class="panel">
+        <h3>📅 월별 출결 현황</h3>
+        <div style="display:flex;gap:10px;align-items:center;margin-bottom:14px;flex-wrap:wrap">
+          <input type="month" id="att-month" onchange="loadAttendance()">
+          <button class="btn btn-pri btn-sm" onclick="loadAttendance()">조회</button>
+          <button class="btn btn-sec btn-sm" onclick="exportAttendanceMonth()">📥 월별 CSV</button>
+        </div>
+        <div id="attendance-area"></div>
       </div>
     </div>
 
@@ -191,6 +314,8 @@
           <button class="btn btn-pri btn-sm" onclick="downloadCsv('leaderboard','multi')">👥 멀티 점수판</button>
           <button class="btn btn-pri btn-sm" onclick="downloadCsv('leaderboard','battle')">⚔️ 대전 점수판</button>
           <button class="btn btn-acc btn-sm" onclick="downloadBackup()">🗄 전체 백업 (JSON)</button>
+          <button class="btn btn-pri btn-sm" onclick="document.getElementById('restore-input').click()">📤 백업 복원 (JSON 업로드)</button>
+          <input type="file" id="restore-input" accept="application/json" style="display:none" onchange="handleRestoreFile(event)">
         </div>
       </div>
       <div class="panel" style="margin-top:16px;border:1px solid var(--err)">
@@ -296,7 +421,7 @@ async function refresh(ov) {
   document.getElementById('st-active').textContent = rooms.filter(r => r.phase === 'question' || r.phase === 'reveal').length;
 
   const typeEmo = { single:'🎯', multi:'👥', battle:'⚔️' };
-  const gmLabel = { 1:'개수', 2:'찾기', 3:'측정' };
+  const gmLabel = { 1:'개수', 2:'찾기', 3:'측정', 4:'덧셈/뺄셈', 5:'과학표기', 6:'반올림' };
   const diffLabel = { easy:'쉬움', medium:'보통', hard:'어려움', mixed:'혼합' };
   const phaseLabel = { lobby:'대기실', question:'문제 중', reveal:'정답 공개', results:'종료' };
 
@@ -313,7 +438,7 @@ async function refresh(ov) {
             ${r.phase !== 'lobby' ? `<span class="badge ok">${phaseLabel[r.phase]}</span>` : ''}
           </div>
         </div>
-        <div class="meta">${gmLabel[r.gameMode]} · ${diffLabel[r.difficulty]} · ${r.questionCount}문제 · 방장: ${r.ownerName||'-'} · ${r.playerCount}/${r.capacity}명 ${r.phase !== 'lobby' ? ` · 진행 ${r.qIndex+1}/${r.total}` : ''}</div>
+        <div class="meta">${gmLabel[r.gameMode]||'?'} · ${diffLabel[r.difficulty]} · ${r.questionCount}문제 · 방장: ${_h(r.ownerName||'-')} · ${r.playerCount}/${r.capacity}명${r.phase !== 'lobby' && r.total > 0 ? ` · 진행 ${r.qIndex+1}/${r.total} (${Math.round((r.qIndex+1)/r.total*100)}%)` : ''}</div>
         ${r.players.length ? `<div class="players">참여자: ${r.players.map(p => `${p.name}(${p.score}점)`).join(', ')}</div>` : ''}
         <div class="btns">
           ${!r.approved ? `<button class="btn btn-sec btn-sm" onclick="approveRoom('${r.code}',true)">✅ 승인</button>` : ''}
@@ -321,6 +446,7 @@ async function refresh(ov) {
           ${r.phase === 'question' || r.phase === 'reveal' ? `<button class="btn btn-err btn-sm" onclick="stopRoom('${r.code}')">⏹ 강제 종료</button>` : ''}
           <button class="btn btn-err btn-sm" onclick="closeRoom('${r.code}')">🗑 방 삭제</button>
           <a class="btn btn-ghost btn-sm" href="/room.html?code=${r.code}&watch=1" target="_blank">👁 관전</a>
+          <button class="btn btn-ghost btn-sm" onclick="shareRoom('${r.code}')">🔗 공유</button>
         </div>
       </div>`;
     }).join('');
@@ -360,31 +486,32 @@ async function toggleAutoApprove() {
 
 async function approveRoom(code, approved) {
   const r = await teacherApi('/api/teacher/room/approve', { method: 'POST', body: { code, approved } });
-  if (r.error) alert(r.error);
+  if (r.error) toast(r.error, 'err');
+  else toast(approved ? `방 #${code} 승인됨` : `방 #${code} 승인 취소됨`, 'ok', 1500);
   refresh();
 }
 async function stopRoom(code) {
-  if (!confirm('이 게임을 강제 종료하시겠습니까?')) return;
+  if (!await confirmDialog('이 게임을 강제 종료할까요?', { danger: true })) return;
   await teacherApi('/api/teacher/room/stop', { method: 'POST', body: { code } });
-  refresh();
+  toast('방 #' + code + ' 강제 종료', 'warn'); refresh();
 }
 async function closeRoom(code) {
-  if (!confirm('이 방을 삭제하시겠습니까?')) return;
+  if (!await confirmDialog('이 방을 삭제할까요? 진행 중이면 모든 학생이 튕깁니다.', { danger: true })) return;
   await teacherApi('/api/teacher/room/close', { method: 'POST', body: { code } });
-  refresh();
+  toast('방 #' + code + ' 삭제됨', 'warn'); refresh();
 }
 async function kickStudent(studentId) {
-  if (!confirm(`학생 ${studentId}를 강퇴하시겠습니까?`)) return;
+  if (!await confirmDialog('학생 ' + studentId + '를 강퇴할까요?', { danger: true })) return;
   await teacherApi('/api/teacher/kick', { method: 'POST', body: { studentId } });
-  refresh();
+  toast('학생 ' + studentId + ' 강퇴됨', 'warn'); refresh();
 }
 
 async function changePassword() {
-  const pw = prompt('새 비밀번호 (4자 이상):');
-  if (!pw || pw.length < 4) return;
+  const pw = await promptDialog('새 비밀번호 (4자 이상)', '', { title: '🔑 비밀번호 변경', type: 'password', okLabel: '변경' });
+  if (!pw || pw.length < 4) { if (pw !== null) toast('4자 이상 입력하세요', 'warn'); return; }
   const r = await teacherApi('/api/teacher/password', { method: 'POST', body: { newPassword: pw } });
-  if (r.error) alert(r.error);
-  else alert('비밀번호가 변경되었습니다.');
+  if (r.error) toast(r.error, 'err');
+  else toast('비밀번호 변경 완료', 'ok');
 }
 
 let createType = 'multi';
@@ -410,8 +537,8 @@ function pickType(type) {
     capRange.textContent = '(2~35명)';
   } else {
     capWrap.style.display = 'block';
-    capInput.min = 2; capInput.max = 6; capInput.value = 4;
-    capRange.textContent = '(2~6명)';
+    capInput.min = 2; capInput.max = 10; capInput.value = 6;
+    capRange.textContent = '(2~10명)';
   }
 }
 async function submitCreateRoom() {
@@ -429,6 +556,13 @@ async function submitCreateRoom() {
     revealTime: rt,
     capacity: parseInt(document.getElementById('m-cap').value) || 4,
     label: document.getElementById('m-label').value.trim(),
+    addSubMode: document.getElementById('m-addsub').value,
+    singleMode: document.getElementById('m-single-mode').value,
+    timeLimit: parseInt(document.getElementById('m-timelimit').value),
+    multiMode: document.getElementById('m-multi-mode').value,
+    teamCount: parseInt(document.getElementById('m-team-count').value) || 4,
+    battleMode: document.getElementById('m-battle-mode').value,
+    hpStart: parseInt(document.getElementById('m-hp').value) || 3,
   };
   const max = createType === 'multi' ? 35 : (createType === 'battle' ? 6 : 1);
   const min = createType === 'single' ? 1 : 2;
@@ -440,19 +574,48 @@ async function submitCreateRoom() {
   if (r.error) { document.getElementById('m-err').textContent = r.error; return; }
   closeCreateModal();
   refresh();
+  // 만들기 직후 — 방 코드 + 학생 입장 URL + QR 표시
+  await showRoomShareModal(r.code);
+}
+
+async function showRoomShareModal(code) {
+  const url = location.origin + '/';
+  const cls = (document.getElementById('brand-cls')?.textContent || '').match(/\(([^)]+)\)/)?.[1] || '';
+  const wrap = document.createElement('div');
+  wrap.innerHTML = '<div style="text-align:center;line-height:1.6">'
+    + '<div style="font-size:.88rem;color:var(--txt2)">학생들에게 알려주세요</div>'
+    + '<div style="font-size:2.2rem;font-weight:900;color:var(--acc);letter-spacing:6px;margin:8px 0;font-family:Courier New,monospace">' + code + '</div>'
+    + '<div style="margin:14px 0">' + qrSvg(url, 200) + '</div>'
+    + '<div style="font-size:.85rem;color:var(--txt2)">학생 입장 URL: <code>' + url + '</code></div>'
+    + (cls ? '<div style="font-size:.85rem;color:var(--txt2);margin-top:6px">교실 코드: <b style="color:var(--pri)">' + _h(cls) + '</b></div>' : '')
+    + '</div>';
+  await modal({
+    title: '🆕 방 #' + code + ' 생성됨',
+    body: wrap, wide: false,
+    actions: [
+      { label: '🔗 URL 복사', value: 'url', kind: 'sec' },
+      { label: '🔢 방 코드 복사', value: 'code', kind: 'sec' },
+      { label: '닫기', value: null, kind: 'ghost' },
+    ],
+  }).then(v => {
+    if (v === 'url') copyToClipboard(url, '학생 입장 URL');
+    else if (v === 'code') copyToClipboard(code, '방 코드');
+  });
 }
 
 // ============ 탭 전환 ============
 let currentTab = 'dash';
 function showTab(t) {
   currentTab = t;
-  ['dash','students','data'].forEach(k => {
+  ['dash','students','analytics','attendance','data'].forEach(k => {
     document.getElementById('tab-'+k).style.display = k === t ? 'block' : 'none';
     const nav = document.getElementById('nav-'+k);
     if (nav) nav.style.color = k === t ? 'var(--pri)' : 'var(--txt2)';
   });
   if (t === 'students') loadStudentsDb();
   if (t === 'data') loadSheetsConfig();
+  if (t === 'analytics') loadAnalytics();
+  if (t === 'attendance') { const m = document.getElementById('att-month'); if (m && !m.value) { const d=new Date(); m.value=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; } loadAttendance(); }
 }
 
 // ============ 학생 마스터 DB ============
@@ -463,13 +626,29 @@ async function loadStudentsDb() {
   studentsDbCache = r.students || [];
   renderStudentsDb();
 }
+let _selectedStudents = window._selectedStudents || (window._selectedStudents = new Set());
+function toggleStudentSel(sid, on) { if (on) _selectedStudents.add(sid); else _selectedStudents.delete(sid); }
 function renderStudentsDb() {
   const q = document.getElementById('stu-search').value.trim().toLowerCase();
-  const filtered = studentsDbCache.filter(s => !q || s.studentId.toLowerCase().includes(q) || s.name.toLowerCase().includes(q));
+  const filt = document.getElementById('stu-filter')?.value || 'all';
+  const srt = document.getElementById('stu-sort')?.value || 'sid';
+  let filtered = studentsDbCache.filter(s => !q || s.studentId.toLowerCase().includes(q) || s.name.toLowerCase().includes(q));
+  if (filt === 'online') filtered = filtered.filter(s => s.online);
+  else if (filt === 'blocked') filtered = filtered.filter(s => s.blocked);
+  else if (filt === 'active') filtered = filtered.filter(s => (s.stats?.totalGames||0) > 0);
+  else if (filt === 'inactive') filtered = filtered.filter(s => (s.stats?.totalGames||0) === 0);
+  filtered.sort((a, b) => {
+    if (srt === 'name') return (a.name||'').localeCompare(b.name||'');
+    if (srt === 'score') return (b.stats?.totalScore||0) - (a.stats?.totalScore||0);
+    if (srt === 'games') return (b.stats?.totalGames||0) - (a.stats?.totalGames||0);
+    if (srt === 'lastPlayed') return (b.stats?.lastPlayedAt||0) - (a.stats?.lastPlayedAt||0);
+    return (a.studentId > b.studentId ? 1 : -1);
+  });
   const el = document.getElementById('students-db-area');
   if (!filtered.length) { el.innerHTML = '<div class="empty">등록된 학생이 없어요</div>'; return; }
-  el.innerHTML = `<div style="color:var(--txt2);font-size:.82rem;margin-bottom:8px">총 ${filtered.length}명 · 클릭하면 상세 전적</div>
+  el.innerHTML = `<div style="color:var(--txt2);font-size:.82rem;margin-bottom:8px">총 ${filtered.length}명 · 클릭하면 상세 전적 (체크 후 일괄 작업 가능)</div>
     <table><thead><tr>
+      <th style="width:36px"><input type="checkbox" id="cb-stu-all" onchange="toggleAllStudents(this.checked)"></th>
       <th>학번</th><th>이름</th><th>상태</th><th>게임</th><th>누적점수</th><th>⚔️ 승-패</th><th>승률</th><th>최고점</th><th>관리</th>
     </tr></thead><tbody>
     ${filtered.map(s => {
@@ -478,9 +657,10 @@ function renderStudentsDb() {
       const bw = st.battleWins || 0;
       const bl = st.battleLosses || 0;
       const wr = bg > 0 ? Math.round(bw / bg * 100) : 0;
-      return `<tr style="cursor:pointer" onclick="showStudentStats('${s.studentId}','${(s.name||'').replace(/'/g,"\\'")}')">
-        <td><b>${s.studentId}</b></td>
-        <td>${s.name}</td>
+      return `<tr style="cursor:pointer">
+        <td onclick="event.stopPropagation()"><input type="checkbox" ${_selectedStudents.has(s.studentId)?'checked':''} onclick="event.stopPropagation()" onchange="toggleStudentSel('${s.studentId}', this.checked)"></td>
+        <td onclick="showStudentStats('${s.studentId}','${(s.name||'').replace(/'/g,"\\'")}')"><b>${_h(s.studentId)}</b></td>
+        <td onclick="showStudentStats('${s.studentId}','${(s.name||'').replace(/'/g,"\\'")}')">${_h(s.name)}</td>
         <td>${s.online?'<span class="badge ok">🟢 접속</span>':'<span class="badge">오프</span>'} ${s.blocked?'<span class="badge no">🚫 차단</span>':''}</td>
         <td>${st.totalGames||0}</td>
         <td style="font-weight:700;color:var(--sec)">${(st.totalScore||0).toLocaleString()}</td>
@@ -556,7 +736,7 @@ function fmtDate(ts) {
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 }
 async function deleteStudent(sid) {
-  if (!confirm(`학번 ${sid}의 모든 정보를 삭제하시겠습니까?\n(플레이 이력은 점수판에 남습니다)`)) return;
+  if (!await confirmDialog('학번 ' + sid + '의 모든 정보를 삭제할까요?\n(플레이 이력은 점수판에 남습니다)', { danger: true })) return;
   const r = await teacherApi('/api/teacher/student/delete', { method: 'POST', body: { studentId: sid } });
   if (r.error) alert(r.error);
   loadStudentsDb();
@@ -567,10 +747,12 @@ async function toggleBlock(sid, blocked) {
   loadStudentsDb();
 }
 async function renameStudent(sid, oldName) {
-  const name = prompt(`학번 ${sid}의 이름 수정:`, oldName);
+  const name = await promptDialog('학번 ' + sid + '의 새 이름 (12자 이내)', oldName, { title: '✏️ 이름 변경', okLabel: '저장', maxLength: 12 });
   if (!name || name === oldName) return;
+  if (isBadName(name)) { toast('부적절한 단어가 들어 있어요', 'err'); return; }
   const r = await teacherApi('/api/teacher/student/rename', { method: 'POST', body: { studentId: sid, name } });
-  if (r.error) alert(r.error);
+  if (r.error) toast(r.error, 'err');
+  else toast('이름 변경: ' + oldName + ' → ' + name, 'ok');
   loadStudentsDb();
 }
 
@@ -660,7 +842,314 @@ async function pushAllSheets() {
 
 document.getElementById('in-pw').addEventListener('keydown', e => { if (e.key === 'Enter') login(); });
 
+
+// ==================== 추가: 도구 함수 ====================
+function toggleTheme() {
+  const order = ['dark','light','hc'];
+  const cur = getTheme();
+  const next = order[(order.indexOf(cur) + 1) % order.length];
+  setTheme(next);
+  toast('테마: ' + ({dark:'🌙 다크',light:'☀️ 라이트',hc:'🔆 고대비'})[next], 'info', 1800);
+  document.getElementById('theme-toggle').textContent = ({dark:'🌙',light:'☀️',hc:'🔆'})[next];
+}
+function toggleSound() {
+  const on = !(localStorage.getItem('sigfig-sound') !== 'off');
+  setSoundEnabled(on);
+  toast('사운드: ' + (on ? '🔊 켜짐' : '🔇 꺼짐'), 'info', 1500);
+  document.getElementById('sound-toggle').textContent = on ? '🔊' : '🔇';
+}
+window.addEventListener('DOMContentLoaded', () => {
+  const cur = getTheme();
+  const tt = document.getElementById('theme-toggle'); if (tt) tt.textContent = ({dark:'🌙',light:'☀️',hc:'🔆'})[cur];
+  const st = document.getElementById('sound-toggle'); if (st) st.textContent = (localStorage.getItem('sigfig-sound') !== 'off') ? '🔊' : '🔇';
+});
+
+// 방 만들기 모달 — 옵션 토글
+function onMGmChange() {
+  document.getElementById('m-addsub-wrap').style.display = (document.getElementById('m-gm').value === '4') ? 'block' : 'none';
+}
+function onMSingleChange() {
+  if (createType !== 'single') {
+    document.getElementById('m-singlemode-wrap').style.display = 'none';
+    document.getElementById('m-timelimit-wrap').style.display = 'none';
+    return;
+  }
+  const m = document.getElementById('m-single-mode').value;
+  document.getElementById('m-timelimit-wrap').style.display = m === 'timed' ? 'block' : 'none';
+  document.getElementById('m-qc').parentElement.style.display = m === 'count' ? 'block' : 'none';
+}
+function onMMultiChange() {
+  document.getElementById('m-team-wrap').style.display = (createType === 'multi' && document.getElementById('m-multi-mode').value === 'team') ? 'block' : 'none';
+}
+function onMBattleChange() {
+  document.getElementById('m-hp-wrap').style.display = (createType === 'battle' && document.getElementById('m-battle-mode').value === 'survival') ? 'block' : 'none';
+}
+
+// pickType 후 옵션 토글 동기화
+const _origPickType = pickType;
+pickType = function(type) {
+  _origPickType(type);
+  document.getElementById('m-singlemode-wrap').style.display = type === 'single' ? 'block' : 'none';
+  document.getElementById('m-multimode-wrap').style.display = type === 'multi' ? 'block' : 'none';
+  document.getElementById('m-battlemode-wrap').style.display = type === 'battle' ? 'block' : 'none';
+  onMSingleChange(); onMMultiChange(); onMBattleChange(); onMGmChange();
+};
+
+// 방 공유
+async function shareRoom(code) {
+  await showRoomShareModal(code);
+}
+
+// 학생 일괄
+async function bulkStudentOp(op) {
+  if (_selectedStudents.size === 0) { toast('학생을 먼저 선택하세요', 'warn'); return; }
+  const labels = { block:'차단', unblock:'차단 해제', delete:'삭제' };
+  if (!await confirmDialog('선택한 ' + _selectedStudents.size + '명을 ' + labels[op] + '할까요?', { danger: op === 'delete' })) return;
+  const r = await teacherApi('/api/teacher/students/bulk', { method: 'POST', body: { op, studentIds: [..._selectedStudents] } });
+  if (r.error) { toast(r.error, 'err'); return; }
+  toast(r.count + '명 ' + labels[op] + ' 완료', 'ok');
+  _selectedStudents.clear();
+  loadStudentsDb();
+}
+function toggleAllStudents(on) {
+  document.querySelectorAll('#students-db-area input[type=checkbox]').forEach(cb => {
+    if (cb.id === 'cb-stu-all') return;
+    cb.checked = on;
+    cb.dispatchEvent(new Event('change'));
+  });
+}
+
+// 방 일괄
+async function bulkRoomOp(op) {
+  const labels = { 'approve-all':'모두 승인', 'stop-all':'모두 종료', 'close-all':'모두 삭제' };
+  if (!await confirmDialog('이 교실의 모든 방을 ' + labels[op] + '할까요?', { danger: op === 'close-all' || op === 'stop-all' })) return;
+  const r = await teacherApi('/api/teacher/rooms/bulk', { method: 'POST', body: { op } });
+  if (r.error) { toast(r.error, 'err'); return; }
+  toast(r.count + '개 방 ' + labels[op] + ' 완료', 'ok');
+  refresh();
+}
+
+// CSV import
+async function showImportModal() {
+  const wrap = document.createElement('div');
+  wrap.innerHTML = '<div style="line-height:1.7;color:var(--txt2);margin-bottom:10px">CSV 형식: <code>studentId,name</code> 헤더 + 각 줄에 학번,이름</div>'
+    + '<div style="font-size:.85rem;color:var(--txt2);margin-bottom:10px">예시:<pre style="background:var(--bg);padding:8px;border-radius:6px;font-size:.78rem;color:var(--txt)">studentId,name\n1001,홍길동\n1002,김철수</pre></div>'
+    + '<textarea class="csv-text" style="width:100%;min-height:180px;padding:10px;border-radius:8px;border:1px solid var(--bg3);background:var(--bg);color:var(--txt);font-family:monospace;font-size:.88rem" placeholder="여기에 CSV를 붙여넣으세요"></textarea>'
+    + '<div style="margin-top:8px;color:var(--txt2);font-size:.85rem">또는 파일 업로드: <input type="file" class="csv-file" accept=".csv,text/csv"></div>';
+  const v = await modal({
+    title: '📥 학생 CSV 일괄 등록',
+    body: wrap, wide: true,
+    actions: [
+      { label: '취소', value: null, kind: 'ghost' },
+      { label: '✅ 가져오기', value: 'go', kind: 'pri' },
+    ],
+  });
+  if (v !== 'go') return;
+  let csv = wrap.querySelector('.csv-text').value;
+  const file = wrap.querySelector('.csv-file').files[0];
+  if (file) csv = await file.text();
+  if (!csv.trim()) { toast('CSV 내용이 없어요', 'err'); return; }
+  const r = await teacherApi('/api/teacher/students/import', { method: 'POST', body: { csv } });
+  if (r.error) { toast(r.error, 'err'); return; }
+  toast('추가 ' + r.added + '명 · 갱신 ' + r.updated + '명 · 건너뜀 ' + r.skipped + '명', 'ok', 5000);
+  loadStudentsDb();
+}
+
+// 백업 복원
+async function handleRestoreFile(ev) {
+  const f = ev.target.files[0];
+  if (!f) return;
+  ev.target.value = '';
+  let bundle;
+  try { bundle = JSON.parse(await f.text()); } catch (e) { toast('JSON 파싱 실패', 'err'); return; }
+  if (!await confirmDialog('이 백업으로 학생/출결/점수판을 복원할까요?\n현재 본 교실의 같은 데이터는 덮어쓰여집니다.', { danger: true })) return;
+  const r = await teacherApi('/api/teacher/backup/restore', { method: 'POST', body: { bundle } });
+  if (r.error) { toast(r.error, 'err'); return; }
+  toast('복원 완료 — 학생 ' + r.restored.students + '명 · 출결 ' + r.restored.attendance + '일 · 점수 ' + r.restored.lb + '건', 'ok', 5000);
+  loadStudentsDb();
+  refresh();
+}
+
+// 분석 대시보드
+async function loadAnalytics() {
+  const r = await teacherApi('/api/teacher/analytics');
+  const el = document.getElementById('analytics-area');
+  if (r.error) { el.innerHTML = '<div class="empty">' + _h(r.error) + '</div>'; return; }
+  // 모드별 정답률 차트 (CSS 바)
+  const modeNames = {1:'🔢 개수',2:'🎯 찾기',3:'📏 측정',4:'➕ 덧/뺄',5:'🔬 과학표기',6:'🎯 반올림'};
+  const diffNames = {easy:'쉬움',medium:'보통',hard:'어려움',mixed:'혼합'};
+  const accBar = (c, t) => {
+    const acc = t > 0 ? Math.round(c/t*100) : 0;
+    return '<div style="background:var(--bg);height:18px;border-radius:9px;overflow:hidden"><div style="background:linear-gradient(90deg,var(--err),var(--acc),var(--sec));width:' + acc + '%;height:100%;display:flex;align-items:center;justify-content:flex-end;color:#fff;font-size:.78rem;font-weight:700;padding-right:6px">' + (t>0 ? acc+'%' : '-') + '</div></div>';
+  };
+  let modeRows = '';
+  for (const m of [1,2,3,4,5,6]) {
+    const x = r.byMode[m] || {c:0,t:0};
+    modeRows += '<tr><td>' + modeNames[m] + '</td><td>' + x.c + '/' + x.t + '</td><td>' + accBar(x.c, x.t) + '</td></tr>';
+  }
+  let diffRows = '';
+  for (const d of ['easy','medium','hard','mixed']) {
+    const x = r.byDiff[d] || {c:0,t:0};
+    diffRows += '<tr><td>' + diffNames[d] + '</td><td>' + x.c + '/' + x.t + '</td><td>' + accBar(x.c, x.t) + '</td></tr>';
+  }
+  // 시간대별 막대
+  const maxH = Math.max(1, ...r.hourly);
+  const hourly = r.hourly.map((n, i) => '<div style="flex:1;text-align:center"><div style="background:var(--pri);width:80%;margin:0 auto;height:' + Math.round(n/maxH*60) + 'px;min-height:1px;border-radius:3px 3px 0 0" title="' + i + '시: ' + n + '게임"></div><div style="font-size:.7rem;color:var(--txt2);margin-top:2px">' + i + '</div></div>').join('');
+  // 출결 7일
+  const att7 = (r.attendance7d || []).map(d => '<div style="flex:1;text-align:center"><div style="background:var(--sec);width:70%;margin:0 auto;height:' + Math.min(60, d.count*12) + 'px;min-height:2px;border-radius:3px"></div><div style="font-size:.7rem;color:var(--txt2);margin-top:2px">' + d.date.slice(5) + '</div><div style="font-size:.78rem;font-weight:700">' + d.count + '명</div></div>').join('');
+  // 학생별 정답률 분포 (상위 10명만)
+  const topAcc = (r.studentAcc || []).filter(x => x.accuracy !== null).sort((a,b) => b.accuracy - a.accuracy).slice(0, 10);
+  const topAccRows = topAcc.map((x, i) => '<tr><td>' + (i+1) + '</td><td>' + _h(x.name) + ' (' + _h(x.studentId) + ')</td><td>' + x.accuracy + '%</td><td>' + x.games + '게임</td><td>' + x.score.toLocaleString() + '점</td></tr>').join('');
+
+  el.innerHTML = ''
+    + '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px;margin-bottom:14px">'
+    + '<div class="stat"><div class="lbl">총 학생</div><div class="val">' + r.totPlayers + '</div></div>'
+    + '<div class="stat"><div class="lbl">총 게임 기록</div><div class="val">' + r.totGames + '</div></div>'
+    + '<div class="stat"><div class="lbl">누적 점수</div><div class="val">' + r.totScore.toLocaleString() + '</div></div>'
+    + '</div>'
+    + '<h4 style="margin:14px 0 6px">🎮 게임 모드별 정답률</h4>'
+    + '<table><thead><tr><th style="width:140px">모드</th><th style="width:120px">정답/총</th><th>정답률</th></tr></thead><tbody>' + modeRows + '</tbody></table>'
+    + '<h4 style="margin:14px 0 6px">📊 난이도별 정답률</h4>'
+    + '<table><thead><tr><th style="width:140px">난이도</th><th style="width:120px">정답/총</th><th>정답률</th></tr></thead><tbody>' + diffRows + '</tbody></table>'
+    + '<h4 style="margin:14px 0 6px">⏰ 오늘 시간대별 게임 수</h4>'
+    + '<div style="display:flex;align-items:flex-end;height:80px;gap:2px;background:var(--bg);padding:8px 10px;border-radius:8px">' + hourly + '</div>'
+    + '<h4 style="margin:14px 0 6px">📅 최근 7일 출결</h4>'
+    + '<div style="display:flex;align-items:flex-end;gap:6px;background:var(--bg);padding:10px;border-radius:8px">' + att7 + '</div>'
+    + '<h4 style="margin:14px 0 6px">🏆 학급 정답률 TOP 10</h4>'
+    + (topAccRows ? ('<table><thead><tr><th>#</th><th>학생</th><th>정답률</th><th>게임</th><th>누적점수</th></tr></thead><tbody>' + topAccRows + '</tbody></table>') : '<div class="empty">기록 없음</div>');
+
+  // 자주 틀리는 문제
+  const wr = await teacherApi('/api/teacher/analytics/wrongs');
+  const wel = document.getElementById('wrong-stats-area');
+  if (wr.error || !wr.items?.length) { wel.innerHTML = '<div class="empty">' + (wr.error || '데이터 없음') + '</div>'; return; }
+  const modeMap = {1:'🔢',2:'🎯',3:'📏',4:'➕',5:'🔬',6:'🎯'};
+  wel.innerHTML = '<table><thead><tr><th>#</th><th>문제</th><th>모드</th><th>오답 횟수</th></tr></thead><tbody>'
+    + wr.items.map((x, i) => '<tr><td>' + (i+1) + '</td><td><b>' + _h(x.key) + '</b></td><td>' + (modeMap[x.gm] || '?') + '</td><td><b style="color:var(--err)">' + x.count + '회</b></td></tr>').join('')
+    + '</tbody></table>';
+}
+
+// 출결 월별
+async function loadAttendance() {
+  const month = document.getElementById('att-month').value;
+  if (!month) return;
+  const r = await teacherApi('/api/teacher/attendance?month=' + month);
+  const el = document.getElementById('attendance-area');
+  if (r.error) { el.innerHTML = '<div class="empty">' + _h(r.error) + '</div>'; return; }
+  if (!r.days?.length) { el.innerHTML = '<div class="empty">' + month + '에 출결 기록이 없어요</div>'; return; }
+  const total = r.days.reduce((a, d) => a + d.count, 0);
+  const max = Math.max(1, ...r.days.map(d => d.count));
+  el.innerHTML = '<div style="margin-bottom:10px;color:var(--txt2);font-size:.88rem">' + month + ' · 총 ' + total + '명·일 출결</div>'
+    + '<div style="display:flex;align-items:flex-end;gap:3px;background:var(--bg);padding:10px;border-radius:8px;min-height:140px;flex-wrap:wrap">'
+    + r.days.map(d => '<div style="flex:1;min-width:30px;text-align:center"><div style="background:var(--sec);width:80%;margin:0 auto;height:' + Math.round(d.count/max*100) + 'px;min-height:2px;border-radius:3px;cursor:pointer" title="' + d.date + ': ' + d.count + '명"></div><div style="font-size:.7rem;color:var(--txt2);margin-top:2px">' + d.date.slice(8) + '</div><div style="font-size:.7rem;font-weight:700">' + d.count + '</div></div>').join('')
+    + '</div>';
+}
+async function exportAttendanceMonth() {
+  const month = document.getElementById('att-month').value;
+  if (!month) { toast('월을 선택하세요', 'warn'); return; }
+  // 일자별 다운로드 — 간단히 1일짜리 CSV 사용 (월별 통합은 향후)
+  toast('월 단위 CSV는 일자별 통합 — 일자별 출결은 데이터 탭의 "오늘 출결" 사용', 'info', 4000);
+}
+
+// 프리셋
+async function showPresetsModal() {
+  const r = await teacherApi('/api/teacher/presets');
+  const list = r.presets || [];
+  const wrap = document.createElement('div');
+  let body = '';
+  if (!list.length) body = '<div class="empty">저장된 프리셋이 없어요. 방을 만든 직후 "⭐ 프리셋으로 저장" 버튼이 표시됩니다.</div>';
+  else {
+    body = '<div style="display:grid;gap:8px">'
+      + list.map(p => '<div style="background:var(--bg);padding:12px;border-radius:8px;border:1px solid var(--bg3);display:flex;justify-content:space-between;align-items:center;gap:10px">'
+        + '<div><b>' + _h(p.name) + '</b><div style="font-size:.82rem;color:var(--txt2)">' + p.type + ' · 모드' + (p.config.gameMode||'?') + ' · ' + (p.config.difficulty||'?') + ' · ' + (p.config.questionCount||'?') + '문제</div></div>'
+        + '<div style="display:flex;gap:6px">'
+        + '<button class="btn btn-pri btn-sm" onclick="applyPreset(\''+p.id+'\')">사용</button>'
+        + '<button class="btn btn-err btn-sm" onclick="deletePreset(\''+p.id+'\')">🗑</button>'
+        + '</div></div>').join('')
+      + '</div>';
+  }
+  wrap.innerHTML = body + '<div style="margin-top:14px;padding:10px;background:var(--bg);border-radius:8px;font-size:.85rem;color:var(--txt2)">💡 새 프리셋은 방 만들기 모달의 "💾 프리셋 저장" 버튼으로 추가하세요.</div>';
+  await modal({ title: '⭐ 자주 쓰는 설정 (프리셋)', body: wrap, wide: true, actions: [{label:'닫기',value:null,kind:'ghost'}] });
+}
+window._presets = [];
+async function applyPreset(id) {
+  const r = await teacherApi('/api/teacher/presets');
+  const p = (r.presets||[]).find(x => x.id === id);
+  if (!p) return;
+  document.querySelectorAll('.modal-back').forEach(m => m.remove());
+  createRoomDialog();
+  pickType(p.type);
+  setTimeout(() => {
+    if (p.config.gameMode) document.getElementById('m-gm').value = String(p.config.gameMode);
+    if (p.config.difficulty) document.getElementById('m-diff').value = p.config.difficulty;
+    if (p.config.questionCount) document.getElementById('m-qc').value = String(p.config.questionCount);
+    if (p.config.questionTime) document.getElementById('m-qt').value = String(p.config.questionTime);
+    if (p.config.revealTime) document.getElementById('m-rt').value = String(p.config.revealTime);
+    if (p.config.capacity) document.getElementById('m-cap').value = String(p.config.capacity);
+    if (p.config.label) document.getElementById('m-label').value = p.config.label;
+    if (p.config.addSubMode) document.getElementById('m-addsub').value = p.config.addSubMode;
+    if (p.config.singleMode) document.getElementById('m-single-mode').value = p.config.singleMode;
+    if (p.config.timeLimit) document.getElementById('m-timelimit').value = String(p.config.timeLimit);
+    if (p.config.multiMode) document.getElementById('m-multi-mode').value = p.config.multiMode;
+    if (p.config.teamCount) document.getElementById('m-team-count').value = String(p.config.teamCount);
+    if (p.config.battleMode) document.getElementById('m-battle-mode').value = p.config.battleMode;
+    if (p.config.hpStart) document.getElementById('m-hp').value = String(p.config.hpStart);
+    onMGmChange(); onMSingleChange(); onMMultiChange(); onMBattleChange();
+    toast('프리셋 "' + p.name + '" 불러옴', 'ok');
+  }, 100);
+}
+async function deletePreset(id) {
+  if (!await confirmDialog('이 프리셋을 삭제할까요?', { danger: true })) return;
+  await teacherApi('/api/teacher/presets/delete', { method: 'POST', body: { id } });
+  toast('프리셋 삭제됨', 'ok');
+  showPresetsModal();
+}
+async function savePresetFromModal() {
+  const name = await promptDialog('프리셋 이름 (30자 이내)', document.getElementById('m-label').value || '프리셋', { okLabel: '저장' });
+  if (!name) return;
+  const cfg = {
+    gameMode: parseInt(document.getElementById('m-gm').value),
+    difficulty: document.getElementById('m-diff').value,
+    questionCount: parseInt(document.getElementById('m-qc').value),
+    questionTime: parseInt(document.getElementById('m-qt').value),
+    revealTime: parseInt(document.getElementById('m-rt').value),
+    capacity: parseInt(document.getElementById('m-cap').value),
+    label: document.getElementById('m-label').value,
+    addSubMode: document.getElementById('m-addsub').value,
+    singleMode: document.getElementById('m-single-mode').value,
+    timeLimit: parseInt(document.getElementById('m-timelimit').value),
+    multiMode: document.getElementById('m-multi-mode').value,
+    teamCount: parseInt(document.getElementById('m-team-count').value),
+    battleMode: document.getElementById('m-battle-mode').value,
+    hpStart: parseInt(document.getElementById('m-hp').value),
+  };
+  const r = await teacherApi('/api/teacher/presets', { method: 'POST', body: { name, type: createType, config: cfg } });
+  if (r.error) toast(r.error, 'err'); else toast('프리셋 "' + name + '" 저장됨', 'ok');
+}
+
+// 교실 코드 + URL 복사
+function shareClassroom() {
+  const code = (document.getElementById('brand-cls')?.textContent || '').match(/\(([^)]+)\)/)?.[1] || '';
+  const url = location.origin + '/';
+  const wrap = document.createElement('div');
+  wrap.innerHTML = '<div style="text-align:center;line-height:1.6">'
+    + '<div style="font-size:.88rem;color:var(--txt2)">학생들에게 알려주세요</div>'
+    + '<div style="font-size:1.6rem;font-weight:900;color:var(--pri);letter-spacing:3px;margin:8px 0">' + _h(code) + '</div>'
+    + '<div style="margin:14px 0">' + qrSvg(url, 200) + '</div>'
+    + '<div style="font-size:.85rem;color:var(--txt2)">학생 입장: <code>' + url + '</code></div>'
+    + '</div>';
+  modal({ title: '🏫 교실 공유', body: wrap, actions: [
+    { label: '🔗 URL 복사', value: 'url', kind: 'sec' },
+    { label: '🏫 교실 코드 복사', value: 'code', kind: 'sec' },
+    { label: '닫기', value: null, kind: 'ghost' },
+  ]}).then(v => {
+    if (v === 'url') copyToClipboard(url, '학생 입장 URL');
+    else if (v === 'code') copyToClipboard(code, '교실 코드');
+  });
+}
+
 init();
 </script>
+<script>if('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(()=>{});</script>
+
 </body>
 </html>

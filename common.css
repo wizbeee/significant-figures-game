@@ -2,6 +2,17 @@
   --pri:#6366f1;--pri2:#4f46e5;--sec:#10b981;--acc:#f59e0b;--err:#ef4444;
   --bg:#0f172a;--bg2:#1e293b;--bg3:#334155;--txt:#f1f5f9;--txt2:#94a3b8;--r:12px;
 }
+/* 라이트 테마 */
+html[data-theme="light"]{
+  --pri:#4f46e5;--pri2:#3730a3;--sec:#059669;--acc:#d97706;--err:#dc2626;
+  --bg:#f8fafc;--bg2:#ffffff;--bg3:#e2e8f0;--txt:#0f172a;--txt2:#475569;
+}
+/* 고대비 모드 */
+html[data-theme="hc"]{
+  --pri:#fbbf24;--pri2:#f59e0b;--sec:#22c55e;--acc:#fb923c;--err:#f87171;
+  --bg:#000000;--bg2:#0a0a0a;--bg3:#1a1a1a;--txt:#ffffff;--txt2:#e5e5e5;
+}
+html[data-theme="hc"] .badge,html[data-theme="hc"] .btn{outline:1px solid var(--txt)}
 *{margin:0;padding:0;box-sizing:border-box}
 body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--txt);min-height:100vh}
 a{color:var(--pri);text-decoration:none}
@@ -72,3 +83,57 @@ tr:hover td{background:rgba(99,102,241,.05)}
 @keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-6px)}75%{transform:translateX(6px)}}
 @keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
 .fade-in{animation:fadeIn .25s}
+
+/* 포커스 인디케이터 강화 — 키보드 사용자 */
+*:focus-visible{outline:3px solid var(--acc);outline-offset:2px;border-radius:6px}
+.dg:focus-visible{outline:3px solid var(--acc);outline-offset:3px}
+
+/* 클릭 영역 최소 44px (WCAG AA) */
+@media(pointer:coarse){
+  .dg{min-width:44px;min-height:44px}
+  button,.btn{min-height:44px}
+}
+
+/* prefers-reduced-motion — 펄스/콤보 애니메이션 무력화 */
+@media(prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:.01ms !important;animation-iteration-count:1 !important;transition-duration:.01ms !important;scroll-behavior:auto !important}
+  .combo-badge,.score-pop,.timer-display.urgent{animation:none !important}
+}
+
+/* 모바일 — input focus 시 스크롤 보정 */
+@media(max-width:768px){
+  input,select,textarea{font-size:16px} /* iOS 자동 줌 방지 */
+}
+
+/* 모바일 사이드바 (교사 카운터) */
+.mobile-menu-toggle{display:none}
+@media(max-width:768px){
+  .mobile-menu-toggle{display:inline-flex;background:var(--bg3);border:none;color:var(--txt);padding:8px 12px;border-radius:8px;font-size:1.2rem;cursor:pointer}
+  .top-nav .nav-links{display:none;position:absolute;top:100%;left:0;right:0;flex-direction:column;background:var(--bg2);padding:14px;border-bottom:1px solid var(--bg3);box-shadow:0 4px 14px rgba(0,0,0,.4);gap:12px}
+  .top-nav .nav-links.open{display:flex}
+  .top-nav{position:relative}
+}
+
+/* 스킵 링크 (스크린 리더) */
+.skip-link{position:absolute;left:-9999px;top:0;background:var(--acc);color:#000;padding:10px 16px;z-index:99999}
+.skip-link:focus{left:0}
+
+/* 색상 의존도 보강 — 정답/오답 텍스트 라벨 */
+.dg.ok::after{content:" ✓";font-size:.6em;vertical-align:super}
+.dg.no::after{content:" ✗";font-size:.6em;vertical-align:super}
+
+/* 숫자 카운트다운 오버레이 */
+.countdown-overlay{position:fixed;inset:0;background:rgba(0,0,0,.85);display:flex;align-items:center;justify-content:center;z-index:8000;color:var(--acc);font-size:8rem;font-weight:900;animation:fadeIn .15s}
+@keyframes countShrink{from{transform:scale(2.4);opacity:0}50%{opacity:1}to{transform:scale(1);opacity:1}}
+.countdown-overlay .num{animation:countShrink .9s ease-out}
+
+/* 토스트 호환 */
+@media(max-width:768px){#toast-host{top:auto !important;bottom:18px !important;left:18px !important;right:18px !important;max-width:none !important}}
+
+/* 학생 모달 — 버튼 줄바꿈 */
+.modal-back{padding:16px}
+.modal{box-sizing:border-box}
+
+/* QR 카드 스타일 */
+.qr-card{display:inline-flex;flex-direction:column;align-items:center;gap:8px;padding:14px;background:var(--bg2);border-radius:12px;border:1px solid var(--bg3)}
+.qr-card .qr-code{font-weight:800;font-size:1.6rem;letter-spacing:4px;color:var(--acc);font-family:'Courier New',monospace}

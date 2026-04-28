@@ -1,0 +1,14 @@
+{
+  "name": "유효숫자 마스터",
+  "short_name": "SigFig",
+  "description": "고등학교 과학 수업용 실시간 유효숫자 퀴즈 게임",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0f172a",
+  "theme_color": "#6366f1",
+  "lang": "ko",
+  "orientation": "any",
+  "icons": [
+    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}

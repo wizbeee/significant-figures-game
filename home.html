@@ -42,8 +42,15 @@
 .rk{font-weight:800;color:var(--acc)}
 .score-cell{font-weight:800;color:var(--acc)}
 </style>
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" type="image/svg+xml" href="/icon.svg">
+<meta name="theme-color" content="#6366f1">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+
 </head>
 <body>
+<a href="#main-content" class="skip-link">본문 바로가기</a>
 
 <!-- Login screen -->
 <div id="login" class="fade-in" style="display:none">
@@ -73,10 +80,15 @@
 <div id="lobby" style="display:none">
   <div class="top-nav">
     <div class="brand">🔬 유효숫자 마스터</div>
-    <div class="nav-links">
+    <button class="mobile-menu-toggle" onclick="document.getElementById('nav-links').classList.toggle('open')" aria-label="메뉴 열기">☰</button>
+    <div id="nav-links" class="nav-links">
       <a href="#" onclick="showMyStats();return false">📊 내 전적</a>
+      <a href="#" onclick="showWrongNotes();return false">📝 오답노트</a>
+      <a href="#" onclick="showJoinByCode();return false">🔢 방 코드 입장</a>
       <a href="/leaderboard.html">🏆 점수판</a>
-      <a href="#" onclick="refresh()">🔄 새로고침</a>
+      <a href="#" onclick="toggleTheme();return false" id="theme-toggle" title="테마 변경">🌙</a>
+      <a href="#" onclick="toggleSound();return false" id="sound-toggle" title="사운드 토글">🔊</a>
+      <a href="#" onclick="refresh()" title="새로고침">🔄</a>
     </div>
     <div class="user-box">
       <span id="me-label"></span>
@@ -130,6 +142,8 @@
             <option value="2">🎯 유효숫자 찾기</option>
             <option value="3">📏 측정값 읽기</option>
             <option value="4">➕ 유효숫자 덧셈/뺄셈</option>
+            <option value="5">🔬 과학적 표기법 변환</option>
+            <option value="6">🎯 유효숫자 반올림</option>
           </select>
         </div>
         <div id="cfg-addsub-wrap" style="display:none"><label>덧셈/뺄셈 세부</label>
@@ -300,7 +314,7 @@ function switchLb(t) {
   loadLb();
 }
 
-const _gmLbl = { 1:'🔢', 2:'🎯', 3:'📏' };
+const _gmLbl = { 1:'🔢', 2:'🎯', 3:'📏', 4:'➕', 5:'🔬', 6:'🎯' };
 const _diffLbl = { easy:'쉬움', medium:'보통', hard:'어려움', mixed:'혼합' };
 async function loadLb() {
   const r = await api('/api/leaderboard?type=' + currentLb);
@@ -312,7 +326,7 @@ async function loadLb() {
     const extra = currentLb === 'battle' ? `<td>${e.result==='win'?'<span class="badge ok">승</span>':'<span class="badge no">패</span>'}</td>` : '';
     return `<tr>
       <td><span class="rk">${i+1}</span></td>
-      <td><b>${e.name}</b> <span style="color:var(--txt2);font-size:.78rem">${e.studentId}</span></td>
+      <td><b>${_h(e.name)}</b> <span style="color:var(--txt2);font-size:.78rem">${_h(e.studentId)}</span></td>
       <td class="score-cell">${e.score}점</td>
       <td>${e.correct}/${e.total}</td>
       ${extra}
@@ -338,6 +352,8 @@ async function login() {
   const name = document.getElementById('in-name').value.trim();
   if (!classroomCode) { document.getElementById('login-err').textContent = '선생님이 알려준 교실 코드를 입력하세요.'; return; }
   if (!studentId || !name) { document.getElementById('login-err').textContent = '학번과 이름을 모두 입력하세요.'; return; }
+  if (isBadName(name)) { document.getElementById('login-err').textContent = '닉네임에 부적절한 단어가 들어 있어요.'; return; }
+  if (!/^[0-9A-Za-z]+$/.test(studentId)) { document.getElementById('login-err').textContent = '학번은 숫자 또는 영문만 가능해요.'; return; }
   const r = await api('/api/student/login', { method: 'POST', body: { classroomCode, studentId, name } });
   if (r.error) { document.getElementById('login-err').textContent = r.error; return; }
   localStorage.setItem('sigfig-token', r.token);
@@ -424,15 +440,15 @@ async function refresh() {
     return;
   }
   const typeEmoji = { single:'🎯', multi:'👥', battle:'⚔️' };
-  const gmLabel = { 1:'개수 세기', 2:'유효숫자 찾기', 3:'측정값 읽기' };
+  const gmLabel = { 1:'개수 세기', 2:'유효숫자 찾기', 3:'측정값 읽기', 4:'덧셈/뺄셈', 5:'과학적 표기법', 6:'유효숫자 반올림' };
   const diffLabel = { easy:'쉬움', medium:'보통', hard:'어려움', mixed:'혼합' };
   const phaseLabel = { lobby:'대기 중', question:'진행 중', reveal:'진행 중', results:'종료' };
   listEl.innerHTML = r.rooms.map(rm => {
     const canJoin = rm.phase === 'lobby' && rm.playerCount < rm.capacity;
     return `<div class="room-row">
       <div class="info">
-        <div class="title">${typeEmoji[rm.type]||''} ${rm.label || '방 #' + rm.code} <span class="badge pri">${rm.code}</span> ${rm.approved ? '' : '<span class="badge acc">⏳ 승인대기</span>'}</div>
-        <div class="meta">${gmLabel[rm.gameMode]} · ${diffLabel[rm.difficulty]} · ${rm.questionCount}문제 · 방장: ${rm.ownerName||'-'} · ${rm.playerCount}/${rm.capacity}명 · ${phaseLabel[rm.phase]||rm.phase}</div>
+        <div class="title">${typeEmoji[rm.type]||''} ${_h(rm.label || '방 #' + rm.code)} <span class="badge pri">${_h(rm.code)}</span> ${rm.approved ? '' : '<span class="badge acc">⏳ 승인대기</span>'}</div>
+        <div class="meta">${gmLabel[rm.gameMode]||''} · ${diffLabel[rm.difficulty]} · ${rm.questionCount}문제 · 방장: ${_h(rm.ownerName||'-')} · ${rm.playerCount}/${rm.capacity}명 · ${phaseLabel[rm.phase]||rm.phase}</div>
       </div>
       <div>
         <button class="btn ${canJoin?'btn-pri':'btn-ghost'} btn-sm" ${canJoin?'':'disabled'} onclick="joinRoom('${rm.code}')">${canJoin?'참여하기':'입장 불가'}</button>
@@ -529,7 +545,72 @@ async function joinRoom(code) {
 document.getElementById('in-sid').addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('in-name').focus(); });
 document.getElementById('in-name').addEventListener('keydown', e => { if (e.key === 'Enter') login(); });
 
+
+// ==================== 도구 함수 ====================
+function toggleTheme() {
+  const order = ['dark','light','hc'];
+  const cur = getTheme();
+  const next = order[(order.indexOf(cur) + 1) % order.length];
+  setTheme(next);
+  toast('테마: ' + ({dark:'🌙 다크',light:'☀️ 라이트',hc:'🔆 고대비'})[next], 'info', 1800);
+  document.getElementById('theme-toggle').textContent = ({dark:'🌙',light:'☀️',hc:'🔆'})[next];
+}
+function toggleSound() {
+  const on = !(localStorage.getItem('sigfig-sound') !== 'off');
+  setSoundEnabled(on);
+  toast('사운드: ' + (on ? '🔊 켜짐' : '🔇 꺼짐'), 'info', 1500);
+  document.getElementById('sound-toggle').textContent = on ? '🔊' : '🔇';
+  if (on) beep('correct');
+}
+async function showJoinByCode() {
+  const code = await promptDialog('입장할 방 코드를 입력하세요 (6자리 숫자)', '', { title: '방 코드로 입장', okLabel: '입장' });
+  if (!code) return;
+  const trimmed = String(code).trim();
+  if (!/^\d{6}$/.test(trimmed)) { toast('방 코드는 6자리 숫자입니다', 'err'); return; }
+  await joinRoom(trimmed);
+}
+async function showWrongNotes() {
+  const r = await api('/api/wrong-notes');
+  if (r.error) { toast(r.error, 'err'); return; }
+  const items = r.items || [];
+  let html;
+  if (!items.length) html = '<div style="text-align:center;color:var(--txt2);padding:30px">아직 틀린 문제가 없어요. 잘하고 있어요!</div>';
+  else html = items.slice(0, 30).map((it, i) => {
+    const q = it.q || {};
+    const gmLbl = { 1:'🔢 개수 세기', 2:'🎯 유효숫자 찾기', 3:'📏 측정값 읽기', 4:'➕ 덧셈/뺄셈', 5:'🔬 과학적 표기법', 6:'🎯 반올림' }[it.gameMode] || '?';
+    let qText = '?';
+    if (q.num !== undefined) qText = q.num;
+    else if (q.display !== undefined) qText = q.display;
+    else if (q.meas) qText = q.meas.dv + ' ' + q.meas.unit;
+    let mySubmitted = '미제출';
+    if (it.timeout) mySubmitted = '⏰ 시간초과';
+    else if (it.submitted) {
+      if (it.submitted.count !== undefined) mySubmitted = it.submitted.count + '개';
+      else if (it.submitted.result !== undefined) mySubmitted = it.submitted.result;
+      else if (it.submitted.meas !== undefined) mySubmitted = it.submitted.meas + ' / ' + it.submitted.sf;
+      else if (Array.isArray(it.submitted.selected)) mySubmitted = it.submitted.selected.length + '개 선택';
+    }
+    let correct = '?';
+    if (q.count !== undefined) correct = q.count + '개';
+    else if (q.answer !== undefined) correct = q.answer;
+    else if (q.meas) correct = q.meas.dv + ' ' + q.meas.unit + ' (유효숫자 ' + q.meas.sf + '개)';
+    return '<div style="background:var(--bg);padding:12px;border-radius:8px;border-left:3px solid var(--err);margin-bottom:8px">'
+      + '<div style="font-size:.85rem;color:var(--txt2);margin-bottom:4px">' + (i+1) + '. ' + gmLbl + ' · ' + (it.difficulty||'') + '</div>'
+      + '<div style="font-family:Courier New,monospace;font-size:1.1rem;color:var(--acc);margin-bottom:6px">' + _h(qText) + '</div>'
+      + '<div style="font-size:.88rem">내 답: <span style="color:var(--err)">' + _h(mySubmitted) + '</span> · 정답: <span style="color:var(--sec)">' + _h(correct) + '</span></div>'
+      + '</div>';
+  }).join('');
+  modal({ title: '📝 내 오답노트 (최근 50개)', body: html, wide: true, actions: [{ label:'닫기', value:null, kind:'ghost' }] });
+}
+window.addEventListener('DOMContentLoaded', () => {
+  const cur = getTheme();
+  const tt = document.getElementById('theme-toggle'); if (tt) tt.textContent = ({dark:'🌙',light:'☀️',hc:'🔆'})[cur];
+  const st = document.getElementById('sound-toggle'); if (st) st.textContent = (localStorage.getItem('sigfig-sound') !== 'off') ? '🔊' : '🔇';
+});
+
 init();
 </script>
+<script>if('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(()=>{});</script>
+
 </body>
 </html>

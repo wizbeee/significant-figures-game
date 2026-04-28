@@ -102,8 +102,15 @@
 .timed-clock{padding:6px 16px;border-radius:99px;font-weight:800;font-size:.95rem;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff}
 .timed-clock.urgent{background:linear-gradient(135deg,#ef4444,#dc2626);animation:pulse .7s infinite}
 </style>
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" type="image/svg+xml" href="/icon.svg">
+<meta name="theme-color" content="#6366f1">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+
 </head>
 <body>
+<a href="#main-content" class="skip-link">본문 바로가기</a>
 <div id="app"></div>
 
 <script src="common.js"></script>
@@ -155,6 +162,11 @@ function myPlayer() { return S.state?.players.find(p => p.studentId === S.me.stu
 function render() {
   const s = S.state;
   const phaseChanged = S.lastPhase !== s.phase;
+  // 카운트다운 — 첫 question 진입 시
+  if (phaseChanged && S.lastPhase === 'lobby' && s.phase === 'question' && !S.countedDown) {
+    S.countedDown = true;
+    return showCountdown(() => render());
+  }
   if (phaseChanged) { S.lastSig = null; S.lastQSig = null; }
   if (s.phase === 'lobby') renderLobby(phaseChanged);
   else if (s.phase === 'question') renderQuestion(phaseChanged);
@@ -183,7 +195,7 @@ function renderHeader() {
   const battleLbl = s.config.battleMode === 'speed' ? '속도전' : '서바이벌';
   const singleLbl = s.config.singleMode === 'timed' ? `시간제(${s.config.timeLimit}s)` : '문제수';
   const typeLbl = s.type === 'multi' ? `멀티(${multiLbl})` : s.type === 'battle' ? `대전(${battleLbl})` : `싱글(${singleLbl})`;
-  const gmLabel = { 1:'개수 세기', 2:'유효숫자 찾기', 3:'측정값 읽기', 4:'덧셈/뺄셈' }[s.config.gameMode];
+  const gmLabel = { 1:'개수 세기', 2:'유효숫자 찾기', 3:'측정값 읽기', 4:'덧셈/뺄셈', 5:'과학적 표기법', 6:'유효숫자 반올림' }[s.config.gameMode];
   const p = myPlayer();
   const remaining = s.phase === 'question' ? Math.max(0, Math.ceil((s.currentQStart + s.config.questionTime * 1000 - s.serverNow) / 1000)) : 0;
   const comboHtml = (p && p.streak >= 2) ? `<span class="combo-badge ${comboClass(p.streak)}" id="my-combo-badge">${comboLabel(p.streak)}</span>` : '';
@@ -268,7 +280,7 @@ function renderLobby(phaseChanged) {
         ${Array.from({length: s.config.capacity - s.players.length}).map(() => '<div class="player-tile" style="opacity:.3"><div class="emo">⌛</div><div class="nm">대기</div></div>').join('')}
       </div>
       <div style="margin-top:20px;color:var(--txt2);font-size:.9rem">
-        ${s.config.gameMode===1?'🔢 개수 세기':s.config.gameMode===2?'🎯 유효숫자 찾기':'📏 측정값 읽기'}
+        ${({1:'🔢 개수 세기',2:'🎯 유효숫자 찾기',3:'📏 측정값 읽기',4:'➕ 덧셈/뺄셈',5:'🔬 과학적 표기법',6:'🎯 유효숫자 반올림'})[s.config.gameMode]||''}
         · ${({easy:'쉬움',medium:'보통',hard:'어려움',mixed:'혼합'})[s.config.difficulty]}
         · ${s.config.questionCount}문제 · ${s.config.questionTime}초/문제
       </div>
@@ -376,6 +388,47 @@ function renderQuestion(phaseChanged) {
       </div>
     `;
     S.guideSeen = true;
+  } else if (q.gameMode === 5) {
+    const dirLabel = q.direction === 'toSci' ? '일반 → 과학적 표기법' : '과학적 표기법 → 일반';
+    const exampleHelp = q.direction === 'toSci' ? '1500 → 1.5×10³  ·  0.025 → 2.5×10⁻²' : '3.4×10² → 340  ·  6.5×10⁻³ → 0.0065';
+    body = `
+      <div class="q-label">다음 숫자를 <b>${dirLabel}</b>으로 변환하세요</div>
+      <details class="addsub-guide" ${S.guideSeen?'':'open'}>
+        <summary>📖 과학적 표기법 규칙 (클릭)</summary>
+        <ul>
+          <li>가수(앞 부분)는 1 이상 10 미만이어야 해요. (예: <code>1.5</code>는 OK, <code>15</code>는 X)</li>
+          <li>10의 거듭제곱(지수)은 양/음의 정수예요.</li>
+          <li>변환 시 <b>유효숫자 개수가 보존</b>되어야 해요.</li>
+          <li>예: ${exampleHelp}</li>
+          <li>입력 형식: <code>1.5×10³</code>, <code>1.5x10^3</code>, <code>1.5e3</code> 모두 OK</li>
+        </ul>
+      </details>
+      <div class="addsub-display">${_h(q.display)} = ?</div>
+      <div class="ans-row" style="justify-content:center">
+        <input type="text" class="ans-inp" id="ans-sci" placeholder="${q.direction==='toSci'?'예: 1.5×10³ 또는 1.5e3':'예: 0.025'}" ${already?'disabled':'autofocus'}>
+        <button class="btn btn-pri" onclick="submitAns()" ${already?'disabled':''}>제출</button>
+      </div>
+    `;
+    S.guideSeen = true;
+  } else if (q.gameMode === 6) {
+    body = `
+      <div class="q-label">다음 숫자를 <b>유효숫자 ${q.target}개</b>로 반올림하세요</div>
+      <details class="addsub-guide" ${S.guideSeen?'':'open'}>
+        <summary>📖 유효숫자 반올림 규칙 (클릭)</summary>
+        <ul>
+          <li>지정된 유효숫자 개수만큼 남기고 그 다음 자리에서 반올림해요.</li>
+          <li>예: <code>5.367 → 3개로</code> = <b>5.37</b> (4번째 자리 6에서 반올림)</li>
+          <li>예: <code>0.04859 → 2개로</code> = <b>0.049</b></li>
+          <li>큰 수/작은 수는 <b>과학적 표기법</b>으로 답하면 모호함이 없어요. (예: <code>120000 → 2개로</code> = <b>1.2×10⁵</b>)</li>
+        </ul>
+      </details>
+      <div class="addsub-display">${_h(q.num)} → 유효숫자 <b style="color:var(--sec)">${q.target}개</b>로</div>
+      <div class="ans-row" style="justify-content:center">
+        <input type="text" class="ans-inp" id="ans-round" placeholder="예: 5.37 또는 1.2×10⁵" ${already?'disabled':'autofocus'}>
+        <button class="btn btn-pri" onclick="submitAns()" ${already?'disabled':''}>제출</button>
+      </div>
+    `;
+    S.guideSeen = true;
   } else if (q.gameMode === 2) {
     let digs = '<div class="digit-box">';
     q.digs.forEach((d, i) => {
@@ -386,7 +439,8 @@ function renderQuestion(phaseChanged) {
     body = `<div class="q-label">유효숫자를 모두 클릭하세요</div>${digs}<button class="btn btn-pri btn-lg" onclick="submitAns()" ${already?'disabled':''}>제출</button>`;
   } else {
     const m = q.meas;
-    const cW = Math.min(460, window.innerWidth - 40), cH = m.type === 'ruler' ? 190 : 310;
+    let _zoom = parseFloat(localStorage.getItem('sigfig-meas-zoom')||'1');
+    const cW = Math.min(560 * _zoom, window.innerWidth - 30), cH = (m.type === 'ruler' ? 200 : 320) * _zoom;
     const instName = m.type==='ruler'?'자':m.type==='cylinder'?'눈금실린더':'온도계';
     const instRule = m.type==='ruler'?'최소눈금 1mm (0.1cm) → 0.01cm까지 어림':m.type==='cylinder'?'최소눈금 1mL → 0.1mL까지 어림':'최소눈금 1°C → 0.1°C까지 어림';
     const example = m.type==='ruler'?'예) 3.47 cm':m.type==='cylinder'?'예) 24.5 mL':'예) 28.3 °C';
@@ -404,6 +458,11 @@ function renderQuestion(phaseChanged) {
         </ul>
       </details>
       <canvas id="cv" class="inst-canvas" width="${cW}" height="${cH}"></canvas>
+      <div style="display:flex;gap:6px;justify-content:center;margin:6px 0">
+        <button type="button" class="btn btn-ghost btn-sm" onclick="zoomMeas(-0.2)" title="축소">🔍−</button>
+        <button type="button" class="btn btn-ghost btn-sm" onclick="zoomMeas(0)" title="기본">↺</button>
+        <button type="button" class="btn btn-ghost btn-sm" onclick="zoomMeas(0.2)" title="확대">🔍+</button>
+      </div>
       <div style="color:var(--txt2);font-size:.85rem;margin-top:6px">${instName} — ${instRule} · ${example}</div>
       <div class="ans-row"><label>측정값 (${m.unit}):</label><input type="text" class="ans-inp" id="ans-meas" placeholder="예: 3.47" ${already?'disabled':''}></div>
       <div class="ans-row"><label>유효숫자 개수:</label><input type="number" class="ans-inp" id="ans-sf" min="1" max="20" placeholder="?" ${already?'disabled':''}></div>
@@ -452,6 +511,12 @@ function renderQuestion(phaseChanged) {
 }
 
 function togDig(el) { el.classList.toggle('sel'); }
+function zoomMeas(d) {
+  let z = parseFloat(localStorage.getItem('sigfig-meas-zoom') || '1');
+  if (d === 0) z = 1; else z = Math.max(0.7, Math.min(1.6, z + d));
+  localStorage.setItem('sigfig-meas-zoom', String(z));
+  S.lastQSig = null; render();
+}
 
 async function submitAns() {
   const s = S.state, q = s.question;
@@ -461,6 +526,8 @@ async function submitAns() {
   if (q.gameMode === 1) answer.count = document.getElementById('ans-count').value;
   else if (q.gameMode === 2) answer.selected = Array.from(document.querySelectorAll('.dg.sel')).map(el => parseInt(el.dataset.i));
   else if (q.gameMode === 4) answer.result = document.getElementById('ans-addsub').value;
+  else if (q.gameMode === 5) answer.result = document.getElementById('ans-sci').value;
+  else if (q.gameMode === 6) answer.result = document.getElementById('ans-round').value;
   else { answer.meas = document.getElementById('ans-meas').value; answer.sf = document.getElementById('ans-sf').value; }
   const r = await api('/api/answer', { method: 'POST', body: { code: S.code, answer } });
   if (r && r.ok && r.points) {
@@ -542,6 +609,15 @@ function renderReveal(phaseChanged) {
     } else {
       explanation = `<b>${q.display}</b>을 ${opLbl} 결과는 <b class="tag sig">${q.answer}</b>입니다.<br>과학적 표기법에서는 <b>지수를 맞춘 뒤</b> 가수끼리 계산하고, 가수의 소수 자릿수(${q.mantDP}자리)에 맞춰 반올림합니다.`;
     }
+  } else if (q.gameMode === 5) {
+    correctShown = q.answer || '-';
+    if (myAns?.submitted) myShown = myAns.submitted.result || '—';
+    const dirLbl = q.direction === 'toSci' ? '일반 표기 → 과학적 표기법' : '과학적 표기법 → 일반 표기';
+    explanation = '<b>' + _h(q.display) + '</b>를 ' + dirLbl + '으로 변환하면 <b class="tag sig">' + _h(q.answer) + '</b>입니다.<br>유효숫자는 <b>' + q.sf + '개</b>로 보존되어야 하며, 가수는 1 이상 10 미만 범위여야 해요.';
+  } else if (q.gameMode === 6) {
+    correctShown = q.answer || '-';
+    if (myAns?.submitted) myShown = myAns.submitted.result || '—';
+    explanation = '<b>' + _h(q.num) + '</b>을 유효숫자 <b>' + q.target + '개</b>로 반올림하면 <b class="tag sig">' + _h(q.answer) + '</b>입니다.<br>지정된 자리수만큼 남기고 그 다음 자리에서 반올림해요.';
   } else {
     const m = q.meas;
     correctShown = `${m.dv} ${m.unit} · 유효숫자 ${m.sf}개`;
@@ -688,7 +764,53 @@ async function showMyStatsInline() {
   `;
 }
 
+
+
+function showCountdown(done) {
+  const ov = document.createElement('div');
+  ov.className = 'countdown-overlay';
+  ov.innerHTML = '<div class="num">3</div>';
+  document.body.appendChild(ov);
+  let n = 3;
+  beep('countdown');
+  const it = setInterval(() => {
+    n--;
+    if (n <= 0) {
+      clearInterval(it); ov.remove();
+      beep('correct');
+      done && done();
+    } else {
+      const numEl = document.createElement('div');
+      numEl.className = 'num';
+      numEl.textContent = String(n);
+      ov.innerHTML = '';
+      ov.appendChild(numEl);
+      beep('countdown');
+    }
+  }, 800);
+}
+
+// 정답/오답 사운드 (showScorePop와 함께 호출)
+const _origShowScorePop = showScorePop;
+showScorePop = function(points, streak) {
+  beep('correct');
+  return _origShowScorePop(points, streak);
+};
+
+// 화면 잠금 복귀 / 탭 전환 시 즉시 polling
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden && S.code) { poll(); }
+});
+window.addEventListener('online', () => { if (S.code) poll(); });
+
+// 토큰 keep-alive (학생 활동 중일 때 6시간 만료 갱신)
+setInterval(() => {
+  if (S.code && !document.hidden) api('/api/student/touch', { method: 'POST', noRetry: true });
+}, 1000 * 60 * 5);
+
 init();
 </script>
+<script>if('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(()=>{});</script>
+
 </body>
 </html>

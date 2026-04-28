@@ -14,22 +14,66 @@ const CLASSROOMS_FILE = path.join(DATA_DIR, 'classrooms.json');
 const LB_FILE = path.join(DATA_DIR, 'leaderboards.json');
 const STUDENTS_FILE = path.join(DATA_DIR, 'students.json');
 const ATTEND_FILE = path.join(DATA_DIR, 'attendance.json');
+const TOKENS_FILE = path.join(DATA_DIR, 'tokens.json');
+const PRESETS_FILE = path.join(DATA_DIR, 'presets.json');
+const WRONGS_FILE = path.join(DATA_DIR, 'wrongs.json');
+const BACKUPS_DIR = path.join(DATA_DIR, 'backups');
 // (레거시) 단일 교실용 파일 — 있으면 자동으로 default 교실로 이관
 const LEGACY_CONFIG_FILE = path.join(DATA_DIR, 'config.json');
 const DEFAULT_CLASSROOM = 'default';
+const STUDENT_TOKEN_TTL_MS = 1000 * 60 * 60 * 6;   // 6시간 — 정규수업 한 차시 + 여유
+const TEACHER_TOKEN_TTL_MS = 1000 * 60 * 60 * 12;  // 12시간
 
 // ==================== 영구 데이터 ====================
+function safeLoad(file, def) {
+  if (!fs.existsSync(file)) return def;
+  try { return JSON.parse(fs.readFileSync(file, 'utf8')); }
+  catch (e) {
+    console.error('[load] corrupt:', file, '→ 백업 후 기본값 사용');
+    try { fs.copyFileSync(file, file + '.corrupt.' + Date.now()); } catch(_) {}
+    return def;
+  }
+}
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+if (!fs.existsSync(BACKUPS_DIR)) fs.mkdirSync(BACKUPS_DIR, { recursive: true });
 
-// 비밀번호 해싱 (단방향 — sha256)
-function hashPw(pw) { return crypto.createHash('sha256').update(String(pw||'')).digest('hex'); }
+// 비밀번호 해싱 — PBKDF2 + salt (sha256은 약함)
+// 형식: "pbkdf2$<salt>$<hash>"  레거시: 64자 hex(sha256)도 지원
+function hashPwWithSalt(pw, saltHex) {
+  const salt = saltHex || crypto.randomBytes(16).toString('hex');
+  const hash = crypto.pbkdf2Sync(String(pw||''), salt, 100000, 32, 'sha256').toString('hex');
+  return `pbkdf2$${salt}$${hash}`;
+}
+function hashPw(pw) { return hashPwWithSalt(pw); }
+function verifyPw(pw, stored) {
+  if (!stored) return false;
+  if (stored.startsWith('pbkdf2$')) {
+    const [, salt, hash] = stored.split('$');
+    const cand = crypto.pbkdf2Sync(String(pw||''), salt, 100000, 32, 'sha256').toString('hex');
+    try { return crypto.timingSafeEqual(Buffer.from(cand, 'hex'), Buffer.from(hash, 'hex')); } catch { return false; }
+  }
+  // 레거시 sha256
+  const cand = crypto.createHash('sha256').update(String(pw||'')).digest('hex');
+  return cand === stored;
+}
+// HTML 안전 문자열 (서버측 — 저장 전 기본 sanitize)
+function sanitizeStr(v, max = 50) {
+  return [...String(v || '')].filter(c => { const code = c.charCodeAt(0); return code >= 32 && code !== 127; }).join('').trim().slice(0, max);
+}
+// 차단어 (서버측 — 클라이언트 우회 대비)
+const BAD_WORDS = ['시발','씨발','병신','개새','존나','좆','꺼져','지랄','새끼','fuck','shit','bitch','asshole','damn'];
+function hasBadWord(s) {
+  if (!s) return false;
+  const t = String(s).toLowerCase().replace(/\s/g,'');
+  return BAD_WORDS.some(w => t.includes(w));
+}
 
 // 교실 정의: { [code]: { code, name, passwordHash, createdAt, config: { autoApproveRooms, sheetsUrl } } }
 let classrooms = {};
 if (fs.existsSync(CLASSROOMS_FILE)) {
-  classrooms = JSON.parse(fs.readFileSync(CLASSROOMS_FILE, 'utf8'));
+  classrooms = safeLoad(CLASSROOMS_FILE, {});
 }
-const saveClassrooms = () => fs.writeFileSync(CLASSROOMS_FILE, JSON.stringify(classrooms, null, 2));
+const saveClassrooms = () => { try { atomicWrite(CLASSROOMS_FILE, JSON.stringify(classrooms, null, 2)); } catch (e) { console.error('[save] classrooms:', e.message); }};
 
 // 레거시 config.json → default 교실로 자동 이관 (첫 실행 시만)
 if (fs.existsSync(LEGACY_CONFIG_FILE) && !classrooms[DEFAULT_CLASSROOM]) {
@@ -63,9 +107,9 @@ if (Object.keys(classrooms).length === 0) {
 // leaderboards (글로벌): { single: [...entries], multi: [...entries], battle: [...entries] } — 각 entry에 classroomCode 포함
 // studentsDb  (교실별): { [code]: { [studentId]: {studentId,name,joinedAt,stats,blocked} } }
 // attendance  (교실별): { [code]: { [YYYY-MM-DD]: { [studentId]: {firstSeen,lastSeen,games,name} } } }
-let leaderboards = fs.existsSync(LB_FILE) ? JSON.parse(fs.readFileSync(LB_FILE, 'utf8')) : { single: [], multi: [], battle: [] };
-let studentsDb = fs.existsSync(STUDENTS_FILE) ? JSON.parse(fs.readFileSync(STUDENTS_FILE, 'utf8')) : {};
-let attendance = fs.existsSync(ATTEND_FILE) ? JSON.parse(fs.readFileSync(ATTEND_FILE, 'utf8')) : {};
+let leaderboards = safeLoad(LB_FILE, { single: [], multi: [], battle: [] });
+let studentsDb   = safeLoad(STUDENTS_FILE, {});
+let attendance   = safeLoad(ATTEND_FILE, {});
 
 // 레거시 → 새 구조로 이관
 function migrateLegacyIfNeeded() {
@@ -110,9 +154,99 @@ function migrateLegacyIfNeeded() {
 }
 migrateLegacyIfNeeded();
 
-const saveLB = () => fs.writeFileSync(LB_FILE, JSON.stringify(leaderboards, null, 2));
-const saveStudentsDb = () => fs.writeFileSync(STUDENTS_FILE, JSON.stringify(studentsDb, null, 2));
-const saveAttendance = () => fs.writeFileSync(ATTEND_FILE, JSON.stringify(attendance, null, 2));
+// Atomic write: temp file → rename (race condition 방지)
+function atomicWrite(target, data) {
+  const tmp = target + '.tmp.' + process.pid;
+  try { fs.writeFileSync(tmp, data); fs.renameSync(tmp, target); }
+  catch (e) { try { fs.unlinkSync(tmp); } catch(_) {} throw e; }
+}
+// 디바운스 저장 — 자주 호출되어도 1초당 최대 1회 디스크 쓰기
+function makeDebouncedSaver(target, getData, ms = 600) {
+  let pending = false;
+  return () => {
+    if (pending) return;
+    pending = true;
+    setTimeout(() => {
+      pending = false;
+      try { atomicWrite(target, JSON.stringify(getData())); } catch (e) { console.error('[save] failed:', target, e.message); }
+    }, ms);
+  };
+}
+const saveLB         = makeDebouncedSaver(LB_FILE,       () => leaderboards, 800);
+const saveStudentsDb = makeDebouncedSaver(STUDENTS_FILE, () => studentsDb, 800);
+const saveAttendance = makeDebouncedSaver(ATTEND_FILE,   () => attendance, 800);
+
+// ==================== 토큰 영속화 (서버 재시작 시에도 로그인 유지) ====================
+let persistedTokens = safeLoad(TOKENS_FILE, { student: {}, teacher: {} });
+if (!persistedTokens.student) persistedTokens.student = {};
+if (!persistedTokens.teacher) persistedTokens.teacher = {};
+let _tokenSaveTimer = null;
+function saveTokens() {
+  if (_tokenSaveTimer) return;
+  _tokenSaveTimer = setTimeout(() => {
+    _tokenSaveTimer = null;
+    try { atomicWrite(TOKENS_FILE, JSON.stringify(persistedTokens)); } catch (e) { console.error('[tokens] save failed:', e.message); }
+  }, 1500);
+}
+function pruneExpiredTokens() {
+  const now = Date.now();
+  for (const t of Object.keys(persistedTokens.student)) if ((persistedTokens.student[t].expiresAt || 0) < now) delete persistedTokens.student[t];
+  for (const t of Object.keys(persistedTokens.teacher)) if ((persistedTokens.teacher[t].expiresAt || 0) < now) delete persistedTokens.teacher[t];
+  saveTokens();
+}
+pruneExpiredTokens();
+setInterval(pruneExpiredTokens, 1000 * 60 * 30);
+
+// 학습 분석/오답노트용 — 학생별 누적 오답 (교실 단위)
+let wrongsDb = safeLoad(WRONGS_FILE, {});
+function saveWrongs() { try { atomicWrite(WRONGS_FILE, JSON.stringify(wrongsDb)); } catch (e) {} }
+function clsWrongs(code) { if (!wrongsDb[code]) wrongsDb[code] = {}; return wrongsDb[code]; }
+
+// 교사 프리셋 (자주 쓰는 방 설정)
+let presetsDb = safeLoad(PRESETS_FILE, {});
+function savePresets() { try { atomicWrite(PRESETS_FILE, JSON.stringify(presetsDb, null, 2)); } catch (e) {} }
+function clsPresets(code) { if (!presetsDb[code]) presetsDb[code] = []; return presetsDb[code]; }
+
+// ==================== Rate Limiter (DoS / brute-force 방어) ====================
+const rateBuckets = new Map();
+function rateLimitOK(key, max, windowMs) {
+  const now = Date.now();
+  const b = rateBuckets.get(key);
+  if (!b || now >= b.resetAt) { rateBuckets.set(key, { count: 1, resetAt: now + windowMs }); return true; }
+  b.count++;
+  return b.count <= max;
+}
+setInterval(() => { const now = Date.now(); for (const [k, v] of rateBuckets) if (now >= v.resetAt) rateBuckets.delete(k); }, 1000 * 60);
+
+// ==================== 자동 백업 (매일 0시 + 시작 1분 후) ====================
+function makeBackupSnapshot() {
+  try {
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+    const file = path.join(BACKUPS_DIR, 'auto_' + stamp + '.json');
+    const bundle = {
+      classrooms, leaderboards,
+      students: studentsDb, attendance, wrongs: wrongsDb, presets: presetsDb,
+      backedUpAt: Date.now(),
+    };
+    fs.writeFileSync(file, JSON.stringify(bundle));
+    const all = fs.readdirSync(BACKUPS_DIR).filter(n => n.startsWith('auto_')).sort();
+    while (all.length > 14) { try { fs.unlinkSync(path.join(BACKUPS_DIR, all.shift())); } catch (e) {} }
+    console.log('[backup] snapshot saved:', file);
+  } catch (e) { console.error('[backup] failed:', e.message); }
+}
+function scheduleBackups() {
+  setTimeout(makeBackupSnapshot, 60 * 1000);
+  let lastBackupDay = -1;
+  setInterval(() => {
+    const d = new Date();
+    if (d.getHours() === 0 && d.getDate() !== lastBackupDay) {
+      lastBackupDay = d.getDate();
+      makeBackupSnapshot();
+    }
+  }, 1000 * 60 * 30);
+}
+scheduleBackups();
+
 
 // 교실별 접근 헬퍼 — 없으면 자동 생성
 function clsroom(code) { return classrooms[code]; }
@@ -258,15 +392,23 @@ function genNumberStr(d) {
   const dig = () => String(rnd(0, 9));
   const nz = () => String(rnd(1, 9));
   const tpls = {
-    easy: ['intS','intM','decS','decS2','intTZ1','decT0','int2'],
-    medium: ['intTZ','decLZ','decTZ','decMix','decMZ','intMid','decZmix','int3TZ'],
-    hard: ['longDecLZ','longDecTZ','longIntTZ','longMix','deepLZ','decMultiZ','hugeInt','longDeep','complexMix'],
+    easy: ['intS','intM','decS','decS2','intTZ1','decT0','int2','int3','dec2','intMid2','decTwoZero','int4',
+           'int5','dec3','dec4','intDec1','intDec2','dec01','dec02','intLong','decLong'],
+    medium: ['intTZ','decLZ','decTZ','decMix','decMZ','intMid','decZmix','int3TZ',
+             'intMidLong','decZ4','decZ5','intDecZ','intMidZeros','decZmid','intZmid','intZend','decFlex','intFlex','decTwoNZ','decThreeNZ'],
+    hard: ['longDecLZ','longDecTZ','longIntTZ','longMix','deepLZ','decMultiZ','hugeInt','longDeep','complexMix',
+           'mega','superDec','superInt','complexZ','deepMixed','wideRange','extreme1','extreme2','extreme3','extreme4'],
   };
   const list = tpls[d] || tpls.medium;
   const t = list[rnd(0, list.length - 1)];
   switch (t) {
     case 'intS':   return nz() + (Math.random()<0.5 ? '' : dig());
     case 'int2':   return nz() + dig();
+    case 'int3':   return nz() + dig() + dig();
+    case 'int4':   return nz() + dig() + dig() + dig();
+    case 'dec2':   return nz() + dig() + '.' + dig();
+    case 'intMid2':return nz() + '0' + dig();
+    case 'decTwoZero': return '0.0' + nz();
     case 'intM':   return nz() + dig() + dig();
     case 'decS':   return nz() + '.' + dig();
     case 'decS2':  return '0.' + nz() + (Math.random()<0.5 ? '' : dig());
@@ -307,6 +449,62 @@ function genNumberStr(d) {
     }
     case 'longDeep': return '0.00' + nz() + dig() + dig() + '0';
     case 'complexMix': return nz() + dig() + dig() + '.' + '0' + dig() + dig();
+    // 추가 easy 템플릿
+    case 'int5':   return nz() + dig() + dig() + dig() + dig();
+    case 'dec3':   return nz() + dig() + '.' + dig() + dig();
+    case 'dec4':   return nz() + dig() + dig() + '.' + dig();
+    case 'intDec1':return nz() + '.' + dig() + dig();
+    case 'intDec2':return nz() + dig() + '.' + dig() + dig() + dig();
+    case 'dec01':  return '0.' + nz() + dig();
+    case 'dec02':  return '0.' + nz() + dig() + dig();
+    case 'intLong': return nz() + dig() + dig() + dig() + dig() + dig();
+    case 'decLong': return nz() + dig() + dig() + '.' + dig() + dig() + dig();
+    // 추가 medium 템플릿
+    case 'intMidLong': return nz() + dig() + '0' + dig() + dig();
+    case 'decZ4':  return '0.000' + nz() + dig();
+    case 'decZ5':  return '0.0000' + nz() + dig();
+    case 'intDecZ':return nz() + dig() + '.' + dig() + '00';
+    case 'intMidZeros': return nz() + '00' + dig();
+    case 'decZmid':return nz() + '.' + dig() + '00' + dig();
+    case 'intZmid':return nz() + '0' + dig() + '0' + dig();
+    case 'intZend':return nz() + dig() + dig() + '000';
+    case 'decFlex':return nz() + dig() + '.' + dig() + dig() + dig() + '0';
+    case 'intFlex':return nz() + dig() + dig() + '0' + dig() + '0';
+    case 'decTwoNZ':  return nz() + '.' + nz() + dig() + nz();
+    case 'decThreeNZ':return nz() + dig() + '.' + nz() + dig() + nz();
+    // 추가 hard 템플릿
+    case 'mega': {
+      const len = rnd(7, 10);
+      let s = nz(); for (let i = 1; i < len - 1; i++) s += Math.random() < 0.5 ? '0' : dig();
+      s += '0'; return s;
+    }
+    case 'superDec': {
+      const z = '0'.repeat(rnd(2, 4));
+      return nz() + dig() + dig() + '.' + z + nz() + dig();
+    }
+    case 'superInt': {
+      const len = rnd(8, 12);
+      let s = nz(); for (let i = 1; i < len; i++) s += Math.random() < 0.45 ? '0' : dig();
+      return s;
+    }
+    case 'complexZ': return nz() + '0' + dig() + '.' + '0' + nz() + '0' + dig();
+    case 'deepMixed': {
+      const z = '0'.repeat(rnd(3, 6));
+      return '0.' + z + nz() + dig() + dig() + '0';
+    }
+    case 'wideRange': {
+      const intL = rnd(4, 8); const decL = rnd(2, 5);
+      let s = nz(); for (let i = 1; i < intL; i++) s += Math.random() < 0.5 ? '0' : dig();
+      s += '.'; for (let i = 0; i < decL; i++) s += Math.random() < 0.4 ? '0' : dig();
+      return s;
+    }
+    case 'extreme1': return nz() + dig() + dig() + dig() + '.' + dig() + '0' + dig();
+    case 'extreme2': return '0.00' + nz() + '0' + dig() + nz();
+    case 'extreme3': return nz() + '00' + dig() + dig() + '.' + dig() + '0';
+    case 'extreme4': {
+      const z = '0'.repeat(rnd(2, 5));
+      return nz() + dig() + '.' + z + nz() + dig() + dig();
+    }
   }
   return nz();
 }
@@ -322,23 +520,22 @@ function expandPool(d, target) {
   }
   pools[d] = Array.from(set);
 }
-expandPool('easy', 3500);
-expandPool('medium', 5000);
-expandPool('hard', 7500);
-console.log(`[문제풀] 쉬움 ${pools.easy.length} · 보통 ${pools.medium.length} · 어려움 ${pools.hard.length} · 합계 ${pools.easy.length+pools.medium.length+pools.hard.length}개`);
+// 100k+ 문제풀 — 학기 전체 사용해도 중복 거의 없음
+expandPool('easy', 25000);
+expandPool('medium', 35000);
+expandPool('hard', 45000);
+const _totalPool = pools.easy.length + pools.medium.length + pools.hard.length;
+console.log(`[문제풀] 쉬움 ${pools.easy.length} · 보통 ${pools.medium.length} · 어려움 ${pools.hard.length} · 합계 ${_totalPool.toLocaleString()}개`);
 
 function randNum(d) {
   if (d === 'mixed') d = ['easy','medium','hard'][Math.floor(Math.random()*3)];
-  // 70% 확장된 풀, 30% 즉석 절차생성 → 중복이 거의 없으면서도 신선함 유지
   if (Math.random() < 0.7) {
     const p = pools[d]; return p[Math.floor(Math.random()*p.length)];
   }
   return genNumberStr(d);
 }
-// 지수 위첨자 변환 (과학적 표기법용)
 const SUP = {'-':'⁻','0':'⁰','1':'¹','2':'²','3':'³','4':'⁴','5':'⁵','6':'⁶','7':'⁷','8':'⁸','9':'⁹'};
 function toSup(n) { return String(n).split('').map(c => SUP[c] || c).join(''); }
-// 과학적 표기법 생성 — 하드 난이도 전용. 가수(mantissa)의 유효숫자 수가 정답.
 function genSciNum(d) {
   const rnd = (a,b) => Math.floor(Math.random()*(b-a+1))+a;
   const dig = () => String(rnd(0,9));
@@ -479,6 +676,138 @@ function genAddSubQ(d, mode) {
     };
   }
 }
+
+
+// ==================== 게임 모드 5 — 과학적 표기법 변환 ====================
+// 일반 숫자 → 과학적 표기법 / 또는 그 반대.
+// 정답: { mant, exp } 튜플. 가수 1<=|mant|<10, 유효숫자 보존.
+function genSciConvertQ(d) {
+  const rnd = (a, b) => Math.floor(Math.random() * (b - a + 1)) + a;
+  // 두 방향 — 'toSci' (일반→과학) 또는 'toPlain' (과학→일반)
+  const direction = Math.random() < 0.5 ? 'toSci' : 'toPlain';
+  // 일반 숫자 생성 (모드 1과 비슷하지만 과학적 표기로 변환 가능한 패턴 위주)
+  let plain;
+  if (d === 'easy') {
+    // 1500, 0.025, 480 등 — 유효숫자 2~3개
+    const tpls = ['intTZ', 'decLZ', 'intMid', 'plain2'];
+    const t = tpls[rnd(0, tpls.length - 1)];
+    const nz = () => String(rnd(1, 9));
+    if (t === 'intTZ') plain = nz() + nz() + '00';
+    else if (t === 'decLZ') plain = '0.0' + nz() + nz();
+    else if (t === 'intMid') plain = nz() + '0' + nz();
+    else plain = nz() + '.' + nz();
+  } else if (d === 'hard') {
+    const nz = () => String(rnd(1, 9));
+    const tpls = ['longTZ', 'deepLZ', 'mixDeep'];
+    const t = tpls[rnd(0, tpls.length - 1)];
+    if (t === 'longTZ') plain = nz() + String(rnd(0,9)) + String(rnd(0,9)) + '0000';
+    else if (t === 'deepLZ') plain = '0.000' + nz() + String(rnd(0,9)) + String(rnd(0,9));
+    else plain = nz() + '.' + String(rnd(0,9)) + '0' + nz() + '0';
+  } else {
+    plain = randNum('medium');
+  }
+  // 분석해서 mant/exp 산출 (10진 시프트)
+  const a = analyze(plain);
+  const sf = a.count;
+  // mantStr 만들기 — 첫 유효숫자가 1자리, 나머지는 소수
+  const nd = a.digs.filter(x => !x.pt);
+  let firstSig = nd.findIndex(x => x.sig);
+  if (firstSig < 0) firstSig = nd.findIndex(x => x.c !== '0');
+  if (firstSig < 0) firstSig = 0;
+  // 유효숫자만 추출
+  const sigDigits = [];
+  for (const x of nd) if (x.sig) sigDigits.push(x.c);
+  if (sigDigits.length === 0) sigDigits.push(nd[nd.length - 1] ? nd[nd.length - 1].c : '0');
+  let mantStr = sigDigits[0];
+  if (sigDigits.length > 1) mantStr += '.' + sigDigits.slice(1).join('');
+  const numVal = parseFloat(plain);
+  const exp = numVal === 0 ? 0 : Math.floor(Math.log10(Math.abs(numVal)));
+  return {
+    gameMode: 5, direction, plain, mantStr, exp, sf,
+    display: direction === 'toSci' ? plain : (mantStr + '×10' + toSup(exp)),
+    // 정답 표시 — 반대 형태
+    answer: direction === 'toSci' ? (mantStr + '×10' + toSup(exp)) : plain,
+  };
+}
+function judgeSciConvert(q, ansStr) {
+  const p = parseUserNum(ansStr);
+  if (!p) return { ok: false, reason: '형식 오류' };
+  const target = parseFloat(q.plain);
+  const tol = Math.max(Math.abs(target) * 1e-3, 1e-12);
+  if (Math.abs(p.value - target) > tol) return { ok: false, reason: '값이 맞지 않음' };
+  if (q.direction === 'toSci') {
+    if (p.form !== 'sci') return { ok: false, reason: '과학적 표기법으로 입력하세요' };
+    // 가수가 1<=|m|<10 인지
+    if (Math.abs(p.mant) < 1 || Math.abs(p.mant) >= 10) return { ok: false, reason: '가수는 1 이상 10 미만이어야 해요' };
+    // 유효숫자 보존
+    const givenSf = p.mantStr.replace(/[^0-9]/g, '').replace(/^0+/, '').length;
+    if (givenSf !== q.sf) return { ok: false, reason: `유효숫자 ${q.sf}개여야 해요` };
+  } else {
+    if (p.form !== 'plain') return { ok: false, reason: '일반 표기로 입력하세요' };
+    if (p.plainStr !== q.plain && parseFloat(p.plainStr) !== parseFloat(q.plain)) {
+      // 표기 차이 허용 (선후 0)
+    }
+  }
+  return { ok: true };
+}
+
+// ==================== 게임 모드 6 — 유효숫자 반올림 ====================
+// 입력 숫자를 지정 유효숫자 개수로 반올림. 예: 5.367 → 3개로 = 5.37
+function genRoundQ(d) {
+  const rnd = (a, b) => Math.floor(Math.random() * (b - a + 1)) + a;
+  // 적당히 긴 숫자 (유효숫자 4~7개)
+  const nz = () => String(rnd(1, 9));
+  const dg = () => String(rnd(0, 9));
+  let s, intLen, dpLen;
+  if (d === 'easy') { intLen = rnd(1, 2); dpLen = rnd(1, 2); }
+  else if (d === 'hard') { intLen = rnd(1, 4); dpLen = rnd(2, 4); }
+  else { intLen = rnd(1, 3); dpLen = rnd(2, 3); }
+  s = nz();
+  for (let i = 1; i < intLen; i++) s += dg();
+  if (dpLen > 0) { s += '.'; for (let i = 0; i < dpLen; i++) s += dg(); }
+  const a = analyze(s);
+  const totalSf = a.count;
+  // 목표 유효숫자: 1~totalSf-1
+  const target = rnd(1, Math.max(1, totalSf - 1));
+  // 정답 산출 — toPrecision은 충분, 단 trailing 0 처리
+  const v = parseFloat(s);
+  const rounded = parseFloat(v.toPrecision(target));
+  // 표기: 큰 수 → 과학적, 작은 수 → 일반
+  const exp = rounded === 0 ? 0 : Math.floor(Math.log10(Math.abs(rounded)));
+  let answerStr;
+  if (Math.abs(exp) >= 4) {
+    const mant = rounded / Math.pow(10, exp);
+    let mantStr = mant.toString();
+    // 가수의 유효숫자가 target개 이도록 강제
+    const need = target - 1;
+    if (mantStr.indexOf('.') < 0 && need > 0) mantStr += '.' + '0'.repeat(need);
+    else if (mantStr.indexOf('.') >= 0) {
+      const dpCur = mantStr.length - mantStr.indexOf('.') - 1;
+      if (dpCur < need) mantStr += '0'.repeat(need - dpCur);
+    }
+    answerStr = mantStr + '×10' + toSup(exp);
+  } else {
+    answerStr = rounded.toPrecision(target);
+    // 0.00250 같은 trailing 0이 빠져나간 경우 보정
+    if (answerStr.includes('e')) {
+      const [m, e] = answerStr.split('e');
+      answerStr = parseFloat(m).toFixed(Math.max(0, target - 1 - parseInt(e)));
+    }
+  }
+  return { gameMode: 6, num: s, target, answer: answerStr, value: rounded };
+}
+function judgeRound(q, ansStr) {
+  const p = parseUserNum(ansStr);
+  if (!p) return { ok: false, reason: '형식 오류' };
+  const tol = Math.max(Math.abs(q.value) * 5e-4, 1e-12);
+  if (Math.abs(p.value - q.value) > tol) return { ok: false, reason: '값이 맞지 않음' };
+  // 유효숫자 개수 검증
+  const sigDigits = (p.form === 'sci' ? p.mantStr : p.plainStr).replace(/[^0-9]/g, '').replace(/^0+/, '');
+  const givenSf = sigDigits.length || 1;
+  if (givenSf !== q.target) return { ok: false, reason: `유효숫자 ${q.target}개여야 해요` };
+  return { ok: true };
+}
+
 function judgeAddSub(q, ansStr) {
   const p = parseUserNum(ansStr);
   if (!p) return { ok: false, reason: '형식 오류' };
@@ -532,6 +861,26 @@ function genMeas(d) {
 }
 function makeQuestion(gm, diff, recent, addSubMode) {
   const d = diff === 'mixed' ? ['easy','medium','hard'][Math.floor(Math.random()*3)] : diff;
+  if (gm === 5) {
+    for (let tries = 0; tries < 20; tries++) {
+      const q = genSciConvertQ(d);
+      const key = q.direction + ':' + q.display;
+      if (recent && recent.has(key)) continue;
+      if (recent) recent.add(key);
+      return q;
+    }
+    return genSciConvertQ(d);
+  }
+  if (gm === 6) {
+    for (let tries = 0; tries < 20; tries++) {
+      const q = genRoundQ(d);
+      const key = q.num + ':' + q.target;
+      if (recent && recent.has(key)) continue;
+      if (recent) recent.add(key);
+      return q;
+    }
+    return genRoundQ(d);
+  }
   if (gm === 4) {
     for (let tries = 0; tries < 20; tries++) {
       const q = genAddSubQ(d, addSubMode || 'mixed');
@@ -592,6 +941,14 @@ function judge(q, answer) {
     const r = judgeAddSub(q, answer && answer.result);
     return r.ok;
   }
+  if (q.gameMode === 5) {
+    const r = judgeSciConvert(q, answer && answer.result);
+    return r.ok;
+  }
+  if (q.gameMode === 6) {
+    const r = judgeRound(q, answer && answer.result);
+    return r.ok;
+  }
   const tol = q.meas.type === 'ruler' ? 0.03 : 0.2;
   const mv = parseFloat(answer && answer.meas);
   const sv = parseInt(answer && answer.sf);
@@ -607,6 +964,14 @@ function viewQuestion(q, hide) {
   if (q.gameMode === 4) {
     if (hide) return { gameMode: 4, display: q.display, kind: q.kind, op: q.op };
     return { gameMode: 4, display: q.display, kind: q.kind, op: q.op, answer: q.answer, dpResult: q.dpResult, mantDP: q.mantDP, targetExp: q.targetExp };
+  }
+  if (q.gameMode === 5) {
+    if (hide) return { gameMode: 5, direction: q.direction, display: q.display };
+    return { gameMode: 5, direction: q.direction, display: q.display, plain: q.plain, mantStr: q.mantStr, exp: q.exp, sf: q.sf, answer: q.answer };
+  }
+  if (q.gameMode === 6) {
+    if (hide) return { gameMode: 6, num: q.num, target: q.target };
+    return { gameMode: 6, num: q.num, target: q.target, answer: q.answer };
   }
   return { gameMode: 3, meas: q.meas };
 }
@@ -732,7 +1097,7 @@ function createRoom(classroomCode, type, config, owner, autoApprove = false) {
     approved: autoApprove,     // 교사가 승인해야 시작 가능
     phase: 'lobby',
     config: {
-      gameMode: [1,2,3,4].includes(parseInt(config.gameMode)) ? parseInt(config.gameMode) : 1,
+      gameMode: [1,2,3,4,5,6].includes(parseInt(config.gameMode)) ? parseInt(config.gameMode) : 1,
       difficulty: ['easy','medium','hard','mixed'].includes(config.difficulty) ? config.difficulty : 'medium',
       questionCount: Math.min(100, Math.max(1, parseInt(config.questionCount) || 10)),
       questionTime: Math.min(300, Math.max(5, parseInt(config.questionTime) || 30)),
@@ -1130,6 +1495,27 @@ function finalizeRoom(room) {
   } else {
     players.forEach(p => accumulateStats(cCode, p.studentId, p, type));
   }
+  // 학생별 오답노트 누적 (교실 단위) — 학생별 최근 100개
+  for (const p of players) {
+    const wh = p.wrongHistory || [];
+    if (wh.length === 0) continue;
+    const w = clsWrongs(cCode);
+    if (!w[p.studentId]) w[p.studentId] = [];
+    const stamp = Date.now();
+    for (const item of wh) {
+      w[p.studentId].push({
+        at: stamp,
+        gameMode: room.config.gameMode,
+        difficulty: room.config.difficulty,
+        roomType: room.type,
+        q: item.q,
+        submitted: item.submitted,
+        timeout: !!item.timeout,
+      });
+    }
+    if (w[p.studentId].length > 100) w[p.studentId] = w[p.studentId].slice(-100);
+  }
+  saveWrongs();
   // 구글 시트 동기화 (교실별 설정 있을 때)
   maybePushSheets(cCode, 'game', { type, classroomCode: cCode, players: players.map(p => ({
     studentId: p.studentId, name: p.name, score: p.score, correct: p.correct, total: room.questions.length,
@@ -1168,18 +1554,24 @@ async function handleApi(req, res, pathname, query) {
     if (!clsroom(classroomCode)) return sendJSON(res, { error: '존재하지 않는 교실 코드예요.' }, 404);
     if (!studentId || !name) return sendJSON(res, { error: '학번과 이름을 입력하세요.' }, 400);
     if (!/^[0-9A-Za-z]+$/.test(studentId)) return sendJSON(res, { error: '학번은 숫자/영문만 가능' }, 400);
+    if (hasBadWord(name)) return sendJSON(res, { error: '닉네임에 부적절한 단어가 포함되어 있어요.' }, 400);
+    // Rate limit (학번+IP 기준)
+    const ipKeyS = (req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'unknown').toString().split(',')[0].trim();
+    if (!rateLimitOK('login:' + ipKeyS + ':' + studentId, 20, 60_000)) return sendJSON(res, { error: '잠시 후 다시 시도하세요' }, 429);
     // 차단 확인 (교실별)
     const sdb = clsStudents(classroomCode);
     const rec = sdb[studentId];
     if (rec && rec.blocked) return sendJSON(res, { error: '차단된 학생입니다. 교사에게 문의하세요.' }, 403);
-    // 기존 세션이 있으면 토큰 갱신
+    // 기존 세션이 있으면 토큰 갱신 (다중 탭 방지)
     const sKey = studentSessKey(classroomCode, studentId);
     let sess = students.get(sKey);
-    if (sess && sess.token) studentTokens.delete(sess.token);
+    if (sess && sess.token) { studentTokens.delete(sess.token); delete persistedTokens.student[sess.token]; }
     const token = tok();
     sess = { classroomCode, studentId, name, token, lastSeen: Date.now(), currentRoom: sess?.currentRoom || null };
     students.set(sKey, sess);
     studentTokens.set(token, { classroomCode, studentId });
+    persistedTokens.student[token] = { classroomCode, studentId, expiresAt: Date.now() + STUDENT_TOKEN_TTL_MS };
+    saveTokens();
     // 영구 DB + 출결 기록
     const wasNew = !sdb[studentId];
     registerOrTouchStudent(classroomCode, studentId, name);
@@ -1191,6 +1583,7 @@ async function handleApi(req, res, pathname, query) {
     const s = authStudent(req);
     if (s) {
       studentTokens.delete(s.token);
+      delete persistedTokens.student[s.token]; saveTokens();
       // 방에서 나가기
       if (s.currentRoom) {
         const r = rooms.get(s.currentRoom);
@@ -1507,9 +1900,11 @@ async function handleApi(req, res, pathname, query) {
     const name = String(body.name || '').trim().slice(0, 30);
     if (!validCode(code)) return sendJSON(res, { error: '교실 코드는 2~20자 (한글/영문/숫자/-/_)' }, 400);
     if (pw.length < 4) return sendJSON(res, { error: '비밀번호는 4자 이상' }, 400);
+    // Rate limit (교실+IP 기준 — 5분에 10회)
+    const ipKey = (req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'unknown').toString().split(',')[0].trim();
+    if (!rateLimitOK('teacherlogin:' + ipKey + ':' + code, 10, 5 * 60_000)) return sendJSON(res, { error: '비밀번호 시도 횟수 초과 — 5분 후 다시 시도하세요' }, 429);
     let c = clsroom(code);
     if (!c) {
-      // 새 교실 생성 (claim)
       c = classrooms[code] = {
         code, name: name || code,
         passwordHash: hashPw(pw), createdAt: Date.now(),
@@ -1517,14 +1912,32 @@ async function handleApi(req, res, pathname, query) {
       };
       saveClassrooms();
     } else {
-      // 비밀번호 확인
-      if (c.passwordHash !== hashPw(pw)) return sendJSON(res, { error: '비밀번호 오류' }, 401);
+      if (!verifyPw(pw, c.passwordHash)) return sendJSON(res, { error: '비밀번호 오류' }, 401);
+      // 자동 마이그레이션: 평문 sha256 → PBKDF2 (가입 후 첫 로그인에서 1회)
+      if (!String(c.passwordHash).startsWith('pbkdf2$')) {
+        c.passwordHash = hashPw(pw);
+        saveClassrooms();
+      }
     }
     const t = tok(); teacherTokens.set(t, code);
+    persistedTokens.teacher[t] = { classroomCode: code, expiresAt: Date.now() + TEACHER_TOKEN_TTL_MS };
+    saveTokens();
     return sendJSON(res, { token: t, classroomCode: code, name: c.name, created: !c.passwordHash ? false : undefined });
   }
   if (method === 'POST' && pathname === '/api/teacher/logout') {
-    teacherTokens.delete(getAuth(req));
+    const tt = getAuth(req);
+    teacherTokens.delete(tt);
+    delete persistedTokens.teacher[tt]; saveTokens();
+    return sendJSON(res, { ok: true });
+  }
+  // 학생 토큰 keep-alive (heartbeat) — 활동 중이면 만료 갱신
+  if (method === 'POST' && pathname === '/api/student/touch') {
+    const s = authStudent(req);
+    if (!s) return sendJSON(res, { error: '로그인 필요' }, 401);
+    if (persistedTokens.student[s.token]) {
+      persistedTokens.student[s.token].expiresAt = Date.now() + STUDENT_TOKEN_TTL_MS;
+      saveTokens();
+    }
     return sendJSON(res, { ok: true });
   }
   if (method === 'POST' && pathname === '/api/teacher/password') {
@@ -1866,6 +2279,256 @@ async function handleApi(req, res, pathname, query) {
     }
   }
 
+  // ---------- 학습 분석: 학급 종합 통계 ----------
+  if (method === 'GET' && pathname === '/api/teacher/analytics') {
+    const cls = teacherClassroom(req);
+    if (!cls) return sendJSON(res, { error: '교사 권한' }, 401);
+    const sdb = clsStudents(cls);
+    const sList = Object.values(sdb);
+    const adb = clsAttendance(cls);
+    const byMode = {1:{c:0,t:0},2:{c:0,t:0},3:{c:0,t:0},4:{c:0,t:0},5:{c:0,t:0},6:{c:0,t:0}};
+    const byDiff = {easy:{c:0,t:0},medium:{c:0,t:0},hard:{c:0,t:0},mixed:{c:0,t:0}};
+    let totGames=0, totScore=0;
+    const myLB = e => (e.classroomCode || DEFAULT_CLASSROOM) === cls;
+    for (const t of ['single','multi','battle']) {
+      for (const e of (leaderboards[t]||[])) {
+        if (!myLB(e)) continue;
+        totGames++; totScore += e.score || 0;
+        if (byMode[e.gameMode]) { byMode[e.gameMode].c += e.correct||0; byMode[e.gameMode].t += e.total||0; }
+        if (byDiff[e.difficulty]) { byDiff[e.difficulty].c += e.correct||0; byDiff[e.difficulty].t += e.total||0; }
+      }
+    }
+    const today = new Date(); today.setHours(0,0,0,0); const todayMs = today.getTime();
+    const hourly = Array(24).fill(0);
+    for (const t of ['single','multi','battle']) {
+      for (const e of (leaderboards[t]||[])) {
+        if (!myLB(e)) continue;
+        if (!e.at || e.at < todayMs) continue;
+        hourly[new Date(e.at).getHours()]++;
+      }
+    }
+    const days = [];
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(today.getTime() - i * 86400000);
+      const key = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+      days.push({ date: key, count: adb[key] ? Object.keys(adb[key]).length : 0 });
+    }
+    const studentAcc = sList.map(rec => {
+      const st = ensureStatsShape(rec.stats);
+      const tot = (st.totalCorrect||0) + (st.totalWrong||0);
+      return { studentId: rec.studentId, name: rec.name, accuracy: tot>0?Math.round(st.totalCorrect/tot*100):null, games: st.totalGames||0, score: st.totalScore||0 };
+    });
+    return sendJSON(res, { totGames, totPlayers: sList.length, totScore, byMode, byDiff, hourly, attendance7d: days, studentAcc });
+  }
+
+  // ---------- 학습 분석: 자주 틀리는 문제 ----------
+  if (method === 'GET' && pathname === '/api/teacher/analytics/wrongs') {
+    const cls = teacherClassroom(req);
+    if (!cls) return sendJSON(res, { error: '교사 권한' }, 401);
+    const w = clsWrongs(cls);
+    const counts = new Map();
+    for (const sid of Object.keys(w)) {
+      for (const item of (w[sid] || []).slice(-50)) {
+        const key = (item.q && (item.q.num || item.q.display)) || '?';
+        const e = counts.get(key) || { key, gm: item.gameMode, count: 0, sample: item };
+        e.count++;
+        counts.set(key, e);
+      }
+    }
+    const list = [...counts.values()].sort((a,b) => b.count - a.count).slice(0, 30);
+    return sendJSON(res, { items: list });
+  }
+
+  // ---------- 학생 오답노트 ----------
+  if (method === 'GET' && pathname === '/api/wrong-notes') {
+    const sess = authStudent(req);
+    const tch = teacherClassroom(req);
+    let code, sid;
+    if (tch) {
+      code = tch; sid = String(query.studentId || '');
+      if (!sid) return sendJSON(res, { error: 'studentId 필요' }, 400);
+    } else if (sess) {
+      code = sess.classroomCode; sid = sess.studentId;
+    } else return sendJSON(res, { error: '인증 필요' }, 401);
+    const w = clsWrongs(code);
+    return sendJSON(res, { items: (w[sid] || []).slice(-50).reverse() });
+  }
+
+  // ---------- 학생 CSV 일괄 등록 ----------
+  if (method === 'POST' && pathname === '/api/teacher/students/import') {
+    const cls = teacherClassroom(req);
+    if (!cls) return sendJSON(res, { error: '교사 권한' }, 401);
+    const body = await readBody(req);
+    const csv = String(body.csv || '');
+    if (!csv) return sendJSON(res, { error: 'csv 필요' }, 400);
+    const lines = csv.replace(/\r/g, '').split('\n').map(l => l.trim()).filter(Boolean);
+    if (lines.length === 0) return sendJSON(res, { error: '빈 CSV' }, 400);
+    const header = lines[0].toLowerCase().split(',').map(h => h.trim().replace(/^\uFEFF/, ''));
+    const sidIdx = header.indexOf('studentid') >= 0 ? header.indexOf('studentid') : header.indexOf('학번');
+    const nameIdx = header.indexOf('name') >= 0 ? header.indexOf('name') : header.indexOf('이름');
+    if (sidIdx < 0 || nameIdx < 0) return sendJSON(res, { error: '헤더에 studentId/name (또는 학번/이름) 필요' }, 400);
+    const sdb = clsStudents(cls);
+    let added = 0, updated = 0, skipped = 0;
+    for (let i = 1; i < lines.length; i++) {
+      const cols = lines[i].split(',').map(c => c.trim().replace(/^"|"$/g, ''));
+      const sid = sanitizeStr(cols[sidIdx], 10);
+      const name = sanitizeStr(cols[nameIdx], 12);
+      if (!sid || !name || !/^[0-9A-Za-z]+$/.test(sid) || hasBadWord(name)) { skipped++; continue; }
+      if (sdb[sid]) { sdb[sid].name = name; updated++; }
+      else { sdb[sid] = { studentId: sid, name, joinedAt: Date.now(), stats: emptyStats(), blocked: false }; added++; }
+    }
+    saveStudentsDb();
+    return sendJSON(res, { ok: true, added, updated, skipped });
+  }
+
+  // ---------- 학생 일괄 차단/해제/삭제 ----------
+  if (method === 'POST' && pathname === '/api/teacher/students/bulk') {
+    const cls = teacherClassroom(req);
+    if (!cls) return sendJSON(res, { error: '교사 권한' }, 401);
+    const body = await readBody(req);
+    const ids = Array.isArray(body.studentIds) ? body.studentIds : [];
+    const op = body.op;
+    if (!ids.length) return sendJSON(res, { error: '학번 없음' }, 400);
+    const sdb = clsStudents(cls);
+    let n = 0;
+    const kickToken = (sid) => { const ss = students.get(studentSessKey(cls, sid)); if (ss) { studentTokens.delete(ss.token); delete persistedTokens.student[ss.token]; saveTokens(); students.delete(studentSessKey(cls, sid)); }};
+    for (const sid of ids) {
+      const rec = sdb[sid]; if (!rec) continue;
+      if (op === 'block') { rec.blocked = true; n++; kickToken(sid); }
+      else if (op === 'unblock') { rec.blocked = false; n++; }
+      else if (op === 'delete') { delete sdb[sid]; n++; kickToken(sid); }
+    }
+    saveStudentsDb();
+    return sendJSON(res, { ok: true, count: n });
+  }
+
+  // ---------- 방 일괄 ----------
+  if (method === 'POST' && pathname === '/api/teacher/rooms/bulk') {
+    const cls = teacherClassroom(req);
+    if (!cls) return sendJSON(res, { error: '교사 권한' }, 401);
+    const body = await readBody(req);
+    const op = body.op;
+    let n = 0;
+    for (const room of Array.from(rooms.values())) {
+      if (room.classroomCode !== cls) continue;
+      if (op === 'approve-all' && !room.approved) {
+        room.approved = true; n++;
+        if (room.type === 'single' && room.phase === 'lobby' && Object.keys(room.players).length > 0) startRoom(room);
+      } else if (op === 'stop-all' && (room.phase === 'question' || room.phase === 'reveal')) {
+        if (room.phaseTimer) clearTimeout(room.phaseTimer);
+        room.phase = 'results'; finalizeRoom(room); n++;
+      } else if (op === 'close-all') {
+        if (room.phaseTimer) clearTimeout(room.phaseTimer);
+        if (room.multiTick) { clearInterval(room.multiTick); room.multiTick = null; }
+        Object.values(room.players).forEach(p => { const ss = students.get(studentSessKey(cls, p.studentId)); if (ss) ss.currentRoom = null; });
+        rooms.delete(room.code); n++;
+      }
+    }
+    return sendJSON(res, { ok: true, count: n });
+  }
+
+  // ---------- 프리셋 ----------
+  if (method === 'GET' && pathname === '/api/teacher/presets') {
+    const cls = teacherClassroom(req);
+    if (!cls) return sendJSON(res, { error: '교사 권한' }, 401);
+    return sendJSON(res, { presets: clsPresets(cls) });
+  }
+  if (method === 'POST' && pathname === '/api/teacher/presets') {
+    const cls = teacherClassroom(req);
+    if (!cls) return sendJSON(res, { error: '교사 권한' }, 401);
+    const body = await readBody(req);
+    const list = clsPresets(cls);
+    const item = { id: 'p' + Date.now() + '_' + Math.random().toString(36).slice(2, 6), name: sanitizeStr(body.name, 30) || '프리셋', config: body.config || {}, type: ['single','multi','battle'].includes(body.type) ? body.type : 'multi' };
+    list.push(item);
+    if (list.length > 30) list.shift();
+    savePresets();
+    return sendJSON(res, { ok: true, preset: item });
+  }
+  if (method === 'POST' && pathname === '/api/teacher/presets/delete') {
+    const cls = teacherClassroom(req);
+    if (!cls) return sendJSON(res, { error: '교사 권한' }, 401);
+    const body = await readBody(req);
+    presetsDb[cls] = (presetsDb[cls] || []).filter(p => p.id !== body.id);
+    savePresets();
+    return sendJSON(res, { ok: true });
+  }
+
+  // ---------- 백업 복원 ----------
+  if (method === 'POST' && pathname === '/api/teacher/backup/restore') {
+    const cls = teacherClassroom(req);
+    if (!cls) return sendJSON(res, { error: '교사 권한' }, 401);
+    const body = await readBody(req);
+    const bundle = body.bundle;
+    if (!bundle || typeof bundle !== 'object') return sendJSON(res, { error: '잘못된 백업 파일' }, 400);
+    if (bundle.classroomCode && bundle.classroomCode !== cls) return sendJSON(res, { error: '다른 교실 백업 (백업: ' + bundle.classroomCode + ', 현재: ' + cls + ')' }, 400);
+    let restored = { students: 0, attendance: 0, lb: 0 };
+    if (bundle.students && typeof bundle.students === 'object') {
+      studentsDb[cls] = bundle.students;
+      restored.students = Object.keys(bundle.students).length;
+      saveStudentsDb();
+    }
+    if (bundle.attendance && typeof bundle.attendance === 'object') {
+      attendance[cls] = bundle.attendance;
+      restored.attendance = Object.keys(bundle.attendance).length;
+      saveAttendance();
+    }
+    if (bundle.leaderboards) {
+      for (const t of ['single','multi','battle']) {
+        if (Array.isArray(bundle.leaderboards[t])) {
+          leaderboards[t] = (leaderboards[t] || []).filter(e => (e.classroomCode || DEFAULT_CLASSROOM) !== cls);
+          for (const e of bundle.leaderboards[t]) { leaderboards[t].push({ ...e, classroomCode: cls }); restored.lb++; }
+          leaderboards[t].sort((a,b) => b.score - a.score);
+          if (leaderboards[t].length > 500) leaderboards[t].length = 500;
+        }
+      }
+      saveLB();
+    }
+    return sendJSON(res, { ok: true, restored });
+  }
+
+  // ---------- 출결 — 월/주 ----------
+  if (method === 'GET' && pathname === '/api/teacher/attendance') {
+    const cls = teacherClassroom(req);
+    if (!cls) return sendJSON(res, { error: '교사 권한' }, 401);
+    const adb = clsAttendance(cls);
+    const month = String(query.month || '');
+    if (month && /^\d{4}-\d{2}$/.test(month)) {
+      const days = Object.keys(adb).filter(d => d.startsWith(month)).sort();
+      const rows = days.map(d => ({ date: d, count: Object.keys(adb[d]).length }));
+      return sendJSON(res, { month, days: rows });
+    }
+    return sendJSON(res, { dates: Object.keys(adb).sort() });
+  }
+
+  // ---------- 점수판 일괄 보너스 ----------
+  if (method === 'POST' && pathname === '/api/leaderboard/entry/bulk-bonus') {
+    const cls = teacherClassroom(req);
+    if (!cls) return sendJSON(res, { error: '교사 권한' }, 401);
+    const body = await readBody(req);
+    if (!['single','multi','battle'].includes(body.type)) return sendJSON(res, { error: 'type 오류' }, 400);
+    const keys = Array.isArray(body.keys) ? body.keys : [];
+    const bonus = parseInt(body.bonus) || 0;
+    if (!keys.length) return sendJSON(res, { error: '선택 없음' }, 400);
+    const keySet = new Set(keys.map(k => k.at + '|' + k.studentId));
+    let n = 0;
+    for (const e of leaderboards[body.type] || []) {
+      const k = e.at + '|' + e.studentId;
+      if (!keySet.has(k)) continue;
+      if ((e.classroomCode || DEFAULT_CLASSROOM) !== cls) continue;
+      e.score = Math.max(0, (e.score || 0) + bonus);
+      n++;
+    }
+    leaderboards[body.type].sort((a,b) => b.score - a.score);
+    saveLB();
+    return sendJSON(res, { ok: true, count: n });
+  }
+
+  // ---------- 헬스체크 (Render warm-up) ----------
+  if (method === 'GET' && pathname === '/api/health') {
+    return sendJSON(res, { ok: true, uptime: Math.round(process.uptime()), classrooms: Object.keys(classrooms).length, rooms: rooms.size });
+  }
+
+
   sendJSON(res, { error: 'unknown api' }, 404);
 }
 
@@ -1876,6 +2539,8 @@ const mimes = {
   '.css': 'text/css; charset=utf-8',
   '.json': 'application/json; charset=utf-8',
   '.png': 'image/png', '.svg': 'image/svg+xml', '.ico': 'image/x-icon',
+  '.webmanifest': 'application/manifest+json; charset=utf-8',
+  '.txt': 'text/plain; charset=utf-8',
 };
 function serveStatic(req, res, pathname) {
   const file = pathname === '/' ? '/home.html' : pathname;
@@ -1913,7 +2578,7 @@ const server = http.createServer(async (req, res) => {
 setInterval(() => {
   const now = Date.now();
   for (const [sid, s] of students) {
-    if (now - s.lastSeen > 1000 * 60 * 30) {  // 30분 무반응
+    if (now - s.lastSeen > STUDENT_TOKEN_TTL_MS) {  // 6시간 무반응
       if (s.currentRoom) { const r = rooms.get(s.currentRoom); if (r) leaveRoom(r, s); }
       studentTokens.delete(s.token);
       students.delete(sid);
@@ -1929,6 +2594,21 @@ setInterval(() => {
 
 // 클라우드 배포 시 0.0.0.0 에 바인딩 — 모든 인터페이스에서 수신
 const HOST = process.env.HOST || '0.0.0.0';
+// Graceful shutdown — 즉시 flush (디바운스 우회)
+function flushAll() {
+  try { atomicWrite(LB_FILE, JSON.stringify(leaderboards)); } catch(_){}
+  try { atomicWrite(STUDENTS_FILE, JSON.stringify(studentsDb)); } catch(_){}
+  try { atomicWrite(ATTEND_FILE, JSON.stringify(attendance)); } catch(_){}
+  try { atomicWrite(TOKENS_FILE, JSON.stringify(persistedTokens)); } catch(_){}
+  try { atomicWrite(WRONGS_FILE, JSON.stringify(wrongsDb)); } catch(_){}
+  try { atomicWrite(PRESETS_FILE, JSON.stringify(presetsDb)); } catch(_){}
+  console.log('[shutdown] all data flushed');
+}
+process.on('SIGTERM', () => { flushAll(); process.exit(0); });
+process.on('SIGINT',  () => { flushAll(); process.exit(0); });
+process.on('uncaughtException', (e) => { console.error('[uncaught]', e); flushAll(); });
+process.on('unhandledRejection', (e) => { console.error('[unhandled]', e); });
+
 server.listen(PORT, HOST, () => {
   console.log(`\n🔬 유효숫자 마스터 서버 실행 중 (port ${PORT})`);
   console.log(`  학생 입장: http://localhost:${PORT}/`);
