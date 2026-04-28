@@ -86,6 +86,7 @@
       <a href="#" onclick="showWrongNotes();return false">📝 오답노트</a>
       <a href="#" onclick="showJoinByCode();return false">🔢 방 코드 입장</a>
       <a href="/leaderboard.html">🏆 점수판</a>
+      <a href="#" onclick="showSeasonInfo();return false">🏆 시즌</a>
       <a href="#" onclick="toggleTheme();return false" id="theme-toggle" title="테마 변경">🌙</a>
       <a href="#" onclick="toggleSound();return false" id="sound-toggle" title="사운드 토글">🔊</a>
       <a href="#" onclick="refresh()" title="새로고침">🔄</a>
@@ -108,6 +109,7 @@
   </div>
 
   <div class="wrap">
+    <div id="season-badge-slot" style="margin-bottom:10px"></div>
     <h1>🎮 게임 로비</h1>
     <h2>혼자 연습하거나, 방을 만들어 친구와 함께 도전하세요</h2>
 
@@ -432,6 +434,7 @@ async function logout() {
 }
 
 async function refresh() {
+  refreshSeasonBadge();
   const r = await api('/api/rooms');
   if (r.error) return;
   const listEl = document.getElementById('room-list');
@@ -602,6 +605,65 @@ async function showWrongNotes() {
   }).join('');
   modal({ title: '📝 내 오답노트 (최근 50개)', body: html, wide: true, actions: [{ label:'닫기', value:null, kind:'ghost' }] });
 }
+async function showSeasonInfo() {
+  const me = await api('/api/me');
+  if (me.error) { toast('로그인 필요', 'err'); return; }
+  const r = await fetch('/api/season?classroomCode=' + encodeURIComponent(me.classroomCode)).then(r => r.json());
+  const lb = await fetch('/api/season/leaderboard?classroomCode=' + encodeURIComponent(me.classroomCode)).then(r => r.json());
+  const stateLbl = { 'no-season':'시즌 없음', upcoming:'⏳ 예정', active:'✅ 진행 중', paused:'⏸ 일시정지', ended:'🏁 종료' };
+  let body;
+  if (r.state === 'no-season') {
+    body = '<div style="text-align:center;padding:30px"><div style="font-size:3rem">📅</div><h3>현재 시즌이 없어요</h3><p style="color:var(--txt2)">선생님이 시즌을 시작하면 별도 점수판으로 경쟁할 수 있어요.<br>지금은 자유 연습 모드입니다.</p></div>';
+  } else {
+    const c = r.season;
+    const list = lb.entries || [];
+    const myRank = list.findIndex(e => e.studentId === me.studentId);
+    const tierLabel = { master:'🥇 마스터', diamond:'💎 다이아', gold:'🏅 골드', silver:'🥈 실버', bronze:'🥉 브론즈' };
+    const myEntry = list[myRank];
+    body = '<div style="background:linear-gradient(135deg,rgba(99,102,241,.15),rgba(245,158,11,.15));padding:18px;border-radius:12px;border:1px solid var(--pri);margin-bottom:14px">'
+      + '<div style="font-size:1.3rem;font-weight:800;color:var(--acc)">🏆 ' + _h(c.name) + '</div>'
+      + (c.theme ? '<div style="color:var(--txt2);margin-top:4px">📚 ' + _h(c.theme) + '</div>' : '')
+      + '<div style="font-size:.85rem;color:var(--txt2);margin-top:8px">상태: <b>' + stateLbl[r.state] + '</b></div>'
+      + '<div style="font-size:.85rem;color:var(--txt2);margin-top:4px">⏰ ' + new Date(c.startsAt).toLocaleString() + ' ~<br>' + new Date(c.endsAt).toLocaleString() + '</div>'
+      + (r.state !== 'active' ? '<div style="margin-top:10px;padding:8px 12px;background:rgba(245,158,11,.15);border-radius:8px;color:var(--acc);font-size:.88rem">⚠️ 현재 시즌 비활성 — 게임은 가능하지만 점수가 시즌 점수판에 기록되지 않아요 (연습 모드)</div>' : '')
+      + '</div>';
+    if (myEntry) {
+      body += '<div style="background:var(--bg2);padding:14px;border-radius:10px;margin-bottom:12px"><h4 style="margin:0 0 8px">🎯 내 시즌 성적</h4>'
+        + '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(100px,1fr));gap:8px">'
+        + '<div style="text-align:center;padding:8px;background:var(--bg);border-radius:8px"><div style="color:var(--txt2);font-size:.78rem">순위</div><div style="font-size:1.3rem;font-weight:800;color:var(--acc)">' + (myRank+1) + '위</div></div>'
+        + '<div style="text-align:center;padding:8px;background:var(--bg);border-radius:8px"><div style="color:var(--txt2);font-size:.78rem">누적 점수</div><div style="font-size:1.3rem;font-weight:800;color:var(--sec)">' + (myEntry.score||0).toLocaleString() + '</div></div>'
+        + '<div style="text-align:center;padding:8px;background:var(--bg);border-radius:8px"><div style="color:var(--txt2);font-size:.78rem">게임</div><div style="font-size:1.3rem;font-weight:800">' + (myEntry.gamesPlayed||0) + '</div></div>'
+        + '</div></div>';
+    }
+    body += '<h4 style="margin:14px 0 8px">📊 시즌 TOP 20</h4>';
+    if (!list.length) body += '<div style="text-align:center;padding:20px;color:var(--txt2)">아직 기록이 없어요. 첫 주자가 되어보세요!</div>';
+    else body += '<table style="width:100%;font-size:.88rem"><thead><tr><th>순위</th><th>학생</th><th>점수</th><th>게임</th></tr></thead><tbody>'
+      + list.slice(0, 20).map((e, i) => {
+        const me2 = e.studentId === me.studentId;
+        return '<tr style="background:' + (me2 ? 'rgba(99,102,241,.15)' : 'transparent') + '">'
+          + '<td><b>' + (['🥇','🥈','🥉'][i] || '🏅') + ' ' + (i+1) + '</b></td>'
+          + '<td><b>' + _h(e.name) + '</b></td>'
+          + '<td style="color:var(--acc);font-weight:700">' + (e.score||0).toLocaleString() + '</td>'
+          + '<td>' + (e.gamesPlayed||0) + '</td>'
+          + '</tr>';
+      }).join('') + '</tbody></table>';
+  }
+  await modal({ title: '🏆 시즌 정보', body: body, wide: true, actions: [{label:'닫기',value:null,kind:'ghost'}] });
+}
+
+// 시즌 배지 표시 — 로비 진입 시 자동 갱신
+async function refreshSeasonBadge() {
+  const me = await api('/api/me');
+  if (me.error || !me.classroomCode) return;
+  const r = await fetch('/api/season?classroomCode=' + encodeURIComponent(me.classroomCode)).then(r => r.json()).catch(() => null);
+  const slot = document.getElementById('season-badge-slot');
+  if (!slot) return;
+  if (!r || r.state === 'no-season') { slot.innerHTML = ''; return; }
+  const stateLbl = { upcoming:'⏳ 예정', active:'✅', paused:'⏸', ended:'🏁' };
+  const cls = r.state === 'active' ? 'ok' : r.state === 'paused' ? 'no' : 'acc';
+  slot.innerHTML = '<a href="#" onclick="showSeasonInfo();return false" style="text-decoration:none"><span class="badge ' + cls + '" style="font-size:.85rem;padding:6px 12px;cursor:pointer">' + stateLbl[r.state] + ' 🏆 ' + _h(r.season.name) + (r.state !== 'active' ? ' (연습모드)' : '') + '</span></a>';
+}
+
 window.addEventListener('DOMContentLoaded', () => {
   const cur = getTheme();
   const tt = document.getElementById('theme-toggle'); if (tt) tt.textContent = ({dark:'🌙',light:'☀️',hc:'🔆'})[cur];

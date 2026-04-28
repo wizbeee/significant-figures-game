@@ -16,6 +16,7 @@ const STUDENTS_FILE = path.join(DATA_DIR, 'students.json');
 const ATTEND_FILE = path.join(DATA_DIR, 'attendance.json');
 const TOKENS_FILE = path.join(DATA_DIR, 'tokens.json');
 const PRESETS_FILE = path.join(DATA_DIR, 'presets.json');
+const SEASONS_FILE = path.join(DATA_DIR, 'seasons.json');
 const WRONGS_FILE = path.join(DATA_DIR, 'wrongs.json');
 const BACKUPS_DIR = path.join(DATA_DIR, 'backups');
 // (레거시) 단일 교실용 파일 — 있으면 자동으로 default 교실로 이관
@@ -206,6 +207,115 @@ function clsWrongs(code) { if (!wrongsDb[code]) wrongsDb[code] = {}; return wron
 let presetsDb = safeLoad(PRESETS_FILE, {});
 function savePresets() { try { atomicWrite(PRESETS_FILE, JSON.stringify(presetsDb, null, 2)); } catch (e) {} }
 function clsPresets(code) { if (!presetsDb[code]) presetsDb[code] = []; return presetsDb[code]; }
+
+// ==================== 시즌제 ====================
+// 데이터 모델: seasonsDb[classroomCode] = { current: {...} | null, history: [...], leaderboard: [...] }
+// season = {
+//   id: string, name, theme,
+//   startsAt, endsAt,                 // ms (Asia/Seoul, 분 단위)
+//   activeDays: [0..6],               // 0=일 ~ 6=토 (빈 배열이면 모든 요일)
+//   dailyStart, dailyEnd,             // 'HH:MM' (null이면 종일)
+//   manualPaused: bool,               // 토글 즉시 정지
+//   scheduledPause: { from, to } | null,  // 예약 정지 윈도우 (ms, ms)
+//   createdAt, endedAt,               // 메타
+// }
+let seasonsDb = safeLoad(SEASONS_FILE, {});
+function saveSeasons() { try { atomicWrite(SEASONS_FILE, JSON.stringify(seasonsDb, null, 2)); } catch (e) {} }
+function clsSeasons(code) {
+  if (!seasonsDb[code]) seasonsDb[code] = { current: null, history: [], leaderboard: [] };
+  return seasonsDb[code];
+}
+
+// 시즌 활성 상태 계산 — 'no-season' | 'upcoming' | 'active' | 'paused' | 'ended'
+function seasonState(cls, now) {
+  now = now || Date.now();
+  const d = clsSeasons(cls);
+  const c = d.current;
+  if (!c) return 'no-season';
+  if (now < c.startsAt) return 'upcoming';
+  if (now >= c.endsAt) return 'ended';
+  if (c.manualPaused) return 'paused';
+  if (c.scheduledPause && now >= c.scheduledPause.from && now < c.scheduledPause.to) return 'paused';
+  // 활성 요일/시간대 검사
+  if (Array.isArray(c.activeDays) && c.activeDays.length > 0) {
+    const day = new Date(now).getDay();
+    if (!c.activeDays.includes(day)) return 'paused';
+  }
+  if (c.dailyStart && c.dailyEnd) {
+    const d2 = new Date(now);
+    const hm = String(d2.getHours()).padStart(2,'0') + ':' + String(d2.getMinutes()).padStart(2,'0');
+    if (hm < c.dailyStart || hm >= c.dailyEnd) return 'paused';
+  }
+  return 'active';
+}
+// 시즌이 점수 기록 가능한 상태인가
+function isSeasonActive(cls, now) { return seasonState(cls, now) === 'active'; }
+
+// 시즌 종료 — 랭크 산출 + history로 이관 + 점수판 별도 보존
+function endSeasonNow(cls, now) {
+  now = now || Date.now();
+  const d = clsSeasons(cls);
+  const c = d.current;
+  if (!c) return null;
+  const lb = (d.leaderboard || []).slice().sort((a,b) => b.score - a.score);
+  // 랭크 부여 — 마스터 5% / 다이아 15% / 골드 30% / 실버 30% / 브론즈 나머지
+  const total = lb.length;
+  const ranked = lb.map((e, i) => {
+    const pct = total > 0 ? (i / total) : 1;
+    let rank;
+    if (pct < 0.05) rank = 'master';
+    else if (pct < 0.20) rank = 'diamond';
+    else if (pct < 0.50) rank = 'gold';
+    else if (pct < 0.80) rank = 'silver';
+    else rank = 'bronze';
+    return { ...e, finalRank: i + 1, tier: rank };
+  });
+  const champions = ranked.slice(0, 3);
+  const archived = {
+    ...c,
+    endedAt: now,
+    state: 'ended',
+    finalLeaderboard: ranked,
+    champions,
+    totalParticipants: total,
+  };
+  d.history.unshift(archived);  // 최신이 앞
+  if (d.history.length > 50) d.history = d.history.slice(0, 50);
+  d.current = null;
+  d.leaderboard = [];
+  saveSeasons();
+  // 학생 통계에 시즌 랭크 누적 (영구 뱃지)
+  const sdb = clsStudents(cls);
+  for (const e of ranked) {
+    const rec = sdb[e.studentId];
+    if (!rec) continue;
+    if (!rec.seasonBadges) rec.seasonBadges = [];
+    rec.seasonBadges.push({ seasonId: c.id, seasonName: c.name, tier: e.tier, finalRank: e.finalRank, endedAt: now });
+    if (rec.seasonBadges.length > 30) rec.seasonBadges = rec.seasonBadges.slice(-30);
+  }
+  saveStudentsDb();
+  console.log(`[season] ${cls} ended: '${c.name}' (${total} 참여, 챔피언: ${champions[0]?.name || '-'})`);
+  return archived;
+}
+
+// 시즌 자동 종료 체크 (tick)
+function tickSeasons() {
+  const now = Date.now();
+  for (const cls of Object.keys(seasonsDb)) {
+    const c = seasonsDb[cls].current;
+    if (!c) continue;
+    // 종료 시간 도달
+    if (now >= c.endsAt) {
+      endSeasonNow(cls, now);
+    }
+    // 예약 정지 종료 (windowed)
+    else if (c.scheduledPause && now >= c.scheduledPause.to) {
+      c.scheduledPause = null;
+      saveSeasons();
+    }
+  }
+}
+setInterval(tickSeasons, 1000 * 30);  // 30초마다 체크
 
 // ==================== Rate Limiter (DoS / brute-force 방어) ====================
 const rateBuckets = new Map();
@@ -1488,6 +1598,37 @@ function finalizeRoom(room) {
       playerCount: players.length,
     }));
   }
+  // 시즌 활성 상태일 때만 — 시즌 점수판에도 기록 (점수 합산 — 학생별 누적)
+  if (isSeasonActive(cCode)) {
+    const sd = clsSeasons(cCode);
+    const winnerId = type === 'battle' ? players.slice().sort((a,b)=>b.score-a.score)[0]?.id : null;
+    for (const p of players) {
+      // 같은 학생 기존 기록 찾아 점수 누적, 없으면 신규
+      let rec = sd.leaderboard.find(e => e.studentId === p.studentId);
+      if (!rec) {
+        rec = {
+          seasonId: sd.current.id,
+          studentId: p.studentId, name: p.name,
+          score: 0, gamesPlayed: 0,
+          correctTotal: 0, totalTotal: 0, maxStreak: 0,
+          firstAt: Date.now(),
+        };
+        sd.leaderboard.push(rec);
+      }
+      rec.name = p.name;
+      rec.score += p.score || 0;
+      rec.gamesPlayed += 1;
+      rec.correctTotal += p.correct || 0;
+      rec.totalTotal += (type === 'multi' ? perPlayerTotal(p) : room.questions.length);
+      if ((p.maxStreak||0) > rec.maxStreak) rec.maxStreak = p.maxStreak;
+      rec.lastAt = Date.now();
+      if (type === 'battle') {
+        rec.battleGames = (rec.battleGames||0) + 1;
+        if (p.id === winnerId) rec.battleWins = (rec.battleWins||0) + 1;
+      }
+    }
+    saveSeasons();
+  }
   // 학생 누적 통계 업데이트 (대전은 승패 포함) — 교실 범위
   if (type === 'battle') {
     const winnerId = players.slice().sort((a,b) => b.score - a.score)[0]?.id;
@@ -2522,6 +2663,177 @@ async function handleApi(req, res, pathname, query) {
     saveLB();
     return sendJSON(res, { ok: true, count: n });
   }
+  // ---------- 시즌제 ----------
+  // 학생/누구나 — 현재 시즌 상태 조회
+  if (method === 'GET' && pathname === '/api/season') {
+    const sess = authStudent(req);
+    const tch = teacherClassroom(req);
+    const cls = sess ? sess.classroomCode : (tch || normCode(query.classroomCode));
+    if (!cls) return sendJSON(res, { error: 'classroomCode 필요' }, 400);
+    const d = clsSeasons(cls);
+    const c = d.current;
+    const state = seasonState(cls);
+    return sendJSON(res, {
+      state,
+      season: c ? {
+        id: c.id, name: c.name, theme: c.theme,
+        startsAt: c.startsAt, endsAt: c.endsAt,
+        activeDays: c.activeDays, dailyStart: c.dailyStart, dailyEnd: c.dailyEnd,
+        manualPaused: !!c.manualPaused,
+        scheduledPause: c.scheduledPause,
+      } : null,
+      historyCount: (d.history || []).length,
+    });
+  }
+
+  // 학생/누구나 — 시즌 점수판
+  if (method === 'GET' && pathname === '/api/season/leaderboard') {
+    const sess = authStudent(req);
+    const tch = teacherClassroom(req);
+    const cls = sess ? sess.classroomCode : (tch || normCode(query.classroomCode));
+    if (!cls) return sendJSON(res, { error: 'classroomCode 필요' }, 400);
+    const lb = (clsSeasons(cls).leaderboard || []).slice().sort((a,b) => b.score - a.score);
+    return sendJSON(res, { entries: lb.slice(0, 200), total: lb.length });
+  }
+
+  // 학생/교사 — 시즌 이력 조회
+  if (method === 'GET' && pathname === '/api/season/history') {
+    const sess = authStudent(req);
+    const tch = teacherClassroom(req);
+    const cls = sess ? sess.classroomCode : (tch || normCode(query.classroomCode));
+    if (!cls) return sendJSON(res, { error: 'classroomCode 필요' }, 400);
+    const list = (clsSeasons(cls).history || []).map(h => ({
+      id: h.id, name: h.name, theme: h.theme,
+      startsAt: h.startsAt, endsAt: h.endsAt, endedAt: h.endedAt,
+      totalParticipants: h.totalParticipants,
+      champions: h.champions || [],
+    }));
+    return sendJSON(res, { history: list });
+  }
+
+  // 학생/교사 — 특정 시즌 상세 (역대)
+  if (method === 'GET' && pathname === '/api/season/history/detail') {
+    const sess = authStudent(req);
+    const tch = teacherClassroom(req);
+    const cls = sess ? sess.classroomCode : (tch || normCode(query.classroomCode));
+    if (!cls) return sendJSON(res, { error: 'classroomCode 필요' }, 400);
+    const id = String(query.id || '');
+    const h = (clsSeasons(cls).history || []).find(x => x.id === id);
+    if (!h) return sendJSON(res, { error: '시즌 없음' }, 404);
+    return sendJSON(res, { season: h });
+  }
+
+  // 교사 — 새 시즌 시작
+  if (method === 'POST' && pathname === '/api/teacher/season/start') {
+    const cls = teacherClassroom(req);
+    if (!cls) return sendJSON(res, { error: '교사 권한' }, 401);
+    const body = await readBody(req);
+    const d = clsSeasons(cls);
+    if (d.current) return sendJSON(res, { error: '이미 진행 중인 시즌이 있습니다. 먼저 종료하세요.' }, 400);
+    const startsAt = parseInt(body.startsAt);
+    const endsAt = parseInt(body.endsAt);
+    if (!startsAt || !endsAt || startsAt >= endsAt) return sendJSON(res, { error: '시작/종료 일시가 올바르지 않습니다' }, 400);
+    if (endsAt - startsAt < 60_000) return sendJSON(res, { error: '시즌은 최소 1분 이상이어야 합니다' }, 400);
+    if (endsAt - startsAt > 1000 * 60 * 60 * 24 * 365) return sendJSON(res, { error: '시즌은 1년을 넘을 수 없습니다' }, 400);
+    const name = sanitizeStr(body.name, 30) || '시즌';
+    const theme = sanitizeStr(body.theme, 50) || '';
+    let activeDays = Array.isArray(body.activeDays) ? body.activeDays.filter(d => d>=0 && d<=6).map(Number) : [];
+    const hmRe = /^([01]\d|2[0-3]):[0-5]\d$/;
+    const dailyStart = hmRe.test(body.dailyStart) ? body.dailyStart : null;
+    const dailyEnd = hmRe.test(body.dailyEnd) ? body.dailyEnd : null;
+    if ((dailyStart && !dailyEnd) || (!dailyStart && dailyEnd)) return sendJSON(res, { error: '활성 시간대는 시작/종료 모두 필요' }, 400);
+    if (dailyStart && dailyEnd && dailyStart >= dailyEnd) return sendJSON(res, { error: '활성 시간 범위가 잘못되었습니다' }, 400);
+    const id = 's' + Date.now() + '_' + Math.random().toString(36).slice(2, 6);
+    d.current = {
+      id, name, theme,
+      startsAt, endsAt,
+      activeDays, dailyStart, dailyEnd,
+      manualPaused: false, scheduledPause: null,
+      createdAt: Date.now(),
+    };
+    d.leaderboard = [];
+    saveSeasons();
+    return sendJSON(res, { ok: true, season: d.current });
+  }
+
+  // 교사 — 즉시 종료 (긴급)
+  if (method === 'POST' && pathname === '/api/teacher/season/end-now') {
+    const cls = teacherClassroom(req);
+    if (!cls) return sendJSON(res, { error: '교사 권한' }, 401);
+    const archived = endSeasonNow(cls);
+    if (!archived) return sendJSON(res, { error: '진행 중인 시즌 없음' }, 400);
+    return sendJSON(res, { ok: true, archived });
+  }
+
+  // 교사 — 시즌 일정 수정 (시작/종료 일시, 요일, 시간대)
+  if (method === 'POST' && pathname === '/api/teacher/season/edit') {
+    const cls = teacherClassroom(req);
+    if (!cls) return sendJSON(res, { error: '교사 권한' }, 401);
+    const body = await readBody(req);
+    const c = clsSeasons(cls).current;
+    if (!c) return sendJSON(res, { error: '진행 중인 시즌 없음' }, 400);
+    if (body.startsAt !== undefined) {
+      const v = parseInt(body.startsAt);
+      if (isNaN(v)) return sendJSON(res, { error: 'startsAt 오류' }, 400);
+      c.startsAt = v;
+    }
+    if (body.endsAt !== undefined) {
+      const v = parseInt(body.endsAt);
+      if (isNaN(v) || v <= c.startsAt) return sendJSON(res, { error: 'endsAt 오류' }, 400);
+      c.endsAt = v;
+    }
+    if (body.activeDays !== undefined) {
+      c.activeDays = Array.isArray(body.activeDays) ? body.activeDays.filter(x => x>=0 && x<=6).map(Number) : [];
+    }
+    const hmRe = /^([01]\d|2[0-3]):[0-5]\d$/;
+    if (body.dailyStart !== undefined) c.dailyStart = hmRe.test(body.dailyStart) ? body.dailyStart : null;
+    if (body.dailyEnd !== undefined)   c.dailyEnd = hmRe.test(body.dailyEnd) ? body.dailyEnd : null;
+    if (body.name) c.name = sanitizeStr(body.name, 30);
+    if (body.theme !== undefined) c.theme = sanitizeStr(body.theme, 50);
+    saveSeasons();
+    return sendJSON(res, { ok: true, season: c });
+  }
+
+  // 교사 — 즉시 일시정지 토글
+  if (method === 'POST' && pathname === '/api/teacher/season/pause-toggle') {
+    const cls = teacherClassroom(req);
+    if (!cls) return sendJSON(res, { error: '교사 권한' }, 401);
+    const c = clsSeasons(cls).current;
+    if (!c) return sendJSON(res, { error: '진행 중인 시즌 없음' }, 400);
+    c.manualPaused = !c.manualPaused;
+    saveSeasons();
+    return sendJSON(res, { ok: true, manualPaused: c.manualPaused });
+  }
+
+  // 교사 — 예약 일시정지 (윈도우)
+  if (method === 'POST' && pathname === '/api/teacher/season/schedule-pause') {
+    const cls = teacherClassroom(req);
+    if (!cls) return sendJSON(res, { error: '교사 권한' }, 401);
+    const body = await readBody(req);
+    const c = clsSeasons(cls).current;
+    if (!c) return sendJSON(res, { error: '진행 중인 시즌 없음' }, 400);
+    if (body.clear) { c.scheduledPause = null; saveSeasons(); return sendJSON(res, { ok: true, cleared: true }); }
+    const from = parseInt(body.from), to = parseInt(body.to);
+    if (!from || !to || from >= to) return sendJSON(res, { error: '예약 정지 시간 범위 오류' }, 400);
+    if (from < c.startsAt || to > c.endsAt) return sendJSON(res, { error: '시즌 기간 안에서만 예약 가능합니다' }, 400);
+    c.scheduledPause = { from, to };
+    saveSeasons();
+    return sendJSON(res, { ok: true, scheduledPause: c.scheduledPause });
+  }
+
+  // 교사 — 시즌 점수판 초기화 (안전장치 — 시작 직후 실수 정정)
+  if (method === 'POST' && pathname === '/api/teacher/season/reset-leaderboard') {
+    const cls = teacherClassroom(req);
+    if (!cls) return sendJSON(res, { error: '교사 권한' }, 401);
+    const d = clsSeasons(cls);
+    if (!d.current) return sendJSON(res, { error: '진행 중인 시즌 없음' }, 400);
+    const removed = d.leaderboard.length;
+    d.leaderboard = [];
+    saveSeasons();
+    return sendJSON(res, { ok: true, removed });
+  }
+
+
 
   // ---------- 헬스체크 (Render warm-up) ----------
   if (method === 'GET' && pathname === '/api/health') {
@@ -2602,6 +2914,7 @@ function flushAll() {
   try { atomicWrite(TOKENS_FILE, JSON.stringify(persistedTokens)); } catch(_){}
   try { atomicWrite(WRONGS_FILE, JSON.stringify(wrongsDb)); } catch(_){}
   try { atomicWrite(PRESETS_FILE, JSON.stringify(presetsDb)); } catch(_){}
+  try { atomicWrite(SEASONS_FILE, JSON.stringify(seasonsDb)); } catch(_){}
   console.log('[shutdown] all data flushed');
 }
 process.on('SIGTERM', () => { flushAll(); process.exit(0); });

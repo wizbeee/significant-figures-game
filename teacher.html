@@ -80,6 +80,7 @@
     <div id="teacher-nav-links" class="nav-links">
       <a href="#" onclick="showTab('dash')" id="nav-dash">🖥 카운터</a>
       <a href="#" onclick="showTab('students')" id="nav-students">👤 학생 관리</a>
+      <a href="#" onclick="showTab('seasons')" id="nav-seasons">🏆 시즌</a>
       <a href="#" onclick="showTab('analytics')" id="nav-analytics">📈 분석</a>
       <a href="#" onclick="showTab('attendance')" id="nav-attendance">📅 출결</a>
       <a href="#" onclick="showTab('data')" id="nav-data">💾 데이터/시트</a>
@@ -275,6 +276,17 @@
           <button class="btn btn-sec btn-sm" onclick="downloadCsv('attendance')">📅 오늘 출결 CSV</button>
         </div>
         <div id="students-db-area"></div>
+      </div>
+    </div>
+
+    <div id="tab-seasons" style="display:none">
+      <div class="panel">
+        <h3>🏆 시즌 관리 <button class="btn btn-ghost btn-sm" onclick="loadSeason()">🔄 새로고침</button></h3>
+        <div id="seasons-area"><div class="empty">불러오는 중...</div></div>
+      </div>
+      <div class="panel" style="margin-top:16px">
+        <h3>📜 역대 시즌</h3>
+        <div id="seasons-history-area"></div>
       </div>
     </div>
 
@@ -607,13 +619,14 @@ async function showRoomShareModal(code) {
 let currentTab = 'dash';
 function showTab(t) {
   currentTab = t;
-  ['dash','students','analytics','attendance','data'].forEach(k => {
+  ['dash','students','seasons','analytics','attendance','data'].forEach(k => {
     document.getElementById('tab-'+k).style.display = k === t ? 'block' : 'none';
     const nav = document.getElementById('nav-'+k);
     if (nav) nav.style.color = k === t ? 'var(--pri)' : 'var(--txt2)';
   });
   if (t === 'students') loadStudentsDb();
   if (t === 'data') loadSheetsConfig();
+  if (t === 'seasons') loadSeason();
   if (t === 'analytics') loadAnalytics();
   if (t === 'attendance') { const m = document.getElementById('att-month'); if (m && !m.value) { const d=new Date(); m.value=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; } loadAttendance(); }
 }
@@ -1127,6 +1140,280 @@ async function savePresetFromModal() {
 }
 
 // 교실 코드 + URL 복사
+
+// ==================== 시즌제 — 교사 ====================
+const TIER_LABEL = { master:'🥇 마스터', diamond:'💎 다이아', gold:'🏅 골드', silver:'🥈 실버', bronze:'🥉 브론즈' };
+const TIER_COLOR = { master:'#fbbf24', diamond:'#06b6d4', gold:'#f59e0b', silver:'#94a3b8', bronze:'#a16207' };
+const STATE_LABEL = { 'no-season':'시즌 없음', upcoming:'⏳ 예정', active:'✅ 진행 중', paused:'⏸ 일시정지', ended:'🏁 종료' };
+const DAY_LABEL = ['일','월','화','수','목','금','토'];
+
+function fmtDateTime(ms) {
+  if (!ms) return '-';
+  const d = new Date(ms);
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')+' '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');
+}
+function toLocalInput(ms) {
+  if (!ms) return '';
+  const d = new Date(ms);
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')+'T'+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');
+}
+function parseLocalInput(v) {
+  if (!v) return null;
+  const d = new Date(v);
+  return isNaN(d.getTime()) ? null : d.getTime();
+}
+
+async function loadSeason() {
+  const r = await teacherApi('/api/season');
+  const el = document.getElementById('seasons-area');
+  if (r.error) { el.innerHTML = '<div class="empty">' + _h(r.error) + '</div>'; return; }
+  if (r.state === 'no-season') {
+    el.innerHTML = renderSeasonStartForm();
+  } else {
+    el.innerHTML = renderActiveSeasonPanel(r);
+    setTimeout(loadSeasonLeaderboard, 50);
+  }
+  // 역대 시즌
+  const hr = await teacherApi('/api/season/history');
+  const hel = document.getElementById('seasons-history-area');
+  const list = hr.history || [];
+  if (!list.length) { hel.innerHTML = '<div class="empty">아직 종료된 시즌이 없어요</div>'; return; }
+  hel.innerHTML = '<table><thead><tr><th>이름</th><th>테마</th><th>기간</th><th>참여</th><th>챔피언</th><th>상세</th></tr></thead><tbody>'
+    + list.map(h => '<tr>'
+      + '<td><b>' + _h(h.name) + '</b></td>'
+      + '<td>' + _h(h.theme || '-') + '</td>'
+      + '<td style="font-size:.82rem;color:var(--txt2)">' + fmtDateTime(h.startsAt) + ' ~<br>' + fmtDateTime(h.endedAt) + '</td>'
+      + '<td>' + (h.totalParticipants || 0) + '명</td>'
+      + '<td>' + (h.champions || []).slice(0,3).map((c,i) => ['🥇','🥈','🥉'][i] + ' ' + _h(c.name)).join('<br>') + '</td>'
+      + '<td><button class="btn btn-ghost btn-sm" onclick="showSeasonDetail(\''+h.id+'\')">📊 보기</button></td>'
+      + '</tr>').join('') + '</tbody></table>';
+}
+
+function renderSeasonStartForm() {
+  // 기본값: 지금 + 4주
+  const now = Date.now();
+  const startDefault = toLocalInput(now);
+  const endDefault = toLocalInput(now + 4 * 7 * 24 * 3600 * 1000);
+  return ''
+    + '<div style="background:var(--bg);padding:16px;border-radius:10px;border:1px dashed var(--bg3);margin-bottom:14px">'
+    + '<p style="color:var(--txt2);line-height:1.6;margin-bottom:8px">현재 진행 중인 시즌이 없습니다.<br>새 시즌을 시작하면 학생들의 게임 점수가 별도로 누적되어 종료 시 자동으로 랭크가 매겨집니다.</p>'
+    + '<div style="font-size:.85rem;color:var(--txt2)">시즌 외 시간에는 학생들이 <b style="color:var(--acc)">연습 모드</b>로 게임 가능 (점수 기록 X).</div>'
+    + '</div>'
+    + '<h4 style="margin:14px 0 10px">🆕 새 시즌 시작</h4>'
+    + '<div class="grid" style="display:grid;grid-template-columns:1fr 1fr;gap:12px">'
+      + '<div><label>시즌 이름</label><input id="ss-name" type="text" placeholder="예: 시즌 1 — 유효숫자 정복" maxlength="30" style="width:100%"></div>'
+      + '<div><label>테마/단원 (선택)</label><input id="ss-theme" type="text" placeholder="예: 유효숫자 기초" maxlength="50" style="width:100%"></div>'
+      + '<div><label>시작 일시 *</label><input id="ss-starts" type="datetime-local" value="'+startDefault+'" style="width:100%"></div>'
+      + '<div><label>종료 일시 *</label><input id="ss-ends" type="datetime-local" value="'+endDefault+'" style="width:100%"></div>'
+    + '</div>'
+    + '<div style="margin-top:14px">'
+      + '<label style="font-size:.88rem;color:var(--txt2);margin-bottom:6px;display:block">🗓 활성 요일 (체크 안 하면 모든 요일 활성)</label>'
+      + '<div style="display:flex;gap:6px;flex-wrap:wrap">'
+        + [0,1,2,3,4,5,6].map(d => '<label style="display:inline-flex;align-items:center;gap:4px;background:var(--bg);padding:6px 12px;border-radius:8px;border:1px solid var(--bg3);cursor:pointer"><input type="checkbox" class="ss-day" value="'+d+'" '+([1,2,3,4,5].includes(d)?'checked':'')+'> '+DAY_LABEL[d]+'</label>').join('')
+      + '</div>'
+    + '</div>'
+    + '<div class="grid" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:14px">'
+      + '<div><label>활성 시작 시간 (선택)</label><input id="ss-daily-start" type="time" value="" placeholder="09:00" style="width:100%"></div>'
+      + '<div><label>활성 종료 시간 (선택)</label><input id="ss-daily-end" type="time" value="" placeholder="17:00" style="width:100%"></div>'
+    + '</div>'
+    + '<div style="font-size:.82rem;color:var(--txt2);margin-top:6px">💡 시간대를 비워두면 종일 활성</div>'
+    + '<div style="margin-top:18px;display:flex;gap:8px;justify-content:flex-end">'
+      + '<button class="btn btn-pri btn-lg" onclick="startSeason()">🚀 시즌 시작</button>'
+    + '</div>';
+}
+
+function renderActiveSeasonPanel(r) {
+  const c = r.season;
+  const tierBars = ['master','diamond','gold','silver','bronze'].map(t => '<span style="display:inline-block;padding:2px 10px;border-radius:99px;background:'+TIER_COLOR[t]+';color:#000;font-size:.78rem;font-weight:700;margin-right:4px">'+TIER_LABEL[t]+'</span>').join('');
+  let pauseInfo = '';
+  if (r.state === 'paused') {
+    if (c.manualPaused) pauseInfo = '<div class="badge no" style="margin-left:6px">⏸ 수동 일시정지 중</div>';
+    else if (c.scheduledPause && Date.now() >= c.scheduledPause.from && Date.now() < c.scheduledPause.to) pauseInfo = '<div class="badge no" style="margin-left:6px">⏸ 예약 정지 중 (~ '+fmtDateTime(c.scheduledPause.to)+')</div>';
+    else pauseInfo = '<div class="badge no" style="margin-left:6px">⏸ 시간 외 (요일/시간대 제한)</div>';
+  }
+  return ''
+    + '<div style="background:linear-gradient(135deg,rgba(99,102,241,.1),rgba(245,158,11,.1));padding:18px;border-radius:12px;border:1px solid var(--pri);margin-bottom:14px">'
+      + '<div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px">'
+        + '<div>'
+          + '<h2 style="margin:0;color:var(--acc)">🏆 ' + _h(c.name) + ' <span class="badge ' + (r.state==='active'?'ok':r.state==='paused'?'no':'acc') + '">' + STATE_LABEL[r.state] + '</span>' + pauseInfo + '</h2>'
+          + (c.theme ? '<div style="color:var(--txt2);margin-top:4px">📚 테마: ' + _h(c.theme) + '</div>' : '')
+          + '<div style="color:var(--txt2);font-size:.88rem;margin-top:8px">⏰ ' + fmtDateTime(c.startsAt) + ' ~ ' + fmtDateTime(c.endsAt) + '</div>'
+          + (c.activeDays?.length ? '<div style="color:var(--txt2);font-size:.85rem;margin-top:4px">🗓 ' + c.activeDays.map(d => DAY_LABEL[d]).join('·') + '요일</div>' : '')
+          + (c.dailyStart ? '<div style="color:var(--txt2);font-size:.85rem;margin-top:4px">⏱ ' + c.dailyStart + ' ~ ' + c.dailyEnd + '</div>' : '')
+        + '</div>'
+        + '<div style="display:flex;gap:6px;flex-wrap:wrap">'
+          + '<button class="btn ' + (c.manualPaused ? 'btn-sec' : 'btn-acc') + ' btn-sm" onclick="toggleSeasonPause()">' + (c.manualPaused ? '▶ 재개' : '⏸ 일시정지') + '</button>'
+          + '<button class="btn btn-ghost btn-sm" onclick="showSchedulePauseModal()">📅 예약 정지</button>'
+          + '<button class="btn btn-ghost btn-sm" onclick="showEditSeasonModal()">✏️ 일정 수정</button>'
+          + '<button class="btn btn-err btn-sm" onclick="endSeasonNow()">🏁 즉시 종료</button>'
+        + '</div>'
+      + '</div>'
+      + '<div style="font-size:.82rem;color:var(--txt2);margin-top:10px">랭크 부여 (종료 시 자동): ' + tierBars + '</div>'
+    + '</div>'
+    + '<h4 style="margin:14px 0 8px">📊 현재 시즌 점수판 <button class="btn btn-ghost btn-sm" style="margin-left:6px" onclick="resetSeasonLB()">🔄 점수판 초기화</button></h4>'
+    + '<div id="season-lb-area"><div class="empty">불러오는 중...</div></div>';
+}
+
+async function loadSeasonLeaderboard() {
+  const r = await teacherApi('/api/season/leaderboard');
+  const el = document.getElementById('season-lb-area');
+  if (!el) return;
+  if (r.error) { el.innerHTML = '<div class="empty">' + _h(r.error) + '</div>'; return; }
+  const list = r.entries || [];
+  if (!list.length) { el.innerHTML = '<div class="empty">아직 게임 기록이 없어요. 학생들이 게임을 진행하면 자동으로 누적됩니다.</div>'; return; }
+  el.innerHTML = '<table><thead><tr><th>순위</th><th>학생</th><th>누적 점수</th><th>게임 수</th><th>정답률</th><th>최대 콤보</th></tr></thead><tbody>'
+    + list.map((e, i) => {
+      const acc = e.totalTotal > 0 ? Math.round(e.correctTotal/e.totalTotal*100) : 0;
+      const medal = ['🥇','🥈','🥉'][i] || '🏅';
+      return '<tr>'
+        + '<td><b>' + medal + ' ' + (i+1) + '위</b></td>'
+        + '<td><b>' + _h(e.name) + '</b> <span style="color:var(--txt2);font-size:.78rem">' + _h(e.studentId) + '</span></td>'
+        + '<td style="color:var(--acc);font-weight:800">' + (e.score||0).toLocaleString() + '점</td>'
+        + '<td>' + (e.gamesPlayed||0) + '</td>'
+        + '<td>' + acc + '%</td>'
+        + '<td>' + (e.maxStreak||0) + '회</td>'
+        + '</tr>';
+    }).join('') + '</tbody></table>';
+}
+
+// (시즌 점수판은 loadSeason 내부에서 직접 호출하도록 변경)
+
+async function startSeason() {
+  const name = document.getElementById('ss-name').value.trim();
+  const theme = document.getElementById('ss-theme').value.trim();
+  const startsAt = parseLocalInput(document.getElementById('ss-starts').value);
+  const endsAt = parseLocalInput(document.getElementById('ss-ends').value);
+  if (!name) { toast('시즌 이름을 입력하세요', 'warn'); return; }
+  if (!startsAt || !endsAt) { toast('시작/종료 일시를 입력하세요', 'warn'); return; }
+  if (startsAt >= endsAt) { toast('종료가 시작보다 빠릅니다', 'err'); return; }
+  const activeDays = Array.from(document.querySelectorAll('.ss-day:checked')).map(c => parseInt(c.value));
+  const dailyStart = document.getElementById('ss-daily-start').value || null;
+  const dailyEnd = document.getElementById('ss-daily-end').value || null;
+  if ((dailyStart && !dailyEnd) || (!dailyStart && dailyEnd)) { toast('활성 시간대 시작/종료 모두 입력하세요', 'warn'); return; }
+  const r = await teacherApi('/api/teacher/season/start', { method:'POST', body: { name, theme, startsAt, endsAt, activeDays, dailyStart, dailyEnd } });
+  if (r.error) { toast(r.error, 'err'); return; }
+  toast('시즌 "' + name + '" 시작!', 'ok');
+  loadSeason();
+}
+
+async function toggleSeasonPause() {
+  const r = await teacherApi('/api/teacher/season/pause-toggle', { method:'POST' });
+  if (r.error) { toast(r.error, 'err'); return; }
+  toast(r.manualPaused ? '⏸ 시즌 일시정지' : '▶ 시즌 재개', 'ok');
+  loadSeason();
+}
+
+async function endSeasonNow() {
+  if (!await confirmDialog('시즌을 즉시 종료하고 랭크를 산출할까요?\n현재 점수판이 역대 시즌 이력으로 보관됩니다.', { danger: true })) return;
+  const r = await teacherApi('/api/teacher/season/end-now', { method:'POST' });
+  if (r.error) { toast(r.error, 'err'); return; }
+  toast('🏁 시즌 종료 — 챔피언: ' + (r.archived.champions[0]?.name || '없음'), 'ok', 5000);
+  loadSeason();
+}
+
+async function resetSeasonLB() {
+  if (!await confirmDialog('현재 시즌 점수판을 모두 초기화할까요?\n시즌 자체는 유지되지만 모든 학생 누적이 0으로 돌아갑니다.', { danger: true })) return;
+  const r = await teacherApi('/api/teacher/season/reset-leaderboard', { method:'POST' });
+  if (r.error) { toast(r.error, 'err'); return; }
+  toast(r.removed + '건 초기화됨', 'ok');
+  loadSeason();
+}
+
+async function showSchedulePauseModal() {
+  const r = await teacherApi('/api/season');
+  const c = r.season;
+  if (!c) return;
+  const wrap = document.createElement('div');
+  const sched = c.scheduledPause;
+  wrap.innerHTML = '<div style="line-height:1.6;color:var(--txt2);margin-bottom:12px">시즌 진행 중 특정 기간 동안 게임 점수 기록을 자동 정지시킵니다 (예: 시험기간).</div>'
+    + '<div class="grid" style="display:grid;grid-template-columns:1fr 1fr;gap:10px">'
+      + '<div><label>정지 시작</label><input type="datetime-local" class="sp-from" value="' + (sched ? toLocalInput(sched.from) : '') + '" style="width:100%"></div>'
+      + '<div><label>정지 종료</label><input type="datetime-local" class="sp-to" value="' + (sched ? toLocalInput(sched.to) : '') + '" style="width:100%"></div>'
+    + '</div>'
+    + '<div style="font-size:.82rem;color:var(--txt2);margin-top:8px">💡 시즌 기간(' + fmtDateTime(c.startsAt) + ' ~ ' + fmtDateTime(c.endsAt) + ') 안에서만 설정 가능</div>';
+  const v = await modal({
+    title: '📅 예약 일시정지', body: wrap, wide: true,
+    actions: [
+      { label: '🗑 예약 해제', value: 'clear', kind: 'err' },
+      { label: '취소', value: null, kind: 'ghost' },
+      { label: '✅ 저장', value: 'save', kind: 'pri' },
+    ],
+  });
+  if (v === 'clear') {
+    const r2 = await teacherApi('/api/teacher/season/schedule-pause', { method:'POST', body: { clear: true } });
+    if (r2.error) toast(r2.error, 'err'); else toast('예약 정지 해제됨', 'ok');
+    loadSeason();
+  } else if (v === 'save') {
+    const from = parseLocalInput(wrap.querySelector('.sp-from').value);
+    const to = parseLocalInput(wrap.querySelector('.sp-to').value);
+    if (!from || !to || from >= to) { toast('시간 범위를 확인하세요', 'err'); return; }
+    const r2 = await teacherApi('/api/teacher/season/schedule-pause', { method:'POST', body: { from, to } });
+    if (r2.error) toast(r2.error, 'err'); else toast('예약 정지 설정됨 (' + fmtDateTime(from) + ' ~ ' + fmtDateTime(to) + ')', 'ok', 5000);
+    loadSeason();
+  }
+}
+
+async function showEditSeasonModal() {
+  const r = await teacherApi('/api/season');
+  const c = r.season;
+  if (!c) return;
+  const wrap = document.createElement('div');
+  wrap.innerHTML = '<div class="grid" style="display:grid;grid-template-columns:1fr 1fr;gap:10px">'
+    + '<div><label>이름</label><input class="ed-name" type="text" value="' + _h(c.name) + '" maxlength="30" style="width:100%"></div>'
+    + '<div><label>테마</label><input class="ed-theme" type="text" value="' + _h(c.theme||'') + '" maxlength="50" style="width:100%"></div>'
+    + '<div><label>시작 일시</label><input class="ed-starts" type="datetime-local" value="' + toLocalInput(c.startsAt) + '" style="width:100%"></div>'
+    + '<div><label>종료 일시</label><input class="ed-ends" type="datetime-local" value="' + toLocalInput(c.endsAt) + '" style="width:100%"></div>'
+    + '<div><label>활성 시작 시간</label><input class="ed-dstart" type="time" value="' + (c.dailyStart||'') + '" style="width:100%"></div>'
+    + '<div><label>활성 종료 시간</label><input class="ed-dend" type="time" value="' + (c.dailyEnd||'') + '" style="width:100%"></div>'
+    + '</div>'
+    + '<div style="margin-top:14px"><label style="display:block;margin-bottom:6px">활성 요일</label>'
+    + '<div style="display:flex;gap:6px;flex-wrap:wrap">'
+    + [0,1,2,3,4,5,6].map(d => '<label style="display:inline-flex;align-items:center;gap:4px;background:var(--bg);padding:6px 12px;border-radius:8px;border:1px solid var(--bg3);cursor:pointer"><input type="checkbox" class="ed-day" value="'+d+'" '+((c.activeDays||[]).includes(d)?'checked':'')+'> '+DAY_LABEL[d]+'</label>').join('')
+    + '</div></div>';
+  const v = await modal({ title: '✏️ 시즌 일정 수정', body: wrap, wide: true,
+    actions: [{label:'취소',value:null,kind:'ghost'},{label:'✅ 저장',value:'save',kind:'pri'}],
+  });
+  if (v !== 'save') return;
+  const body = {
+    name: wrap.querySelector('.ed-name').value.trim(),
+    theme: wrap.querySelector('.ed-theme').value.trim(),
+    startsAt: parseLocalInput(wrap.querySelector('.ed-starts').value),
+    endsAt: parseLocalInput(wrap.querySelector('.ed-ends').value),
+    activeDays: Array.from(wrap.querySelectorAll('.ed-day:checked')).map(c => parseInt(c.value)),
+    dailyStart: wrap.querySelector('.ed-dstart').value || null,
+    dailyEnd: wrap.querySelector('.ed-dend').value || null,
+  };
+  const r2 = await teacherApi('/api/teacher/season/edit', { method:'POST', body });
+  if (r2.error) toast(r2.error, 'err'); else toast('시즌 일정 수정됨', 'ok');
+  loadSeason();
+}
+
+async function showSeasonDetail(id) {
+  const r = await teacherApi('/api/season/history/detail?id=' + encodeURIComponent(id));
+  if (r.error) { toast(r.error, 'err'); return; }
+  const h = r.season;
+  const wrap = document.createElement('div');
+  const lb = (h.finalLeaderboard || []).slice(0, 30);
+  wrap.innerHTML = '<div style="margin-bottom:12px;color:var(--txt2);font-size:.88rem">'
+    + '⏰ ' + fmtDateTime(h.startsAt) + ' ~ ' + fmtDateTime(h.endedAt) + ' · 참여 ' + (h.totalParticipants || 0) + '명'
+    + (h.theme ? ' · 📚 ' + _h(h.theme) : '')
+    + '</div>'
+    + '<table><thead><tr><th>순위</th><th>티어</th><th>학생</th><th>점수</th><th>게임</th><th>정답률</th></tr></thead><tbody>'
+    + lb.map((e, i) => {
+      const acc = e.totalTotal > 0 ? Math.round(e.correctTotal/e.totalTotal*100) : 0;
+      return '<tr><td><b>' + (i+1) + '위</b></td>'
+        + '<td><span style="display:inline-block;padding:2px 10px;border-radius:99px;background:' + TIER_COLOR[e.tier] + ';color:#000;font-size:.78rem;font-weight:700">' + TIER_LABEL[e.tier] + '</span></td>'
+        + '<td><b>' + _h(e.name) + '</b></td>'
+        + '<td style="color:var(--acc);font-weight:800">' + (e.score||0).toLocaleString() + '</td>'
+        + '<td>' + (e.gamesPlayed||0) + '</td>'
+        + '<td>' + acc + '%</td>'
+        + '</tr>';
+    }).join('') + '</tbody></table>';
+  await modal({ title: '📊 ' + h.name + ' — 최종 결과', body: wrap, wide: true,
+    actions: [{label:'닫기',value:null,kind:'ghost'}] });
+}
+
+
 function shareClassroom() {
   const code = (document.getElementById('brand-cls')?.textContent || '').match(/\(([^)]+)\)/)?.[1] || '';
   const url = location.origin + '/';

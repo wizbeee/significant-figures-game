@@ -47,6 +47,7 @@
   <div class="brand">🏆 유효숫자 마스터 점수판</div>
   <div class="nav-links">
     <a href="/">🏠 로비</a>
+    <a href="#" onclick="showSeasonLb();return false">🏆 시즌 점수판</a>
     <a href="#" onclick="load()">🔄 새로고침</a>
   </div>
   <div class="user-box"></div>
@@ -417,6 +418,30 @@ function switchTab(type) {
 document.getElementById('flt-gm').addEventListener('change', render);
 document.getElementById('flt-diff').addEventListener('change', render);
 document.getElementById('flt-cls').addEventListener('change', render);
+async function showSeasonLb() {
+  const cls = document.getElementById('flt-cls')?.value || 'all';
+  if (cls === 'all') { toast('교실 필터에서 특정 교실을 먼저 선택하세요', 'warn'); return; }
+  const r = await fetch('/api/season?classroomCode=' + encodeURIComponent(cls)).then(r=>r.json()).catch(()=>null);
+  const lb = await fetch('/api/season/leaderboard?classroomCode=' + encodeURIComponent(cls)).then(r=>r.json()).catch(()=>null);
+  if (!r || r.state === 'no-season') { toast('해당 교실에 진행 중인 시즌이 없습니다', 'info'); return; }
+  const list = (lb?.entries || []).slice(0, 50);
+  let html = '<div style="margin-bottom:12px;padding:12px;background:linear-gradient(135deg,rgba(99,102,241,.1),rgba(245,158,11,.1));border-radius:10px;border:1px solid var(--pri)">'
+    + '<b style="color:var(--acc)">🏆 ' + _h(r.season.name) + '</b>'
+    + (r.season.theme ? ' · 📚 ' + _h(r.season.theme) : '')
+    + '</div>';
+  if (!list.length) html += '<div class="empty">아직 기록이 없어요</div>';
+  else html += '<table style="width:100%"><thead><tr><th>순위</th><th>학생</th><th>누적 점수</th><th>게임</th><th>정답률</th></tr></thead><tbody>'
+    + list.map((e, i) => {
+      const acc = e.totalTotal > 0 ? Math.round(e.correctTotal/e.totalTotal*100) : 0;
+      return '<tr><td><b>' + (['🥇','🥈','🥉'][i] || '🏅') + ' ' + (i+1) + '</b></td>'
+        + '<td><b>' + _h(e.name) + '</b></td>'
+        + '<td style="color:var(--acc);font-weight:800">' + (e.score||0).toLocaleString() + '점</td>'
+        + '<td>' + (e.gamesPlayed||0) + '</td>'
+        + '<td>' + acc + '%</td>'
+        + '</tr>';
+    }).join('') + '</tbody></table>';
+  modal({ title: '🏆 시즌 점수판', body: html, wide: true, actions: [{label:'닫기',value:null,kind:'ghost'}] });
+}
 loadClassroomOptions();
 load();
 setInterval(() => { if (editingIdx === -1 && selected.size === 0) load(); }, 5000);

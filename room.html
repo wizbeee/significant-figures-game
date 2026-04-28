@@ -189,6 +189,11 @@ function comboLabel(streak) {
   return '';
 }
 function renderHeader() {
+  // 시즌 배지 — 비동기 로드된 결과를 캐싱
+  if (S.seasonState === undefined) {
+    S.seasonState = null;
+    fetch('/api/season').then(r=>r.json()).then(r => { S.seasonState = r; }).catch(()=>{});
+  }
   const s = S.state;
   const typeEmo = { single:'🎯', multi:'👥', battle:'⚔️' }[s.type];
   const multiLbl = { class:'학급협동', team:'조별협동', individual:'개인별' }[s.config.multiMode || 'class'];
@@ -218,6 +223,8 @@ function renderHeader() {
       ${classHtml}
       ${teamHtml}
       ${timedHtml}
+      ${S.seasonState && S.seasonState.state && S.seasonState.state !== 'no-season' && S.seasonState.state !== 'active' ? '<span class="badge acc" style="font-size:.78rem" title="현재 시즌 비활성 — 연습 모드 (점수 시즌 기록 안 됨)">🏆 연습</span>' : ''}
+      ${S.seasonState && S.seasonState.state === 'active' && S.seasonState.season ? '<span class="badge ok" style="font-size:.78rem" title="시즌 진행 중 — 점수 누적">🏆 ' + (S.seasonState.season.name || '시즌') + '</span>' : ''}
     </div>
     <div class="info">
       ${s.phase === 'question' ? `<div class="timer-display ${remaining<=5?'urgent':''}">${remaining}초</div>` : ''}
