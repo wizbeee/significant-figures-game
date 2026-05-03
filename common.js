@@ -127,6 +127,51 @@ function drawInst(cv, m) {
   else drawTherm(ctx, w, h, m);
 }
 
+// ==================== Render 슬립 warm-up (#22) ====================
+// 5분마다 헬스 체크 ping — Render free 슬립 방지 + 백그라운드 시 일시 중단
+let _wakeUpTimer = null;
+function startWarmUpPing() {
+  if (_wakeUpTimer) clearInterval(_wakeUpTimer);
+  _wakeUpTimer = setInterval(() => {
+    if (document.hidden) return;
+    fetch('/api/health', { method: 'GET' }).catch(() => {});
+  }, 5 * 60 * 1000);
+}
+if (typeof document !== 'undefined') {
+  document.addEventListener('DOMContentLoaded', () => {
+    startWarmUpPing();
+    // 버전 푸터 자동 삽입 (#73)
+    setTimeout(async () => {
+      const v = await checkVersionMismatch();
+      if (v && !document.getElementById('app-version-footer')) {
+        const f = document.createElement('div');
+        f.id = 'app-version-footer';
+        f.style.cssText = 'position:fixed;bottom:6px;right:8px;font-size:.7rem;color:rgba(148,163,184,.4);pointer-events:none;z-index:1;font-family:monospace';
+        f.textContent = 'v' + v;
+        document.body.appendChild(f);
+      }
+    }, 800);
+  });
+}
+
+// 클라이언트가 알고 있는 버전 (#73) — 서버 버전과 다르면 사용자에게 갱신 안내
+async function checkVersionMismatch() {
+  try {
+    const r = await fetch('/api/version').then(r => r.json());
+    const known = localStorage.getItem('sigfig-version-seen');
+    if (known && r.version && r.version !== 'dev' && known !== r.version) {
+      // 새 버전이 배포됐음 — toast 안내 (toast가 정의된 후 호출됨)
+      setTimeout(() => {
+        if (typeof toast === 'function') {
+          toast('🔄 새 버전이 배포되었어요 — 페이지 새로고침을 권장합니다 (' + r.version + ')', 'info', 8000);
+        }
+      }, 1000);
+    }
+    if (r.version) localStorage.setItem('sigfig-version-seen', r.version);
+    return r.version;
+  } catch (_) { return null; }
+}
+
 // ==================== API 헬퍼 (네트워크 오류 자동 재시도 + 오프라인 표시) ====================
 let _onlineState = true;
 function _setOnline(ok) {

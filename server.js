@@ -2,9 +2,9 @@
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
-const url = require('url');
 const os = require('os');
 const crypto = require('crypto');
+const zlib = require('zlib');  // #15 gzip/brotli 압축
 
 const PORT = parseInt(process.env.PORT) || 8093;
 const ROOT = __dirname;
@@ -24,6 +24,31 @@ const LEGACY_CONFIG_FILE = path.join(DATA_DIR, 'config.json');
 const DEFAULT_CLASSROOM = 'default';
 const STUDENT_TOKEN_TTL_MS = 1000 * 60 * 60 * 6;   // 6시간 — 정규수업 한 차시 + 여유
 const TEACHER_TOKEN_TTL_MS = 1000 * 60 * 60 * 12;  // 12시간
+
+// ==================== 버전 (#73) ====================
+const APP_VERSION = (() => {
+  try { return fs.readFileSync(path.join(ROOT, '.version'), 'utf8').trim(); } catch (_) {}
+  try { return require('child_process').execSync('git rev-parse --short HEAD', { cwd: ROOT, stdio: ['ignore','pipe','ignore'] }).toString().trim(); } catch (_) {}
+  return 'dev';
+})();
+const APP_STARTED_AT = Date.now();
+
+// ==================== 로그 timestamp (#71) ====================
+// 환경변수 LOG_FILE 이 설정되면 그 경로로도 일별 로테이션 출력
+const _origLog = console.log.bind(console);
+const _origErr = console.error.bind(console);
+const LOG_FILE_BASE = process.env.LOG_FILE || null;
+function _logWithTs(method, args) {
+  const ts = '[' + new Date().toISOString() + ']';
+  method(ts, ...args);
+  if (LOG_FILE_BASE) {
+    const day = new Date().toISOString().slice(0, 10);
+    const f = LOG_FILE_BASE + '.' + day + '.log';
+    try { fs.appendFile(f, ts + ' ' + args.map(a => typeof a === 'string' ? a : JSON.stringify(a)).join(' ') + '\n', () => {}); } catch (_) {}
+  }
+}
+console.log = (...a) => _logWithTs(_origLog, a);
+console.error = (...a) => _logWithTs(_origErr, a);
 
 // ==================== 영구 데이터 ====================
 function safeLoad(file, def) {
@@ -61,12 +86,25 @@ function verifyPw(pw, stored) {
 function sanitizeStr(v, max = 50) {
   return [...String(v || '')].filter(c => { const code = c.charCodeAt(0); return code >= 32 && code !== 127; }).join('').trim().slice(0, max);
 }
-// 차단어 (서버측 — 클라이언트 우회 대비)
-const BAD_WORDS = ['시발','씨발','병신','개새','존나','좆','꺼져','지랄','새끼','fuck','shit','bitch','asshole','damn'];
+// 차단어 (서버측 — 클라이언트 우회 대비) #3
+const BAD_WORDS = [
+  '시발','씨발','병신','개새','존나','좆','꺼져','지랄','새끼','시바','씨바','개년','개놈','짱깨','쪽바리','니애미','느금마','느그애미','느그엄마',
+  'fuck','shit','bitch','asshole','damn','dick','pussy','cunt','nigger','retard','faggot'
+];
+const LEET_MAP = { '1':'i','0':'o','3':'e','4':'a','5':'s','7':'t','!':'i' };
+LEET_MAP[String.fromCharCode(36)] = 's';   // dollar
+LEET_MAP[String.fromCharCode(64)] = 'a';   // at
+function normalizeForBadWord(t) {
+  if (!t) return '';
+  let r = String(t).normalize('NFC').toLowerCase();
+  r = r.split('').map(c => LEET_MAP[c] || c).join('');
+  r = r.replace(/[\s_\-.,;:'"()\[\]{}]/g, '');
+  return r;
+}
 function hasBadWord(s) {
   if (!s) return false;
-  const t = String(s).toLowerCase().replace(/\s/g,'');
-  return BAD_WORDS.some(w => t.includes(w));
+  const t = normalizeForBadWord(s);
+  return BAD_WORDS.some(w => t.includes(normalizeForBadWord(w)));
 }
 
 // 교실 정의: { [code]: { code, name, passwordHash, createdAt, config: { autoApproveRooms, sheetsUrl } } }
@@ -357,6 +395,31 @@ function scheduleBackups() {
 }
 scheduleBackups();
 
+// ==================== Audit Log (#7) ====================
+// 보안 관련 이벤트만 — 일별 로테이션 (audit.YYYY-MM-DD.log)
+function audit(req, kind, payload) {
+  try {
+    const ip = (req.headers['x-forwarded-for'] || req.socket?.remoteAddress || '?').toString().split(',')[0].trim();
+    const ua = (req.headers['user-agent'] || '').slice(0, 100);
+    const line = JSON.stringify({ ts: new Date().toISOString(), kind, ip, ua, ...(payload || {}) }) + '\n';
+    const day = todayKey();
+    const file = path.join(DATA_DIR, 'audit.' + day + '.log');
+    fs.appendFile(file, line, () => {});
+  } catch (e) { /* swallow */ }
+}
+// 90일 이상 된 audit log 자동 청소
+setInterval(() => {
+  try {
+    const files = fs.readdirSync(DATA_DIR).filter(n => n.startsWith('audit.') && n.endsWith('.log'));
+    const now = Date.now();
+    for (const f of files) {
+      const m = f.match(/^audit\.(\d{4}-\d{2}-\d{2})\.log$/);
+      if (!m) continue;
+      const t = new Date(m[1]).getTime();
+      if (!isNaN(t) && now - t > 90 * 86400_000) try { fs.unlinkSync(path.join(DATA_DIR, f)); } catch (_) {}
+    }
+  } catch (e) {}
+}, 1000 * 60 * 60 * 6);
 
 // 교실별 접근 헬퍼 — 없으면 자동 생성
 function clsroom(code) { return classrooms[code]; }
@@ -1155,11 +1218,37 @@ function genCode() {
 const tok = () => crypto.randomBytes(16).toString('hex');
 const pid = () => crypto.randomBytes(5).toString('hex');
 
+// CORS allowed origins — 환경변수 CORS_ORIGIN 으로 화이트리스트 지정 가능 (#2)
+const CORS_ORIGIN = process.env.CORS_ORIGIN || '*';
+// #15 응답 압축 — accept-encoding 보고 gzip/br 선택
+function maybeCompress(req, res, body, baseHeaders) {
+  const acceptEnc = String(req.headers['accept-encoding'] || '');
+  // 1KB 미만은 압축 손해 — 그대로 전송
+  if (body.length < 1024) {
+    res.writeHead(baseHeaders.status || 200, { ...baseHeaders, headers: undefined });
+    res.end(body);
+    return;
+  }
+  let encoded, encoding;
+  if (acceptEnc.includes('br')) { encoded = zlib.brotliCompressSync(body, { params: { [zlib.constants.BROTLI_PARAM_QUALITY]: 4 } }); encoding = 'br'; }
+  else if (acceptEnc.includes('gzip')) { encoded = zlib.gzipSync(body, { level: 6 }); encoding = 'gzip'; }
+  else { encoded = body; encoding = null; }
+  const status = baseHeaders.status || 200;
+  const headers = { ...baseHeaders };
+  delete headers.status;
+  if (encoding) { headers['Content-Encoding'] = encoding; headers['Vary'] = (headers['Vary'] ? headers['Vary'] + ', ' : '') + 'Accept-Encoding'; }
+  res.writeHead(status, headers);
+  res.end(encoded);
+}
+
 function sendJSON(res, obj, status = 200) {
+  // 호출부 호환을 위해 req 미사용 — 기본은 압축 없음
   res.writeHead(status, {
     'Content-Type': 'application/json; charset=utf-8',
     'Cache-Control': 'no-store',
-    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Origin': CORS_ORIGIN,
+    'Vary': 'Origin',
+    'X-Content-Type-Options': 'nosniff',
   });
   res.end(JSON.stringify(obj));
 }
@@ -1602,9 +1691,12 @@ function finalizeRoom(room) {
   if (isSeasonActive(cCode)) {
     const sd = clsSeasons(cCode);
     const winnerId = type === 'battle' ? players.slice().sort((a,b)=>b.score-a.score)[0]?.id : null;
+    // #21 — Map 기반 lookup (O(1)) 위해 1회 인덱싱
+    const lbIndex = new Map();
+    for (const e of sd.leaderboard) lbIndex.set(e.studentId, e);
     for (const p of players) {
       // 같은 학생 기존 기록 찾아 점수 누적, 없으면 신규
-      let rec = sd.leaderboard.find(e => e.studentId === p.studentId);
+      let rec = lbIndex.get(p.studentId);
       if (!rec) {
         rec = {
           seasonId: sd.current.id,
@@ -1614,6 +1706,7 @@ function finalizeRoom(room) {
           firstAt: Date.now(),
         };
         sd.leaderboard.push(rec);
+        lbIndex.set(p.studentId, rec);
       }
       rec.name = p.name;
       rec.score += p.score || 0;
@@ -2053,7 +2146,10 @@ async function handleApi(req, res, pathname, query) {
       };
       saveClassrooms();
     } else {
-      if (!verifyPw(pw, c.passwordHash)) return sendJSON(res, { error: '비밀번호 오류' }, 401);
+      if (!verifyPw(pw, c.passwordHash)) {
+        audit(req, 'teacher_login_fail', { code });
+        return sendJSON(res, { error: '비밀번호 오류' }, 401);
+      }
       // 자동 마이그레이션: 평문 sha256 → PBKDF2 (가입 후 첫 로그인에서 1회)
       if (!String(c.passwordHash).startsWith('pbkdf2$')) {
         c.passwordHash = hashPw(pw);
@@ -2063,6 +2159,7 @@ async function handleApi(req, res, pathname, query) {
     const t = tok(); teacherTokens.set(t, code);
     persistedTokens.teacher[t] = { classroomCode: code, expiresAt: Date.now() + TEACHER_TOKEN_TTL_MS };
     saveTokens();
+    audit(req, 'teacher_login_ok', { code });
     return sendJSON(res, { token: t, classroomCode: code, name: c.name, created: !c.passwordHash ? false : undefined });
   }
   if (method === 'POST' && pathname === '/api/teacher/logout') {
@@ -2206,6 +2303,7 @@ async function handleApi(req, res, pathname, query) {
     const cls = teacherClassroom(req);
     if (!cls) return sendJSON(res, { error: '교사 권한' }, 401);
     const body = await readBody(req);
+    audit(req, 'student_kick', { cls, studentId: body.studentId });
     const s = students.get(studentSessKey(cls, body.studentId));
     if (s) {
       if (s.currentRoom) { const r = rooms.get(s.currentRoom); if (r) leaveRoom(r, s); }
@@ -2231,6 +2329,7 @@ async function handleApi(req, res, pathname, query) {
     if (!cls) return sendJSON(res, { error: '교사 권한' }, 401);
     const body = await readBody(req);
     const sid = String(body.studentId || '');
+    audit(req, 'student_delete', { cls, studentId: sid });
     const sdb = clsStudents(cls);
     if (!sdb[sid]) return sendJSON(res, { error: '존재하지 않는 학생' }, 404);
     delete sdb[sid];
@@ -2249,6 +2348,7 @@ async function handleApi(req, res, pathname, query) {
     if (!cls) return sendJSON(res, { error: '교사 권한' }, 401);
     const body = await readBody(req);
     const sid = String(body.studentId || '');
+    audit(req, body.blocked ? 'student_block' : 'student_unblock', { cls, studentId: sid });
     const sdb = clsStudents(cls);
     const rec = sdb[sid];
     if (!rec) return sendJSON(res, { error: '존재하지 않는 학생' }, 404);
@@ -2602,6 +2702,15 @@ async function handleApi(req, res, pathname, query) {
     const bundle = body.bundle;
     if (!bundle || typeof bundle !== 'object') return sendJSON(res, { error: '잘못된 백업 파일' }, 400);
     if (bundle.classroomCode && bundle.classroomCode !== cls) return sendJSON(res, { error: '다른 교실 백업 (백업: ' + bundle.classroomCode + ', 현재: ' + cls + ')' }, 400);
+    // 데이터 형식 검증 — 의심스런 데이터 거부 (#8)
+    if (bundle.students && (typeof bundle.students !== 'object' || Array.isArray(bundle.students))) return sendJSON(res, { error: '학생 데이터 형식 오류' }, 400);
+    if (bundle.attendance && (typeof bundle.attendance !== 'object' || Array.isArray(bundle.attendance))) return sendJSON(res, { error: '출결 데이터 형식 오류' }, 400);
+    if (bundle.leaderboards) {
+      for (const t of ['single','multi','battle']) {
+        if (bundle.leaderboards[t] && !Array.isArray(bundle.leaderboards[t])) return sendJSON(res, { error: '점수판 ' + t + ' 형식 오류' }, 400);
+      }
+    }
+    audit(req, 'backup_restore', { lbCounts: bundle.leaderboards ? Object.keys(bundle.leaderboards).map(t => t+':'+(bundle.leaderboards[t]?.length||0)).join(',') : '' });
     let restored = { students: 0, attendance: 0, lb: 0 };
     if (bundle.students && typeof bundle.students === 'object') {
       studentsDb[cls] = bundle.students;
@@ -2837,7 +2946,40 @@ async function handleApi(req, res, pathname, query) {
 
   // ---------- 헬스체크 (Render warm-up) ----------
   if (method === 'GET' && pathname === '/api/health') {
-    return sendJSON(res, { ok: true, uptime: Math.round(process.uptime()), classrooms: Object.keys(classrooms).length, rooms: rooms.size });
+    return sendJSON(res, { ok: true, uptime: Math.round(process.uptime()), classrooms: Object.keys(classrooms).length, rooms: rooms.size, version: APP_VERSION });
+  }
+  // 버전 조회 (#73) — 클라이언트 표시용
+  if (method === 'GET' && pathname === '/api/version') {
+    return sendJSON(res, { version: APP_VERSION, startedAt: APP_STARTED_AT, now: Date.now() });
+  }
+  // 메트릭 (#72) — 운영 모니터링용
+  if (method === 'GET' && pathname === '/api/metrics') {
+    const mem = process.memoryUsage();
+    let totalLB = 0, totalSeasons = 0, totalStudents = 0, totalAttendance = 0, totalWrongs = 0;
+    for (const t of ['single','multi','battle']) totalLB += (leaderboards[t]||[]).length;
+    for (const k of Object.keys(seasonsDb||{})) {
+      totalSeasons += seasonsDb[k].current ? 1 : 0;
+      totalSeasons += (seasonsDb[k].history||[]).length;
+    }
+    for (const k of Object.keys(studentsDb||{})) totalStudents += Object.keys(studentsDb[k]||{}).length;
+    for (const k of Object.keys(attendance||{})) totalAttendance += Object.keys(attendance[k]||{}).length;
+    for (const k of Object.keys(wrongsDb||{})) for (const sid of Object.keys(wrongsDb[k]||{})) totalWrongs += (wrongsDb[k][sid]||[]).length;
+    return sendJSON(res, {
+      version: APP_VERSION,
+      uptime: Math.round(process.uptime()),
+      memory: { rss: mem.rss, heapUsed: mem.heapUsed, heapTotal: mem.heapTotal },
+      counts: {
+        classrooms: Object.keys(classrooms).length,
+        activeRooms: rooms.size,
+        onlineStudents: students.size,
+        leaderboardEntries: totalLB,
+        seasonsAll: totalSeasons,
+        studentsRegistered: totalStudents,
+        attendanceDays: totalAttendance,
+        wrongNoteEntries: totalWrongs,
+      },
+      rate: { activeBuckets: rateBuckets.size },
+    });
   }
 
 
@@ -2861,8 +3003,21 @@ function serveStatic(req, res, pathname) {
   fs.readFile(fp, (err, data) => {
     if (err) { res.writeHead(404); res.end('Not found'); return; }
     const ext = path.extname(fp).toLowerCase();
-    res.writeHead(200, { 'Content-Type': mimes[ext] || 'application/octet-stream', 'Cache-Control': 'no-cache' });
-    res.end(data);
+    const headers = {
+      'Content-Type': mimes[ext] || 'application/octet-stream',
+      'Cache-Control': ext === '.html' ? 'no-cache' : 'public, max-age=300',
+      // #1 CSP — XSS 방어 심층화
+      'Content-Security-Policy': "default-src 'self'; img-src 'self' data: https://api.qrserver.com; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self' https://script.google.com; font-src 'self' data:; frame-ancestors 'none'; base-uri 'self';",
+      'X-Content-Type-Options': 'nosniff',
+      'X-Frame-Options': 'DENY',
+      'Referrer-Policy': 'strict-origin-when-cross-origin',
+      'Permissions-Policy': 'geolocation=(), camera=(), microphone=(), payment=()',
+      'X-App-Version': APP_VERSION,
+    };
+    // #15 텍스트 자원만 압축 (이미지·폰트 등은 X)
+    const isText = /^(text\/|application\/(javascript|json|manifest\+json))/.test(headers['Content-Type']);
+    if (isText) maybeCompress(req, res, data, headers);
+    else { res.writeHead(200, headers); res.end(data); }
   });
 }
 
@@ -2870,16 +3025,26 @@ function serveStatic(req, res, pathname) {
 const server = http.createServer(async (req, res) => {
   if (req.method === 'OPTIONS') {
     res.writeHead(204, {
-      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Origin': CORS_ORIGIN,
       'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
       'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+      'Access-Control-Max-Age': '86400',
+      'Vary': 'Origin',
     });
     return res.end();
   }
-  const u = url.parse(req.url, true);
+  // #18 WHATWG URL — url.parse() deprecated 회피
+  let pathname, query;
   try {
-    if (u.pathname.startsWith('/api/')) await handleApi(req, res, u.pathname, u.query);
-    else serveStatic(req, res, u.pathname);
+    const u = new URL(req.url, 'http://localhost');
+    pathname = u.pathname;
+    query = Object.fromEntries(u.searchParams);
+  } catch (_) {
+    res.writeHead(400); res.end('Bad URL'); return;
+  }
+  try {
+    if (pathname.startsWith('/api/')) await handleApi(req, res, pathname, query);
+    else serveStatic(req, res, pathname);
   } catch (e) {
     console.error(e);
     sendJSON(res, { error: String(e.message || e) }, 500);
