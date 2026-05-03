@@ -587,7 +587,7 @@ function registerOrTouchStudent(classroomCode, studentId, name) {
   saveAttendance();
   return rec;
 }
-function accumulateStats(classroomCode, studentId, finalPlayer, roomType, battleResult) {
+function accumulateStats(classroomCode, studentId, finalPlayer, roomType, battleResult, ctx) {
   const sdb = clsStudents(classroomCode);
   const rec = sdb[studentId];
   if (!rec) return;
@@ -607,9 +607,36 @@ function accumulateStats(classroomCode, studentId, finalPlayer, roomType, battle
     if (battleResult === 'win') s.battleWins += 1;
     else if (battleResult === 'lose') s.battleLosses += 1;
   }
+  // #40 학생 영구 뱃지 누적 (게임별로 새로 받은 뱃지 추가)
+  if (Array.isArray(finalPlayer.badges) && finalPlayer.badges.length) {
+    if (!rec.allBadges) rec.allBadges = {};
+    for (const b of finalPlayer.badges) rec.allBadges[b] = (rec.allBadges[b] || 0) + 1;
+  }
+  // #35 퍼펙트 게임 — 모든 문제 정답 + 오답 0
+  if (ctx && ctx.totalQ > 0 && finalPlayer.correct === ctx.totalQ && (finalPlayer.wrong || 0) === 0) {
+    rec.perfectGames = (rec.perfectGames || 0) + 1;
+    if (!rec.allBadges) rec.allBadges = {};
+    rec.allBadges['perfect'] = (rec.allBadges['perfect'] || 0) + 1;
+  }
+  // #38 출석 연속 — 어제 + 오늘 둘 다 게임했으면 연속, 아니면 1로 리셋
   const adb = clsAttendance(classroomCode);
   const day = todayKey();
   if (adb[day] && adb[day][studentId]) adb[day][studentId].games = (adb[day][studentId].games||0) + 1;
+  if (!rec.streakDays) rec.streakDays = 0;
+  if (rec.lastStreakDate !== day) {
+    const yesterday = new Date(); yesterday.setDate(yesterday.getDate() - 1);
+    const yKey = yesterday.getFullYear() + '-' + String(yesterday.getMonth()+1).padStart(2,'0') + '-' + String(yesterday.getDate()).padStart(2,'0');
+    if (rec.lastStreakDate === yKey) rec.streakDays += 1;
+    else rec.streakDays = 1;
+    rec.lastStreakDate = day;
+    if (rec.streakDays > (rec.maxStreakDays || 0)) rec.maxStreakDays = rec.streakDays;
+    // 출석 연속 뱃지
+    if (!rec.allBadges) rec.allBadges = {};
+    if (rec.streakDays === 3) rec.allBadges['streak3'] = (rec.allBadges['streak3']||0)+1;
+    if (rec.streakDays === 7) rec.allBadges['streak7'] = (rec.allBadges['streak7']||0)+1;
+    if (rec.streakDays === 14) rec.allBadges['streak14'] = (rec.allBadges['streak14']||0)+1;
+    if (rec.streakDays === 30) rec.allBadges['streak30'] = (rec.allBadges['streak30']||0)+1;
+  }
   saveStudentsDb();
   saveAttendance();
 }
@@ -1838,11 +1865,19 @@ function finalizeRoom(room) {
     saveSeasons();
   }
   // 학생 누적 통계 업데이트 (대전은 승패 포함) — 교실 범위
+  const ctx = { totalQ: room.questions.length };
+  // #35 퍼펙트 게임 보너스 — 모든 정답 + 0 오답 → +500 보너스 (게임당)
+  for (const p of players) {
+    if (ctx.totalQ > 0 && p.correct === ctx.totalQ && (p.wrong||0) === 0) {
+      p.score += 500;
+      p.lastAnswer = { ...(p.lastAnswer||{}), perfectBonus: 500 };
+    }
+  }
   if (type === 'battle') {
     const winnerId = players.slice().sort((a,b) => b.score - a.score)[0]?.id;
-    players.forEach(p => accumulateStats(cCode, p.studentId, p, 'battle', p.id === winnerId ? 'win' : 'lose'));
+    players.forEach(p => accumulateStats(cCode, p.studentId, p, 'battle', p.id === winnerId ? 'win' : 'lose', ctx));
   } else {
-    players.forEach(p => accumulateStats(cCode, p.studentId, p, type));
+    players.forEach(p => accumulateStats(cCode, p.studentId, p, type, undefined, ctx));
   }
   // 학생별 오답노트 누적 (교실 단위) — 학생별 최근 100개
   for (const p of players) {
@@ -2111,12 +2146,21 @@ async function handleApi(req, res, pathname, query) {
       if (body.hintUsed) pts = Math.floor(pts * 0.7);
       p.score += pts;
       p.lastAnswer = { ok: true, elapsed, points: pts, submitted: body.answer, hintUsed: !!body.hintUsed };
-      // 업적
+      // #40 업적 확장
       p.badges = p.badges || [];
       if (p.correct === 1 && !p.badges.includes('first-correct')) p.badges.push('first-correct');
       if (p.streak === 5 && !p.badges.includes('fever')) p.badges.push('fever');
       if (p.streak === 10 && !p.badges.includes('legend')) p.badges.push('legend');
+      if (p.streak === 15 && !p.badges.includes('mythic')) p.badges.push('mythic');  // 신화
+      if (p.streak === 20 && !p.badges.includes('immortal')) p.badges.push('immortal');  // 불멸
       if (elapsed <= 2 && !p.badges.includes('lightning')) p.badges.push('lightning');
+      if (elapsed <= 1 && !p.badges.includes('flash')) p.badges.push('flash');  // 광속
+      if (body.hintUsed && !p.badges.includes('hint-master')) p.badges.push('hint-master');  // 힌트로 정답
+      if (room.type === 'battle' && room.config.battleMode === 'speed') {
+        // #41 속도전 1등 — 첫 정답자
+        const others = Object.values(room.players).filter(x => x.id !== p.id && !x.eliminated);
+        if (others.length && others.every(x => !x.answered) && !p.badges.includes('quickdraw')) p.badges.push('quickdraw');
+      }
       // 속도전: 첫 정답 나오면 바로 리빌
       if (isSpeed) {
         setTimeout(() => revealAnswer(room), 150);
@@ -2297,6 +2341,101 @@ async function handleApi(req, res, pathname, query) {
       saveTokens();
     }
     return sendJSON(res, { ok: true });
+  }
+  // #39 학생 프로필 (아바타 이모지 + 자기소개)
+  if (method === 'POST' && pathname === '/api/student/profile') {
+    const s = authStudent(req);
+    if (!s) return sendJSON(res, { error: '로그인 필요' }, 401);
+    const body = await readBody(req);
+    const sdb = clsStudents(s.classroomCode);
+    const rec = sdb[s.studentId];
+    if (!rec) return sendJSON(res, { error: '학생 없음' }, 404);
+    if (body.avatar !== undefined) {
+      const av = sanitizeStr(body.avatar, 8);
+      // 이모지 또는 1글자만 허용
+      if (av.length > 0 && av.length <= 4) rec.avatar = av;
+    }
+    if (body.bio !== undefined) rec.bio = sanitizeStr(body.bio, 60);
+    saveStudentsDb();
+    return sendJSON(res, { ok: true, profile: { avatar: rec.avatar, bio: rec.bio } });
+  }
+  // #36 일일 도전 — 매일 같은 5문제, 학급 내 비교
+  if (method === 'GET' && pathname === '/api/daily-challenge') {
+    const sess = authStudent(req);
+    if (!sess) return sendJSON(res, { error: '로그인 필요' }, 401);
+    // 시드: 교실 + 날짜
+    const seedStr = sess.classroomCode + ':' + todayKey();
+    const seed = crypto.createHash('sha256').update(seedStr).digest();
+    // 시드 기반 의사난수
+    let idx = 0;
+    const seedRand = () => {
+      const v = seed.readUInt32BE(idx % 28);
+      idx += 4;
+      return v / 0xffffffff;
+    };
+    // 5문제 — 게임모드 1 위주, 다양한 난이도
+    const questions = [];
+    const diffs = ['easy','medium','medium','hard','hard'];
+    for (let i = 0; i < 5; i++) {
+      // 시드 기반 풀 인덱스
+      const pool = pools[diffs[i]] || pools.medium;
+      const pickIdx = Math.floor(seedRand() * pool.length);
+      const num = pool[pickIdx];
+      const a = analyze(num);
+      questions.push({ index: i, num, expectedCount: a.count, difficulty: diffs[i] });
+    }
+    // 본인 도전 결과 (있으면)
+    const sdb = clsStudents(sess.classroomCode);
+    const rec = sdb[sess.studentId];
+    const todaysKey = 'daily-' + todayKey();
+    const myResult = rec?.dailyChallenges?.[todaysKey] || null;
+    return sendJSON(res, { date: todayKey(), questions, myResult });
+  }
+  if (method === 'POST' && pathname === '/api/daily-challenge') {
+    const sess = authStudent(req);
+    if (!sess) return sendJSON(res, { error: '로그인 필요' }, 401);
+    const body = await readBody(req);
+    const sdb = clsStudents(sess.classroomCode);
+    const rec = sdb[sess.studentId];
+    if (!rec) return sendJSON(res, { error: '학생 없음' }, 404);
+    const todaysKey = 'daily-' + todayKey();
+    if (!rec.dailyChallenges) rec.dailyChallenges = {};
+    if (rec.dailyChallenges[todaysKey]) return sendJSON(res, { error: '오늘 일일 도전은 이미 완료했어요' }, 400);
+    // 답안 검증 — 서버 측에서 정답 다시 계산
+    const seedStr = sess.classroomCode + ':' + todayKey();
+    const seed = crypto.createHash('sha256').update(seedStr).digest();
+    let idx = 0;
+    const seedRand = () => { const v = seed.readUInt32BE(idx % 28); idx += 4; return v / 0xffffffff; };
+    const diffs = ['easy','medium','medium','hard','hard'];
+    let correct = 0, totalElapsed = 0;
+    const answers = body.answers || [];
+    for (let i = 0; i < 5; i++) {
+      const pool = pools[diffs[i]] || pools.medium;
+      const pickIdx = Math.floor(seedRand() * pool.length);
+      const num = pool[pickIdx];
+      const exp = analyze(num).count;
+      if (parseInt(answers[i]?.count) === exp) correct++;
+      totalElapsed += parseFloat(answers[i]?.elapsed) || 0;
+    }
+    const score = correct * 100 + Math.max(0, Math.floor((60 - totalElapsed) * 5));
+    rec.dailyChallenges[todaysKey] = { correct, score, elapsed: totalElapsed, completedAt: Date.now() };
+    saveStudentsDb();
+    return sendJSON(res, { ok: true, correct, score });
+  }
+  if (method === 'GET' && pathname === '/api/daily-challenge/leaderboard') {
+    const sess = authStudent(req);
+    const tch = teacherClassroom(req);
+    const cls = sess ? sess.classroomCode : (tch || normCode(query.classroomCode));
+    if (!cls) return sendJSON(res, { error: 'classroomCode 필요' }, 400);
+    const todaysKey = 'daily-' + todayKey();
+    const sdb = clsStudents(cls);
+    const ranking = [];
+    for (const sid of Object.keys(sdb)) {
+      const r2 = sdb[sid].dailyChallenges?.[todaysKey];
+      if (r2) ranking.push({ studentId: sid, name: sdb[sid].name, ...r2 });
+    }
+    ranking.sort((a, b) => b.score - a.score);
+    return sendJSON(res, { date: todayKey(), ranking: ranking.slice(0, 30), participants: ranking.length });
   }
   if (method === 'POST' && pathname === '/api/teacher/password') {
     const cls = teacherClassroom(req);

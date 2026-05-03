@@ -84,7 +84,10 @@
     <div id="nav-links" class="nav-links">
       <a href="#" onclick="showMyStats();return false">📊 내 전적</a>
       <a href="#" onclick="showWrongNotes();return false">📝 오답노트</a>
-      <a href="#" onclick="showJoinByCode();return false">🔢 방 코드 입장</a>
+      <a href="#" onclick="showSrsReview();return false">🧠 복습</a>
+      <a href="#" onclick="showDailyChallenge();return false">🎯 일일도전</a>
+      <a href="#" onclick="showProfileModal();return false">👤 프로필</a>
+      <a href="#" onclick="showJoinByCode();return false">🔢 방 코드</a>
       <a href="/leaderboard.html">🏆 점수판</a>
       <a href="#" onclick="showSeasonInfo();return false">🏆 시즌</a>
       <a href="#" onclick="toggleTheme();return false" id="theme-toggle" title="테마 변경">🌙</a>
@@ -572,6 +575,113 @@ async function showJoinByCode() {
   if (!/^\d{6}$/.test(trimmed)) { toast('방 코드는 6자리 숫자입니다', 'err'); return; }
   await joinRoom(trimmed);
 }
+// #23 SRS 복습
+async function showSrsReview() {
+  const r = await api('/api/srs/cards');
+  if (r.error) { toast(r.error, 'err'); return; }
+  if (r.dueNow === 0) {
+    modal({ title: '🧠 복습', body: '<div style="text-align:center;padding:30px"><div style="font-size:3rem">🌟</div><h3>복습할 카드가 없어요!</h3><p style="color:var(--txt2)">전체 ' + r.total + '개 카드 중 모두 다음 복습 시각이 미래입니다. 게임을 더 플레이하면 약점 카드가 늘어나요.</p></div>', actions: [{label:'닫기',value:null,kind:'ghost'}] });
+    return;
+  }
+  const cards = r.cards;
+  let i = 0, ok = 0, ng = 0;
+  const next = () => {
+    if (i >= cards.length) {
+      modal({ title: '🧠 복습 완료!', body: '<div style="text-align:center;padding:20px"><div style="font-size:3rem">🎉</div><div style="font-size:1.2rem;margin-top:10px">정답 ' + ok + ' / 오답 ' + ng + '</div><p style="color:var(--txt2);margin-top:10px">정답 카드는 다음 박스로 진행, 오답은 다시 박스 0으로!</p></div>', actions:[{label:'닫기',value:null,kind:'pri'}] });
+      return;
+    }
+    const c = cards[i++];
+    const q = c.q || {};
+    const showAns = (correct) => {
+      api('/api/srs/answer', { method: 'POST', body: { key: c.key, correct } });
+      if (correct) ok++; else ng++;
+      setTimeout(next, 600);
+    };
+    let bodyHtml;
+    if (c.gameMode === 1 || c.gameMode === 2) {
+      bodyHtml = '<div style="text-align:center"><div style="font-size:.9rem;color:var(--txt2);margin-bottom:8px">유효숫자 개수는?</div><div style="font-size:2.5rem;font-weight:800;font-family:Courier New,monospace;letter-spacing:4px;color:var(--acc);margin:14px 0">' + _h(q.num) + '</div><div style="font-size:1.5rem;font-weight:700;color:var(--sec);margin-top:14px">정답: ' + (q.count || '?') + '개</div></div>';
+    } else if (c.gameMode === 4 || c.gameMode === 5) {
+      bodyHtml = '<div style="text-align:center"><div style="font-size:1.8rem;font-weight:800;font-family:Courier New,monospace;color:var(--acc);margin:14px 0">' + _h(q.display) + '</div><div style="font-size:1.3rem;color:var(--sec);margin-top:14px">정답: ' + _h(q.answer || '?') + '</div></div>';
+    } else if (c.gameMode === 6) {
+      bodyHtml = '<div style="text-align:center"><div style="font-size:1.8rem;font-weight:800;color:var(--acc);margin:14px 0">' + _h(q.num) + ' → 유효숫자 ' + (q.target||'?') + '개</div><div style="font-size:1.3rem;color:var(--sec)">정답: ' + _h(q.answer || '?') + '</div></div>';
+    } else {
+      bodyHtml = '<div style="text-align:center"><div style="margin:14px 0">측정값: <b>' + _h(q.meas?.dv || '?') + ' ' + _h(q.meas?.unit || '') + '</b></div><div style="color:var(--sec)">유효숫자 ' + (q.meas?.sf || '?') + '개</div></div>';
+    }
+    bodyHtml += '<div style="text-align:center;color:var(--txt2);font-size:.82rem;margin-top:14px">카드 ' + i + ' / ' + cards.length + ' · 박스 ' + (c.box || 0) + ' (틀린 횟수: ' + (c.wrongCount||0) + ')</div>';
+    modal({ title: '🧠 복습 (' + r.dueNow + '개 대기)', body: bodyHtml, wide: true, actions: [
+      { label: '🔴 또 틀렸어요', value: 'no', kind: 'err' },
+      { label: '✅ 알겠어요!', value: 'yes', kind: 'sec' },
+    ]}).then(v => { if (v) showAns(v === 'yes'); else next(); });
+  };
+  next();
+}
+
+// #36 일일 도전
+async function showDailyChallenge() {
+  const r = await api('/api/daily-challenge');
+  if (r.error) { toast(r.error, 'err'); return; }
+  if (r.myResult) {
+    // 이미 완료 — 결과 + 학급 랭킹
+    const lb = await api('/api/daily-challenge/leaderboard');
+    let body = '<div style="text-align:center;padding:14px;background:linear-gradient(135deg,rgba(245,158,11,.15),rgba(99,102,241,.15));border-radius:10px;margin-bottom:12px"><div style="font-size:2rem">🎯</div><div><b>오늘 일일 도전 완료!</b></div><div style="font-size:.9rem;color:var(--txt2);margin-top:6px">정답 ' + r.myResult.correct + '/5 · ' + r.myResult.score + '점 · ' + Math.round(r.myResult.elapsed) + '초</div></div>';
+    if (lb.ranking?.length) {
+      body += '<h4 style="margin:14px 0 6px">🏆 학급 일일 랭킹 (' + lb.participants + '명 참여)</h4><table style="width:100%;font-size:.88rem"><thead><tr><th>순위</th><th>학생</th><th>점수</th><th>정답</th></tr></thead><tbody>'
+        + lb.ranking.map((e, i) => '<tr><td>' + (['🥇','🥈','🥉'][i] || (i+1)) + '</td><td><b>' + _h(e.name) + '</b></td><td style="color:var(--acc);font-weight:700">' + e.score + '</td><td>' + e.correct + '/5</td></tr>').join('') + '</tbody></table>';
+    }
+    modal({ title: '🎯 일일 도전 — ' + r.date, body: body, wide: true, actions: [{label:'닫기',value:null,kind:'ghost'}] });
+    return;
+  }
+  // 도전 진행
+  let i = 0; const answers = []; let started = Date.now();
+  const next = () => {
+    if (i >= 5) {
+      const totalElapsed = (Date.now() - started) / 1000;
+      api('/api/daily-challenge', { method: 'POST', body: { answers: answers.map(a => ({ count: a.count, elapsed: totalElapsed/5 })) } }).then(r2 => {
+        if (r2.error) toast(r2.error, 'err');
+        else { toast('🎯 도전 완료! ' + r2.correct + '/5 · ' + r2.score + '점', 'ok', 5000); showDailyChallenge(); }
+      });
+      return;
+    }
+    const q = r.questions[i];
+    const wrap = document.createElement('div');
+    wrap.innerHTML = '<div style="text-align:center"><div style="font-size:.9rem;color:var(--txt2);margin-bottom:6px">문제 ' + (i+1) + ' / 5 · 난이도: ' + (q.difficulty==='easy'?'쉬움':q.difficulty==='hard'?'어려움':'보통') + '</div><div style="font-size:.85rem;color:var(--txt2);margin-bottom:12px">유효숫자 개수는?</div><div style="font-size:2.5rem;font-weight:800;font-family:Courier New,monospace;letter-spacing:4px;color:var(--acc);margin:14px 0">' + _h(q.num) + '</div><input type="number" class="dc-input" style="width:120px;text-align:center;font-size:1.5rem;padding:10px;margin-top:10px" placeholder="?"></div>';
+    modal({ title: '🎯 일일 도전 (' + r.date + ')', body: wrap, actions: [{label:'제출',value:'submit',kind:'pri'}] }).then(v => {
+      const cnt = parseInt(wrap.querySelector('.dc-input').value);
+      answers.push({ count: cnt });
+      i++; next();
+    });
+    setTimeout(() => { const inp = wrap.querySelector('.dc-input'); if (inp) inp.focus(); }, 80);
+  };
+  next();
+}
+
+// #39 프로필 (아바타 + 자기소개)
+async function showProfileModal() {
+  const me = await api('/api/me');
+  if (me.error) { toast(me.error, 'err'); return; }
+  const stats = await api('/api/student/stats?studentId=' + encodeURIComponent(me.studentId));
+  const cur = stats.stats || {};
+  const wrap = document.createElement('div');
+  const emojis = ['🦊','🐱','🐶','🐰','🦁','🐯','🐻','🐼','🐧','🦉','🦄','🐬','🐢','🦋','🌟','💎','🌸','🌈','🍀','⚛️','🔬','🧪','📚','🎯'];
+  wrap.innerHTML = '<div style="display:flex;flex-direction:column;gap:14px">'
+    + '<div><label style="display:block;margin-bottom:6px">👤 아바타 (이모지 1~4자)</label><input class="pf-avatar" type="text" maxlength="4" style="width:100%;font-size:1.5rem;text-align:center;padding:10px" value="' + _h(stats.avatar||'') + '" placeholder="🦊"></div>'
+    + '<div><label style="display:block;margin-bottom:6px;font-size:.85rem;color:var(--txt2)">빠른 선택</label><div style="display:flex;flex-wrap:wrap;gap:6px">' + emojis.map(e => '<button type="button" class="pf-emoji" onclick="this.closest(\'.modal-back\').querySelector(\'.pf-avatar\').value=\''+e+'\'" style="background:var(--bg3);border:none;border-radius:8px;padding:8px 12px;font-size:1.3rem;cursor:pointer">'+e+'</button>').join('') + '</div></div>'
+    + '<div><label style="display:block;margin-bottom:6px">📝 자기소개 (60자)</label><input class="pf-bio" type="text" maxlength="60" style="width:100%;padding:10px" placeholder="화학을 좋아하는 학생!"></div>'
+    + (cur.maxStreakDays ? '<div style="background:var(--bg);padding:10px;border-radius:8px"><b>🔥 최고 출석 연속:</b> ' + cur.maxStreakDays + '일</div>' : '')
+    + '</div>';
+  modal({ title: '👤 내 프로필', body: wrap, actions: [
+    { label: '취소', value: null, kind: 'ghost' },
+    { label: '💾 저장', value: 'save', kind: 'pri' },
+  ]}).then(v => {
+    if (v !== 'save') return;
+    const avatar = wrap.querySelector('.pf-avatar').value;
+    const bio = wrap.querySelector('.pf-bio').value;
+    api('/api/student/profile', { method: 'POST', body: { avatar, bio } }).then(r => {
+      if (r.error) toast(r.error, 'err'); else toast('프로필 저장됨', 'ok');
+    });
+  });
+}
+
 async function showWrongNotes() {
   const r = await api('/api/wrong-notes');
   if (r.error) { toast(r.error, 'err'); return; }
