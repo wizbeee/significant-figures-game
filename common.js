@@ -242,6 +242,50 @@ function drawInst(cv, m) {
   else drawTherm(ctx, w, h, m);
 }
 
+// ==================== TTS — 시각장애 학생 지원 (#45) ====================
+function getTtsEnabled() { return localStorage.getItem('sigfig-tts') === 'on'; }
+function setTtsEnabled(on) { localStorage.setItem('sigfig-tts', on ? 'on' : 'off'); }
+function speak(text, opts = {}) {
+  if (!getTtsEnabled() || !window.speechSynthesis) return;
+  try {
+    window.speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(String(text));
+    u.lang = opts.lang || 'ko-KR';
+    u.rate = opts.rate || 1.0;
+    u.pitch = opts.pitch || 1.0;
+    window.speechSynthesis.speak(u);
+  } catch (_) {}
+}
+
+// ==================== aria-live 알림 — 점수/콤보 (#47) ====================
+function ensureLiveRegion() {
+  let el = document.getElementById('a11y-live');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'a11y-live';
+    el.setAttribute('aria-live', 'assertive');
+    el.setAttribute('aria-atomic', 'true');
+    el.style.cssText = 'position:absolute;left:-10000px;width:1px;height:1px;overflow:hidden';
+    document.body.appendChild(el);
+  }
+  return el;
+}
+function announce(text) {
+  const el = ensureLiveRegion();
+  el.textContent = '';
+  setTimeout(() => { el.textContent = String(text); }, 50);
+}
+
+// ==================== 난독증 친화 폰트 (#48) ====================
+function getDyslexicFont() { return localStorage.getItem('sigfig-dyslexic') === 'on'; }
+function setDyslexicFont(on) {
+  localStorage.setItem('sigfig-dyslexic', on ? 'on' : 'off');
+  document.documentElement.classList.toggle('dyslexic-font', on);
+}
+(function applyDyslexicImmediately() {
+  if (typeof document !== 'undefined' && getDyslexicFont()) document.documentElement.classList.add('dyslexic-font');
+})();
+
 // ==================== Render 슬립 warm-up (#22) ====================
 // 5분마다 헬스 체크 ping — Render free 슬립 방지 + 백그라운드 시 일시 중단
 let _wakeUpTimer = null;

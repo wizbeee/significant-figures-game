@@ -134,6 +134,20 @@ tr:hover td{background:rgba(99,102,241,.05)}
 .modal-back{padding:16px}
 .modal{box-sizing:border-box}
 
+/* 난독증 친화 폰트 (#48) */
+html.dyslexic-font, html.dyslexic-font body, html.dyslexic-font input, html.dyslexic-font select, html.dyslexic-font textarea, html.dyslexic-font button {
+  font-family: 'Comic Sans MS', 'Trebuchet MS', 'Open Sans', sans-serif !important;
+  letter-spacing: 0.03em;
+  word-spacing: 0.1em;
+  line-height: 1.7 !important;
+}
+
+/* 색맹 안전 — 빨강만 의존하지 않게 패턴/심볼 보강 (#49) */
+.fb.no::before { content: '✗ '; font-weight: 900; }
+.fb.ok::before { content: '✓ '; font-weight: 900; }
+.badge.no::before { content: '✗\00a0'; }
+.badge.ok::before { content: '✓\00a0'; }
+
 /* QR 카드 스타일 */
 .qr-card{display:inline-flex;flex-direction:column;align-items:center;gap:8px;padding:14px;background:var(--bg2);border-radius:12px;border:1px solid var(--bg3)}
 .qr-card .qr-code{font-weight:800;font-size:1.6rem;letter-spacing:4px;color:var(--acc);font-family:'Courier New',monospace}
