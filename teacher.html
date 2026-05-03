@@ -335,6 +335,9 @@
           <button class="btn btn-acc btn-sm" onclick="downloadBackup()">🗄 전체 백업 (JSON)</button>
           <button class="btn btn-pri btn-sm" onclick="document.getElementById('restore-input').click()">📤 백업 복원 (JSON 업로드)</button>
           <input type="file" id="restore-input" accept="application/json" style="display:none" onchange="handleRestoreFile(event)">
+          <button class="btn btn-acc btn-sm" onclick="downloadTermReport()">📑 학기말 종합 리포트 (JSON)</button>
+          <button class="btn btn-pri btn-sm" onclick="document.getElementById('semester-input').click()">📅 이전 학기 누적</button>
+          <input type="file" id="semester-input" accept="application/json" style="display:none" onchange="handleSemesterImport(event)">
         </div>
       </div>
       <div class="panel" style="margin-top:16px;border:1px solid var(--err)">
@@ -841,6 +844,32 @@ async function downloadCsv(kind, type) {
   const filename = m ? m[1] : `${kind}.csv`;
   triggerDownload(blob, filename);
 }
+// #77 학기말 종합 리포트 다운로드
+async function downloadTermReport() {
+  const t = localStorage.getItem('sigfig-teacher-token');
+  const r = await fetch('/api/teacher/term-report', { headers: { 'Authorization': 'Bearer ' + t } });
+  if (!r.ok) { toast('리포트 생성 실패', 'err'); return; }
+  const data = await r.json();
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const cls = data.classroomCode || 'unknown';
+  triggerDownload(blob, `term-report_${cls}_${new Date().toISOString().slice(0,10)}.json`);
+  toast('학기말 종합 리포트 ' + (data.summary?.totalStudents || 0) + '명 데이터 다운로드 완료', 'ok', 4000);
+}
+// #80 이전 학기 데이터 import
+async function handleSemesterImport(ev) {
+  const f = ev.target.files[0];
+  if (!f) return;
+  ev.target.value = '';
+  let bundle;
+  try { bundle = JSON.parse(await f.text()); } catch (e) { toast('JSON 파싱 실패', 'err'); return; }
+  // 신규 학생만 vs 기존 학생도 누적
+  const merge = await confirmDialog('기존에 같은 학번의 학생 데이터가 있다면 누적할까요?\n(취소: 기존 학생은 건드리지 않고 신규만 추가)', { okLabel: '누적', cancelLabel: '신규만' });
+  const r = await teacherApi('/api/teacher/import-semester', { method: 'POST', body: { bundle: bundle.students ? bundle : { students: bundle }, merge } });
+  if (r.error) { toast(r.error, 'err'); return; }
+  toast('신규 학생 ' + r.imported + '명 추가 · ' + r.merged + '명 데이터 누적', 'ok', 5000);
+  loadStudentsDb();
+}
+
 async function downloadBackup() {
   const t = localStorage.getItem('sigfig-teacher-token');
   const r = await fetch('/api/teacher/backup', { headers: { 'Authorization': 'Bearer ' + t } });

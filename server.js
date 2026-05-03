@@ -1295,8 +1295,9 @@ function pushLB(classroomCode, type, entry) {
   const list = leaderboards[type] || (leaderboards[type] = []);
   list.push({ ...entry, classroomCode, at: Date.now() });
   list.sort((a, b) => b.score - a.score);
-  // 글로벌 점수판 — 상위 500건까지 유지
-  if (list.length > 500) list.length = 500;
+  // #78 글로벌 점수판 — 환경변수 LB_CAP 으로 상한 조절 (기본 5000)
+  const cap = parseInt(process.env.LB_CAP) || 5000;
+  if (list.length > cap) list.length = cap;
   saveLB();
 }
 
@@ -3337,6 +3338,149 @@ async function handleApi(req, res, pathname, query) {
         ]},
       ],
     });
+  }
+
+  // #77 학기말 종합 리포트 — 학생 전원 데이터 ZIP/JSON
+  // 일반 백업과 차이: 분석 통계 + 시즌 챔피언 이력 + 출결 통계 모두 포함
+  if (method === 'GET' && pathname === '/api/teacher/term-report') {
+    const cls = teacherClassroom(req);
+    if (!cls) return sendJSON(res, { error: '교사 권한' }, 401);
+    const sdb = clsStudents(cls);
+    const adb = clsAttendance(cls);
+    const w = clsWrongs(cls);
+    const seasons = clsSeasons(cls);
+    // 학생별 종합 정보
+    const students = Object.values(sdb).map(rec => {
+      const st = ensureStatsShape(rec.stats);
+      const tot = (st.totalCorrect||0) + (st.totalWrong||0);
+      const accuracy = tot>0 ? Math.round(st.totalCorrect/tot*100) : null;
+      // 출석 일수 계산
+      let attendanceDays = 0;
+      for (const day of Object.keys(adb)) if (adb[day][rec.studentId]) attendanceDays++;
+      return {
+        studentId: rec.studentId, name: rec.name,
+        avatar: rec.avatar || null, bio: rec.bio || null,
+        joinedAt: rec.joinedAt,
+        stats: st,
+        accuracy,
+        winRate: st.battleGames > 0 ? Math.round(st.battleWins/st.battleGames*100) : null,
+        seasonBadges: rec.seasonBadges || [],
+        allBadges: rec.allBadges || {},
+        perfectGames: rec.perfectGames || 0,
+        maxStreakDays: rec.maxStreakDays || 0,
+        wrongCount: (w[rec.studentId] || []).length,
+        attendanceDays,
+        blocked: !!rec.blocked,
+      };
+    });
+    // 점수 순 + 정답률 순 두 ranking
+    const byScore = [...students].sort((a,b) => (b.stats.totalScore||0) - (a.stats.totalScore||0));
+    const byAcc = [...students].filter(s => s.accuracy !== null).sort((a,b) => b.accuracy - a.accuracy);
+    return sendJSON(res, {
+      classroomCode: cls,
+      classroomName: classrooms[cls].name,
+      generatedAt: Date.now(),
+      summary: {
+        totalStudents: students.length,
+        activeStudents: students.filter(s => (s.stats.totalGames||0) > 0).length,
+        totalGames: students.reduce((a,b) => a+(b.stats.totalGames||0), 0),
+        totalScore: students.reduce((a,b) => a+(b.stats.totalScore||0), 0),
+        totalDays: Object.keys(adb).length,
+      },
+      students,
+      rankings: { byScore: byScore.slice(0, 100), byAccuracy: byAcc.slice(0, 100) },
+      seasonsHistory: (seasons.history||[]).map(h => ({
+        id: h.id, name: h.name, theme: h.theme,
+        startsAt: h.startsAt, endedAt: h.endedAt,
+        totalParticipants: h.totalParticipants,
+        champions: h.champions || [],
+      })),
+      currentSeason: seasons.current,
+    });
+  }
+  // #77 학생 1명 종합 리포트 (학부모 면담용 PDF 데이터)
+  if (method === 'GET' && pathname === '/api/teacher/student-report') {
+    const cls = teacherClassroom(req);
+    if (!cls) return sendJSON(res, { error: '교사 권한' }, 401);
+    const sid = String(query.studentId || '');
+    if (!sid) return sendJSON(res, { error: 'studentId 필요' }, 400);
+    const sdb = clsStudents(cls);
+    const rec = sdb[sid];
+    if (!rec) return sendJSON(res, { error: '학생 없음' }, 404);
+    const st = ensureStatsShape(rec.stats);
+    const w = clsWrongs(cls)[sid] || [];
+    const adb = clsAttendance(cls);
+    let attendanceDays = 0;
+    for (const day of Object.keys(adb)) if (adb[day][sid]) attendanceDays++;
+    const tot = (st.totalCorrect||0) + (st.totalWrong||0);
+    // 모드별 약점 분석
+    const weakness = analyzeWeaknesses(cls, sid);
+    // 최근 게임 기록 (점수판에서 추출)
+    const recent = [];
+    for (const t of ['single','multi','battle']) {
+      for (const e of (leaderboards[t]||[])) {
+        if (e.studentId === sid && (e.classroomCode || DEFAULT_CLASSROOM) === cls) recent.push({ ...e, _type: t });
+      }
+    }
+    recent.sort((a,b) => (b.at||0) - (a.at||0));
+    return sendJSON(res, {
+      classroomCode: cls,
+      classroomName: classrooms[cls].name,
+      student: { studentId: rec.studentId, name: rec.name, avatar: rec.avatar, bio: rec.bio, joinedAt: rec.joinedAt, blocked: !!rec.blocked },
+      stats: st,
+      accuracy: tot>0 ? Math.round(st.totalCorrect/tot*100) : null,
+      winRate: st.battleGames > 0 ? Math.round(st.battleWins/st.battleGames*100) : null,
+      attendanceDays,
+      maxStreakDays: rec.maxStreakDays || 0,
+      perfectGames: rec.perfectGames || 0,
+      seasonBadges: rec.seasonBadges || [],
+      allBadges: rec.allBadges || {},
+      weakness,
+      wrongCount: w.length,
+      recentGames: recent.slice(0, 30),
+    });
+  }
+  // #80 이전 학기 데이터 import (현재 백업 복원과 비슷하지만 누적 옵션)
+  if (method === 'POST' && pathname === '/api/teacher/import-semester') {
+    const cls = teacherClassroom(req);
+    if (!cls) return sendJSON(res, { error: '교사 권한' }, 401);
+    const body = await readBody(req);
+    const bundle = body.bundle;
+    if (!bundle || typeof bundle !== 'object') return sendJSON(res, { error: '잘못된 백업 파일' }, 400);
+    let importedStudents = 0, mergedStats = 0;
+    if (bundle.students && typeof bundle.students === 'object') {
+      const sdb = clsStudents(cls);
+      for (const sid of Object.keys(bundle.students)) {
+        const oldRec = bundle.students[sid];
+        if (!oldRec || !oldRec.studentId) continue;
+        if (sdb[sid]) {
+          // 누적 — 기존 누적에 더함 (option: body.merge)
+          if (body.merge) {
+            const s = ensureStatsShape(sdb[sid].stats);
+            const o = ensureStatsShape(oldRec.stats);
+            s.totalGames += o.totalGames || 0;
+            s.totalCorrect += o.totalCorrect || 0;
+            s.totalWrong += o.totalWrong || 0;
+            s.totalScore += o.totalScore || 0;
+            s.singleGames += o.singleGames || 0;
+            s.multiGames += o.multiGames || 0;
+            s.battleGames += o.battleGames || 0;
+            s.battleWins += o.battleWins || 0;
+            s.battleLosses += o.battleLosses || 0;
+            if ((o.bestScore||0) > (s.bestScore||0)) s.bestScore = o.bestScore;
+            if ((o.maxStreak||0) > (s.maxStreak||0)) s.maxStreak = o.maxStreak;
+            mergedStats++;
+          }
+        } else {
+          // 신규 — 통째로 복사
+          sdb[sid] = { ...oldRec };
+          importedStudents++;
+        }
+      }
+      saveStudentsDb();
+    }
+    audit(req, 'import_semester', { imported: importedStudents, merged: mergedStats });
+    return sendJSON(res, { ok: true, imported: importedStudents, merged: mergedStats });
   }
 
   if (method === 'GET' && pathname === '/api/health') {
