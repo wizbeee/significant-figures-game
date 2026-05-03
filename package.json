@@ -4,7 +4,8 @@
   "description": "유효숫자 마스터 — 고등학교 과학 수업용 실시간 퀴즈 게임 (싱글/멀티/대전)",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "test": "node --test test/"
   },
   "engines": {
     "node": ">=18"
