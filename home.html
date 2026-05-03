@@ -764,8 +764,32 @@ async function showSeasonInfo() {
   await modal({ title: '🏆 시즌 정보', body: body, wide: true, actions: [{label:'닫기',value:null,kind:'ghost'}] });
 }
 
+// #68 시즌 상태 변화 감지 — toast 알림
+let _lastSeasonState = null;
+let _lastSeasonId = null;
+async function checkSeasonChange() {
+  const me = await api('/api/me');
+  if (me.error || !me.classroomCode) return;
+  const r = await fetch('/api/season?classroomCode=' + encodeURIComponent(me.classroomCode)).then(r=>r.json()).catch(()=>null);
+  if (!r) return;
+  const curState = r.state;
+  const curId = r.season?.id;
+  if (_lastSeasonState !== null && curState !== _lastSeasonState) {
+    if (curState === 'active' && _lastSeasonState === 'paused') toast('▶️ 시즌이 재개되었어요!', 'ok', 5000);
+    else if (curState === 'paused' && _lastSeasonState === 'active') toast('⏸ 시즌이 일시정지되었어요', 'warn', 5000);
+    else if (curState === 'ended' || curState === 'no-season') {
+      if (_lastSeasonState === 'active' || _lastSeasonState === 'paused') toast('🏁 시즌이 종료되었어요! 결과를 확인하세요', 'info', 6000);
+    } else if (curState === 'active' && _lastSeasonId !== curId && _lastSeasonId !== null) {
+      toast('🏆 새 시즌 "' + (r.season?.name || '시즌') + '" 시작!', 'ok', 6000);
+    }
+  }
+  _lastSeasonState = curState;
+  _lastSeasonId = curId;
+}
+
 // 시즌 배지 표시 — 로비 진입 시 자동 갱신
 async function refreshSeasonBadge() {
+  checkSeasonChange();
   const me = await api('/api/me');
   if (me.error || !me.classroomCode) return;
   const r = await fetch('/api/season?classroomCode=' + encodeURIComponent(me.classroomCode)).then(r => r.json()).catch(() => null);

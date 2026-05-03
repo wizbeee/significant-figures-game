@@ -2558,6 +2558,64 @@ async function handleApi(req, res, pathname, query) {
     }
     return sendJSON(res, { ok: true });
   }
+  // #63 방 설정 mid-game 수정 (lobby 또는 진행 중 일부)
+  if (method === 'POST' && pathname === '/api/teacher/room/edit') {
+    const cls = teacherClassroom(req);
+    if (!cls) return sendJSON(res, { error: '교사 권한' }, 401);
+    const body = await readBody(req);
+    const room = rooms.get(body.code);
+    if (!room || room.classroomCode !== cls) return sendJSON(res, { error: '방 없음' }, 404);
+    // lobby에서는 모든 설정 / 진행 중에는 시간/문제 수만
+    const c = room.config;
+    const allowedAlways = ['questionTime','revealTime','label'];
+    const lobbyOnly = ['gameMode','difficulty','questionCount','capacity','singleMode','timeLimit','multiMode','teamCount','battleMode','hpStart','addSubMode'];
+    const patch = body.patch || {};
+    let changed = [];
+    for (const k of Object.keys(patch)) {
+      if (room.phase !== 'lobby' && !allowedAlways.includes(k)) continue;
+      if (allowedAlways.includes(k) || lobbyOnly.includes(k)) {
+        c[k] = patch[k]; changed.push(k);
+      }
+    }
+    return sendJSON(res, { ok: true, changed });
+  }
+  // #64 방 일시정지/재개 (게임 진행 중)
+  if (method === 'POST' && pathname === '/api/teacher/room/pause') {
+    const cls = teacherClassroom(req);
+    if (!cls) return sendJSON(res, { error: '교사 권한' }, 401);
+    const body = await readBody(req);
+    const room = rooms.get(body.code);
+    if (!room || room.classroomCode !== cls) return sendJSON(res, { error: '방 없음' }, 404);
+    if (room.paused) {
+      // 재개 — 남은 시간으로 phaseTimer 다시 설정
+      const elapsed = room.pausedAt - room.currentQStart;
+      const remaining = (room.config.questionTime * 1000) - elapsed;
+      room.currentQStart = Date.now() - elapsed;  // 시간 누락 만큼 보정
+      room.paused = false;
+      room.pausedAt = 0;
+      if (room.phase === 'question' && remaining > 0) {
+        if (room.phaseTimer) clearTimeout(room.phaseTimer);
+        room.phaseTimer = setTimeout(() => revealAnswer(room), remaining);
+      }
+      return sendJSON(res, { ok: true, paused: false });
+    } else {
+      // 일시정지 — phaseTimer 중지
+      if (room.phaseTimer) { clearTimeout(room.phaseTimer); room.phaseTimer = null; }
+      room.paused = true;
+      room.pausedAt = Date.now();
+      return sendJSON(res, { ok: true, paused: true });
+    }
+  }
+  // #67 방 복제 — 같은 설정으로 새 방 만들기
+  if (method === 'POST' && pathname === '/api/teacher/room/duplicate') {
+    const cls = teacherClassroom(req);
+    if (!cls) return sendJSON(res, { error: '교사 권한' }, 401);
+    const body = await readBody(req);
+    const orig = rooms.get(body.code);
+    if (!orig || orig.classroomCode !== cls) return sendJSON(res, { error: '원본 방 없음' }, 404);
+    const newRoom = createRoom(cls, orig.type, { ...orig.config, label: (orig.config.label || '방') + ' (복제)' }, null, true);
+    return sendJSON(res, { ok: true, code: newRoom.code });
+  }
   if (method === 'POST' && pathname === '/api/teacher/kick') {
     const cls = teacherClassroom(req);
     if (!cls) return sendJSON(res, { error: '교사 권한' }, 401);

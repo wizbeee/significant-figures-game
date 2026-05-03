@@ -248,6 +248,10 @@
           <div id="students-area"></div>
         </div>
       </div>
+      <div class="panel" style="margin-top:16px">
+        <h3>📊 학생별 실시간 진도 <span style="font-size:.85rem;color:var(--txt2);font-weight:400">— 진행 중 게임 한눈에</span></h3>
+        <div id="progress-grid-area"><div class="empty">진행 중인 게임이 없을 때는 빈 화면입니다.</div></div>
+      </div>
     </div>
 
     <div id="tab-students" style="display:none">
@@ -469,9 +473,40 @@ async function refresh(ov) {
   document.getElementById('students-area').innerHTML = students.length === 0
     ? '<div class="empty">접속한 학생이 없어요</div>'
     : students.map(s => `<div class="student-row">
-        <div><span class="dot ${s.online?'online':''}"></span><b>${s.name}</b> <span style="color:var(--txt2);font-size:.82rem">${s.studentId}</span> ${s.currentRoom ? `<span class="badge pri">방 ${s.currentRoom}</span>` : ''}</div>
+        <div><span class="dot ${s.online?'online':''}"></span><b>${_h(s.name)}</b> <span style="color:var(--txt2);font-size:.82rem">${_h(s.studentId)}</span> ${s.currentRoom ? `<span class="badge pri">방 ${_h(s.currentRoom)}</span>` : ''}</div>
         <button class="btn btn-err btn-sm" onclick="kickStudent('${s.studentId}')">⛔ 강퇴</button>
       </div>`).join('');
+
+  // #70 진도 grid — 진행 중인 방 학생 진척률
+  const activeRooms = rooms.filter(r => r.phase === 'question' || r.phase === 'reveal');
+  const gridEl = document.getElementById('progress-grid-area');
+  if (gridEl) {
+    if (!activeRooms.length) gridEl.innerHTML = '<div class="empty">진행 중인 게임이 없습니다.</div>';
+    else {
+      gridEl.innerHTML = activeRooms.map(r => {
+        const playerCount = r.players?.length || 0;
+        const totalQ = r.total || r.questionCount || 0;
+        return `<div style="background:var(--bg);border-radius:10px;padding:14px;margin-bottom:12px;border:1px solid var(--bg3)">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px">
+            <div><b>${typeEmo[r.type]||''} ${_h(r.label||'방 #'+r.code)}</b> <span style="color:var(--txt2);font-size:.85rem">— ${gmLabel[r.gameMode]||'?'} · ${diffLabel[r.difficulty]} · ${playerCount}명</span></div>
+            <div><span class="badge ${r.phase==='question'?'pri':'ok'}">${phaseLabel[r.phase]||r.phase}</span> <span class="badge acc">${(r.qIndex+1)}/${totalQ}</span></div>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:6px">
+            ${(r.players||[]).map(p => {
+              const acc = (p.correct + p.wrong) > 0 ? Math.round(p.correct/(p.correct+p.wrong)*100) : 0;
+              const bar = totalQ > 0 ? Math.round((p.correct + p.wrong)/totalQ*100) : 0;
+              return `<div style="background:var(--bg2);padding:8px 10px;border-radius:8px;border-left:3px solid ${acc>=80?'var(--sec)':acc>=50?'var(--acc)':'var(--err)'}">
+                <div style="font-weight:700;font-size:.88rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_h(p.name)}</div>
+                <div style="display:flex;justify-content:space-between;font-size:.78rem;color:var(--txt2);margin-top:2px"><span>✓${p.correct} ✗${p.wrong}</span><span>${acc}%</span></div>
+                <div style="background:var(--bg3);height:4px;border-radius:2px;margin-top:4px;overflow:hidden"><div style="background:linear-gradient(90deg,var(--err),var(--acc),var(--sec));width:${bar}%;height:100%"></div></div>
+                <div style="font-size:.75rem;color:var(--acc);font-weight:700;margin-top:2px">${p.score}점</div>
+              </div>`;
+            }).join('')}
+          </div>
+        </div>`;
+      }).join('');
+    }
+  }
 }
 
 async function loadAutoApprove() {
