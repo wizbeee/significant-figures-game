@@ -119,11 +119,126 @@ function drawTherm(ctx, w, h, m) {
   ctx.beginPath(); ctx.moveTo(cx-tW/2-3,mY); ctx.lineTo(cx-tW/2+1,mY); ctx.stroke(); ctx.setLineDash([]);
 }
 
+// #30 — 비커
+function drawBeaker(ctx, w, h, m) {
+  const v = m.val, bW = 140, cy = 30, bH = h - 60, cx = w/2;
+  const mx = Math.ceil(v/50)*50 + 50, mn = 0, pp = bH / (mx - mn);
+  // 외형 (사다리꼴 비슷한 비커)
+  ctx.strokeStyle = '#4b5563'; ctx.lineWidth = 2; ctx.fillStyle = '#f1f5f9';
+  ctx.beginPath();
+  ctx.moveTo(cx-bW/2, cy);
+  ctx.lineTo(cx-bW/2-6, cy+bH);
+  ctx.quadraticCurveTo(cx-bW/2-6, cy+bH+10, cx-bW/2+6, cy+bH+10);
+  ctx.lineTo(cx+bW/2-6, cy+bH+10);
+  ctx.quadraticCurveTo(cx+bW/2+6, cy+bH+10, cx+bW/2+6, cy+bH);
+  ctx.lineTo(cx+bW/2, cy);
+  ctx.stroke();
+  // 액체
+  const lY = cy + bH - (v - mn) * pp;
+  ctx.fillStyle = 'rgba(59,130,246,.3)';
+  ctx.beginPath();
+  const widthAtY = (y) => bW + (y-cy)/bH * 12;  // 사다리꼴
+  ctx.moveTo(cx - widthAtY(lY)/2, lY);
+  ctx.quadraticCurveTo(cx, lY+4, cx + widthAtY(lY)/2, lY);
+  ctx.lineTo(cx+bW/2-6, cy+bH);
+  ctx.quadraticCurveTo(cx+bW/2+6, cy+bH+8, cx, cy+bH+8);
+  ctx.quadraticCurveTo(cx-bW/2-6, cy+bH+8, cx-bW/2-6, cy+bH);
+  ctx.closePath(); ctx.fill();
+  // 눈금
+  ctx.strokeStyle = '#374151'; ctx.fillStyle = '#1e293b'; ctx.font = '10px sans-serif'; ctx.textAlign = 'right'; ctx.lineWidth = 1;
+  for (let vv = mn; vv <= mx; vv += 10) {
+    const y = cy + bH - (vv - mn) * pp;
+    if (y < cy || y > cy+bH) continue;
+    const maj = vv % 50 === 0;
+    const tl = maj ? 12 : 6;
+    const wd = widthAtY(y);
+    ctx.beginPath();
+    ctx.moveTo(cx-wd/2+1, y); ctx.lineTo(cx-wd/2+1+tl, y);
+    ctx.stroke();
+    if (maj) ctx.fillText(vv+'', cx-wd/2-4, y+3);
+  }
+  ctx.font='11px sans-serif'; ctx.textAlign='center'; ctx.fillStyle='#475569'; ctx.fillText('mL', cx, cy-6);
+  // 빨간 화살표
+  ctx.fillStyle='#ef4444'; ctx.font='bold 11px sans-serif'; ctx.textAlign='left';
+  ctx.fillText('← 읽으세요', cx+widthAtY(lY)/2+10, lY+4);
+}
+// #30 — 디지털 저울
+function drawScale(ctx, w, h, m) {
+  const v = m.val, cx = w/2, cy = 60;
+  // 본체
+  ctx.fillStyle='#cbd5e1'; ctx.strokeStyle='#475569'; ctx.lineWidth=2;
+  const bodyW = 240, bodyH = 100;
+  ctx.beginPath();
+  ctx.roundRect(cx-bodyW/2, cy, bodyW, bodyH, 12);
+  ctx.fill(); ctx.stroke();
+  // 화면 (LCD)
+  ctx.fillStyle='#0f172a';
+  ctx.beginPath();
+  ctx.roundRect(cx-bodyW/2+15, cy+15, bodyW-30, 50, 6);
+  ctx.fill();
+  // 숫자 (모노스페이스, 빨강)
+  ctx.font = 'bold 32px "Courier New", monospace';
+  ctx.fillStyle='#ef4444'; ctx.textAlign='right';
+  ctx.fillText(m.dv + ' g', cx+bodyW/2-25, cy+50);
+  // 라벨
+  ctx.font='11px sans-serif'; ctx.fillStyle='#1e293b'; ctx.textAlign='center';
+  ctx.fillText('Digital Balance', cx, cy+85);
+  // 위 접시 (윗부분)
+  ctx.fillStyle='#94a3b8'; ctx.beginPath();
+  ctx.ellipse(cx, cy-15, 90, 12, 0, 0, Math.PI*2);
+  ctx.fill(); ctx.stroke();
+  // 시료
+  ctx.fillStyle='#fbbf24'; ctx.beginPath();
+  ctx.roundRect(cx-30, cy-30, 60, 16, 4);
+  ctx.fill();
+}
+// #30 — 메스플라스크
+function drawFlask(ctx, w, h, m) {
+  const v = m.val, cx = w/2, cy = 30;
+  const neckW = 28, neckH = 100, bodyR = 60;
+  const totalH = neckH + bodyR * 2;
+  // 외형
+  ctx.strokeStyle='#0284c7'; ctx.lineWidth=2; ctx.fillStyle='#e0f2fe';
+  ctx.beginPath();
+  ctx.moveTo(cx-neckW/2, cy);
+  ctx.lineTo(cx-neckW/2, cy+neckH);
+  ctx.arc(cx, cy+neckH+bodyR, bodyR, Math.PI, 0, true);
+  ctx.lineTo(cx+neckW/2, cy);
+  ctx.stroke();
+  // 표시선 (눈금 한 개) — 100 mL 표준
+  const markY = cy + neckH - 20;
+  ctx.strokeStyle='#dc2626'; ctx.lineWidth=1.5;
+  ctx.beginPath();
+  ctx.moveTo(cx-neckW/2, markY); ctx.lineTo(cx+neckW/2, markY);
+  ctx.stroke();
+  ctx.font='10px sans-serif'; ctx.fillStyle='#dc2626'; ctx.textAlign='left';
+  ctx.fillText('100 mL', cx+neckW/2+4, markY+3);
+  // 액체
+  const liquidTop = cy + neckH - (v >= 100 ? 25 : (100-v)*0.5);  // 임의 매핑
+  ctx.fillStyle='rgba(59,130,246,.25)';
+  ctx.beginPath();
+  ctx.moveTo(cx-neckW/2, Math.max(cy+neckH/3, liquidTop));
+  ctx.lineTo(cx-neckW/2, cy+neckH);
+  ctx.arc(cx, cy+neckH+bodyR, bodyR-1, Math.PI, 0, true);
+  ctx.lineTo(cx+neckW/2, Math.max(cy+neckH/3, liquidTop));
+  ctx.quadraticCurveTo(cx, Math.max(cy+neckH/3, liquidTop)+3, cx-neckW/2, Math.max(cy+neckH/3, liquidTop));
+  ctx.fill();
+  // 라벨
+  ctx.font='11px sans-serif'; ctx.textAlign='center'; ctx.fillStyle='#475569';
+  ctx.fillText('mL', cx, cy-6);
+  ctx.fillStyle='#ef4444'; ctx.font='bold 11px sans-serif';
+  ctx.fillText('← 읽으세요', cx+bodyR+15, cy+neckH+bodyR);
+}
+
 function drawInst(cv, m) {
   const ctx = cv.getContext('2d'), w = cv.width, h = cv.height;
   ctx.clearRect(0, 0, w, h);
   if (m.type === 'ruler') drawRuler(ctx, w, h, m);
   else if (m.type === 'cylinder') drawCyl(ctx, w, h, m);
+  else if (m.type === 'thermometer') drawTherm(ctx, w, h, m);
+  else if (m.type === 'beaker') drawBeaker(ctx, w, h, m);
+  else if (m.type === 'scale') drawScale(ctx, w, h, m);
+  else if (m.type === 'flask') drawFlask(ctx, w, h, m);
   else drawTherm(ctx, w, h, m);
 }
 

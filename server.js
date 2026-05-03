@@ -241,6 +241,102 @@ let wrongsDb = safeLoad(WRONGS_FILE, {});
 function saveWrongs() { try { atomicWrite(WRONGS_FILE, JSON.stringify(wrongsDb)); } catch (e) {} }
 function clsWrongs(code) { if (!wrongsDb[code]) wrongsDb[code] = {}; return wrongsDb[code]; }
 
+// ==================== SRS — 간격 반복 학습 (#23) ====================
+// 학생별 약점 카드: 틀린 문제 + 다음 복습 시각 (Leitner 5단계)
+// data/srs.json: { [classroomCode]: { [studentId]: [{ id, kind, payload, box, nextDueAt, lastSeenAt, wrongCount }] } }
+const SRS_FILE = path.join(DATA_DIR, 'srs.json');
+let srsDb = safeLoad(SRS_FILE, {});
+function saveSrs() { try { atomicWrite(SRS_FILE, JSON.stringify(srsDb)); } catch (e) {} }
+function clsSrs(code) { if (!srsDb[code]) srsDb[code] = {}; return srsDb[code]; }
+// Leitner box → 복습 간격 (ms)
+const SRS_INTERVALS = [
+  0,                          // box 0: 즉시 (방금 틀림)
+  10 * 60 * 1000,             // box 1: 10분 후
+  60 * 60 * 1000,             // box 2: 1시간 후
+  6 * 60 * 60 * 1000,         // box 3: 6시간 후
+  24 * 60 * 60 * 1000,        // box 4: 1일 후
+  3 * 24 * 60 * 60 * 1000,    // box 5: 3일 후
+  7 * 24 * 60 * 60 * 1000,    // box 6: 1주 후
+];
+function srsCardKey(item) {
+  // item.q에서 고유 식별자 — gameMode + 핵심 필드
+  const gm = item.gameMode;
+  const q = item.q || {};
+  if (gm === 1 || gm === 2) return gm + ':' + (q.num || '?');
+  if (gm === 3) return gm + ':' + (q.meas?.type || '?') + ':' + (q.meas?.dv || '?');
+  if (gm === 4 || gm === 5) return gm + ':' + (q.display || '?');
+  if (gm === 6) return gm + ':' + (q.num || '?') + ':' + (q.target || '?');
+  return gm + ':?';
+}
+function recordSrsWrong(cls, studentId, item) {
+  const sdb = clsSrs(cls);
+  if (!sdb[studentId]) sdb[studentId] = [];
+  const cards = sdb[studentId];
+  const key = srsCardKey(item);
+  let card = cards.find(c => c.key === key);
+  const now = Date.now();
+  if (!card) {
+    card = { key, gameMode: item.gameMode, difficulty: item.difficulty, q: item.q, box: 0, nextDueAt: now, lastSeenAt: now, wrongCount: 0, correctCount: 0 };
+    cards.push(card);
+  }
+  card.box = 0;  // 다시 box 0으로
+  card.nextDueAt = now;
+  card.lastSeenAt = now;
+  card.wrongCount = (card.wrongCount || 0) + 1;
+  // 학생당 최대 200개 카드 — 가장 오래된 거 제거
+  if (cards.length > 200) cards.shift();
+  saveSrs();
+}
+function recordSrsCorrect(cls, studentId, key) {
+  const sdb = clsSrs(cls);
+  if (!sdb[studentId]) return;
+  const card = sdb[studentId].find(c => c.key === key);
+  if (!card) return;
+  card.box = Math.min(SRS_INTERVALS.length - 1, (card.box || 0) + 1);
+  card.nextDueAt = Date.now() + SRS_INTERVALS[card.box];
+  card.lastSeenAt = Date.now();
+  card.correctCount = (card.correctCount || 0) + 1;
+  saveSrs();
+}
+// 학생 약점 패턴 분석 (#24)
+function analyzeWeaknesses(cls, studentId) {
+  const sdb = clsSrs(cls);
+  const cards = sdb[studentId] || [];
+  const w = clsWrongs(cls);
+  const wrongs = w[studentId] || [];
+  // 패턴별 카운트
+  const patterns = {
+    leadingZero: 0,    // 앞쪽 0 (0.0034)
+    trailingZeroNoDot: 0,  // 소수점 없는 뒤 0 (1200)
+    trailingZeroDot: 0,    // 소수점 있는 뒤 0 (2.50)
+    middleZero: 0,         // 중간 0 (3.04)
+    decimal: 0,            // 소수
+    bigInt: 0,             // 큰 정수
+    sciNotation: 0,        // 과학적 표기법
+    measurement: 0,        // 측정값 읽기
+    addSub: 0,             // 덧셈/뺄셈
+    rounding: 0,           // 반올림
+  };
+  for (const it of wrongs) {
+    const q = it.q || {};
+    const num = q.num || q.display || '';
+    if (it.gameMode === 3) patterns.measurement++;
+    else if (it.gameMode === 4) patterns.addSub++;
+    else if (it.gameMode === 5) patterns.sciNotation++;
+    else if (it.gameMode === 6) patterns.rounding++;
+    else {
+      if (q.scientific || /×10|x10\^|e\d/i.test(num)) patterns.sciNotation++;
+      else if (/^0\.0/.test(num)) patterns.leadingZero++;
+      else if (/^\d+\.\d/.test(num)) patterns.decimal++;
+      else if (/^\d+0+$/.test(num)) patterns.trailingZeroNoDot++;
+      else if (/0+$/.test(num.split('.')[1] || '')) patterns.trailingZeroDot++;
+      else if (/0/.test(num) && !/^0/.test(num)) patterns.middleZero++;
+      else if (/^\d{4,}$/.test(num)) patterns.bigInt++;
+    }
+  }
+  return { patterns, totalCards: cards.length, dueCards: cards.filter(c => c.nextDueAt <= Date.now()).length };
+}
+
 // 교사 프리셋 (자주 쓰는 방 설정)
 let presetsDb = safeLoad(PRESETS_FILE, {});
 function savePresets() { try { atomicWrite(PRESETS_FILE, JSON.stringify(presetsDb, null, 2)); } catch (e) {} }
@@ -1001,14 +1097,14 @@ function judgeAddSub(q, ansStr) {
 }
 
 function genMeas(d) {
-  const t = ['ruler','cylinder','thermometer'][Math.floor(Math.random()*3)];
+  // #30 측정기구 6종 — 자, 눈금실린더, 온도계, 비커, 디지털저울, 메스플라스크
+  const types = ['ruler','cylinder','thermometer','beaker','scale','flask'];
+  const t = types[Math.floor(Math.random()*types.length)];
   let val, dv, unit;
   if (t === 'ruler') {
-    // 쉬움: 정수 근처 정렬, 하드: 끝자리 1~9 강제(어림 필요)
     const b = d==='easy'?Math.random()*5+1:d==='hard'?Math.random()*12+1:Math.random()*8+1;
     val = Math.floor(b*100)/100;
     if (d === 'hard') {
-      // 끝자리(소수 둘째자리)를 1~9로 강제 — 어림하지 않으면 못 맞춤
       const last = Math.floor(Math.random()*9)+1;
       val = Math.floor(val*10)/10 + last/100;
     }
@@ -1021,7 +1117,7 @@ function genMeas(d) {
       val = Math.floor(val) + last/10;
     }
     dv = val.toFixed(1); unit = 'mL';
-  } else {
+  } else if (t === 'thermometer') {
     const b = d==='easy'?Math.random()*30+15:d==='hard'?Math.random()*80-10:Math.random()*50+10;
     val = Math.floor(b*10)/10;
     if (d === 'hard') {
@@ -1029,6 +1125,24 @@ function genMeas(d) {
       val = Math.floor(val) + last/10;
     }
     dv = val.toFixed(1); unit = '°C';
+  } else if (t === 'beaker') {
+    // 비커 — 50 mL 단위, 어림 없음 (눈금이 굵음)
+    const b = d==='easy'?Math.random()*100+50:d==='hard'?Math.random()*350+50:Math.random()*200+50;
+    val = Math.floor(b/10)*10;  // 10 mL 단위
+    if (d === 'hard') val = Math.floor(b/5)*5;  // 5 mL 단위
+    dv = String(val); unit = 'mL';
+  } else if (t === 'scale') {
+    // 디지털 저울 — 0.01 g 까지
+    const b = d==='easy'?Math.random()*50+10:d==='hard'?Math.random()*200+5:Math.random()*100+10;
+    val = Math.floor(b*100)/100;
+    dv = val.toFixed(2); unit = 'g';
+  } else {
+    // flask — 메스플라스크 100mL 표준 (유효숫자 학습 핵심)
+    val = 100;
+    dv = '100.0'; unit = 'mL';
+    // 난이도에 따라 다른 수준의 정확도 학습
+    if (d === 'hard') { val = 100; dv = '100.00'; }
+    else if (d === 'easy') dv = '100';
   }
   return { type: t, val, dv, unit, sf: analyze(dv).count };
 }
@@ -1122,7 +1236,8 @@ function judge(q, answer) {
     const r = judgeRound(q, answer && answer.result);
     return r.ok;
   }
-  const tol = q.meas.type === 'ruler' ? 0.03 : 0.2;
+  const tolMap = { ruler: 0.03, cylinder: 0.2, thermometer: 0.2, beaker: 5, scale: 0.05, flask: 0.5 };
+  const tol = tolMap[q.meas.type] || 0.2;
   const mv = parseFloat(answer && answer.meas);
   const sv = parseInt(answer && answer.sf);
   return !isNaN(mv) && Math.abs(mv - q.meas.val) <= tol && sv === q.meas.sf;
@@ -1737,7 +1852,7 @@ function finalizeRoom(room) {
     if (!w[p.studentId]) w[p.studentId] = [];
     const stamp = Date.now();
     for (const item of wh) {
-      w[p.studentId].push({
+      const record = {
         at: stamp,
         gameMode: room.config.gameMode,
         difficulty: room.config.difficulty,
@@ -1745,7 +1860,10 @@ function finalizeRoom(room) {
         q: item.q,
         submitted: item.submitted,
         timeout: !!item.timeout,
-      });
+      };
+      w[p.studentId].push(record);
+      // SRS — 약점 카드 등록 (#23)
+      recordSrsWrong(cCode, p.studentId, record);
     }
     if (w[p.studentId].length > 100) w[p.studentId] = w[p.studentId].slice(-100);
   }
@@ -1989,8 +2107,10 @@ async function handleApi(req, res, pathname, query) {
       } else {
         pts = 100 + Math.max(0, Math.floor((10 - elapsed) * 5)) + Math.min((p.streak - 1) * 20, 100);
       }
+      // #26 힌트 사용 시 점수 30% 감점
+      if (body.hintUsed) pts = Math.floor(pts * 0.7);
       p.score += pts;
-      p.lastAnswer = { ok: true, elapsed, points: pts, submitted: body.answer };
+      p.lastAnswer = { ok: true, elapsed, points: pts, submitted: body.answer, hintUsed: !!body.hintUsed };
       // 업적
       p.badges = p.badges || [];
       if (p.correct === 1 && !p.badges.includes('first-correct')) p.badges.push('first-correct');
@@ -2945,6 +3065,83 @@ async function handleApi(req, res, pathname, query) {
 
 
   // ---------- 헬스체크 (Render warm-up) ----------
+  // ---------- SRS — 학생 약점 카드 조회 (#23) ----------
+  if (method === 'GET' && pathname === '/api/srs/cards') {
+    const sess = authStudent(req);
+    const tch = teacherClassroom(req);
+    let cls, sid;
+    if (tch) { cls = tch; sid = String(query.studentId || ''); if (!sid) return sendJSON(res, { error: 'studentId 필요' }, 400); }
+    else if (sess) { cls = sess.classroomCode; sid = sess.studentId; }
+    else return sendJSON(res, { error: '인증 필요' }, 401);
+    const cards = (clsSrs(cls)[sid] || []).slice();
+    const now = Date.now();
+    const due = cards.filter(c => (c.nextDueAt || 0) <= now);
+    return sendJSON(res, {
+      total: cards.length,
+      dueNow: due.length,
+      cards: due.slice(0, 30),  // 한 번에 30개까지 복습
+      summary: cards.reduce((acc, c) => { acc.byBox[c.box || 0] = (acc.byBox[c.box || 0] || 0) + 1; return acc; }, { byBox: {} }),
+    });
+  }
+  // SRS — 카드 정답/오답 결과 기록 (학생 복습 후)
+  if (method === 'POST' && pathname === '/api/srs/answer') {
+    const sess = authStudent(req);
+    if (!sess) return sendJSON(res, { error: '로그인 필요' }, 401);
+    const body = await readBody(req);
+    if (!body.key) return sendJSON(res, { error: 'key 필요' }, 400);
+    if (body.correct) recordSrsCorrect(sess.classroomCode, sess.studentId, body.key);
+    else {
+      const cards = clsSrs(sess.classroomCode)[sess.studentId] || [];
+      const c = cards.find(x => x.key === body.key);
+      if (c) { c.box = 0; c.nextDueAt = Date.now(); c.wrongCount = (c.wrongCount||0)+1; saveSrs(); }
+    }
+    return sendJSON(res, { ok: true });
+  }
+  // 약점 분석 (#24)
+  if (method === 'GET' && pathname === '/api/srs/weakness') {
+    const sess = authStudent(req);
+    const tch = teacherClassroom(req);
+    let cls, sid;
+    if (tch) { cls = tch; sid = String(query.studentId || ''); if (!sid) return sendJSON(res, { error: 'studentId 필요' }, 400); }
+    else if (sess) { cls = sess.classroomCode; sid = sess.studentId; }
+    else return sendJSON(res, { error: '인증 필요' }, 401);
+    return sendJSON(res, analyzeWeaknesses(cls, sid));
+  }
+  // ---------- 치트시트 — 유효숫자 규칙 빠른 참고 (#33) ----------
+  if (method === 'GET' && pathname === '/api/cheatsheet') {
+    return sendJSON(res, {
+      sections: [
+        { title: '🔢 유효숫자 기본 규칙', rules: [
+          { rule: '0이 아닌 숫자는 항상 유효', ex: '3.14 → 3개' },
+          { rule: '0이 아닌 숫자 사이의 0은 유효', ex: '1.005 → 4개' },
+          { rule: '소수점 앞쪽의 0은 무효', ex: '0.0034 → 2개' },
+          { rule: '소수점 뒤쪽의 0은 유효', ex: '2.50 → 3개' },
+          { rule: '소수점 없는 정수의 끝 0은 모호', ex: '1200 → 2개 (보수적)' },
+        ]},
+        { title: '➕ 덧셈·뺄셈 규칙', rules: [
+          { rule: '소수 자릿수가 가장 적은 항에 맞춤', ex: '12.34 + 5.6 = 17.9' },
+          { rule: '과학적 표기법은 지수를 먼저 통일', ex: '3.4×10² + 5.6×10¹ = 3.96×10²' },
+        ]},
+        { title: '✖️ 곱셈·나눗셈 규칙', rules: [
+          { rule: '유효숫자 개수가 가장 적은 항에 맞춤', ex: '3.0 × 4.567 = 14 (2개)' },
+        ]},
+        { title: '🔬 과학적 표기법', rules: [
+          { rule: '가수는 1 이상 10 미만', ex: '5000 → 5×10³ (1개) 또는 5.000×10³ (4개)' },
+          { rule: '음수 지수는 작은 수', ex: '0.0023 → 2.3×10⁻³' },
+          { rule: '유효숫자 개수가 명확함', ex: '120 → 1.20×10² (3개)' },
+        ]},
+        { title: '🎯 반올림 규칙', rules: [
+          { rule: '지정 자릿수 다음 자리에서 반올림', ex: '5.367 → 3개로 = 5.37' },
+          { rule: '5는 반올림 (가장 가까운 짝수로 가는 학파도 있음)', ex: '0.4567 → 2개로 = 0.46' },
+        ]},
+        { title: '📏 측정값 읽기', rules: [
+          { rule: '최소 눈금까지 정확히 + 한 자리 어림', ex: '자: 1mm 단위 → 0.01cm까지' },
+          { rule: '눈금 사이 위치를 비율로 어림', ex: '눈금 5와 6 사이 절반 → 5.5' },
+        ]},
+      ],
+    });
+  }
+
   if (method === 'GET' && pathname === '/api/health') {
     return sendJSON(res, { ok: true, uptime: Math.round(process.uptime()), classrooms: Object.keys(classrooms).length, rooms: rooms.size, version: APP_VERSION });
   }
@@ -3080,6 +3277,7 @@ function flushAll() {
   try { atomicWrite(WRONGS_FILE, JSON.stringify(wrongsDb)); } catch(_){}
   try { atomicWrite(PRESETS_FILE, JSON.stringify(presetsDb)); } catch(_){}
   try { atomicWrite(SEASONS_FILE, JSON.stringify(seasonsDb)); } catch(_){}
+  try { atomicWrite(SRS_FILE, JSON.stringify(srsDb)); } catch(_){}
   console.log('[shutdown] all data flushed');
 }
 process.on('SIGTERM', () => { flushAll(); process.exit(0); });
