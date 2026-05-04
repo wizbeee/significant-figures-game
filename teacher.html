@@ -1279,11 +1279,19 @@ function renderSeasonStartForm() {
         + [0,1,2,3,4,5,6].map(d => '<label style="display:inline-flex;align-items:center;gap:4px;background:var(--bg);padding:6px 12px;border-radius:8px;border:1px solid var(--bg3);cursor:pointer"><input type="checkbox" class="ss-day" value="'+d+'" '+([1,2,3,4,5].includes(d)?'checked':'')+'> '+DAY_LABEL[d]+'</label>').join('')
       + '</div>'
     + '</div>'
-    + '<div class="grid" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:14px">'
-      + '<div><label>활성 시작 시간 (선택)</label><input id="ss-daily-start" type="time" value="" placeholder="09:00" style="width:100%"></div>'
-      + '<div><label>활성 종료 시간 (선택)</label><input id="ss-daily-end" type="time" value="" placeholder="17:00" style="width:100%"></div>'
+    + '<div style="margin-top:14px">'
+      + '<label style="display:block;margin-bottom:6px">⏱ 활성 시간 윈도우 (여러 개 가능 — 점심+저녁 분리 운영)</label>'
+      + '<div id="ss-windows-list" style="display:flex;flex-direction:column;gap:6px"></div>'
+      + '<div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap">'
+        + '<button type="button" class="btn btn-ghost btn-sm" onclick="addSsWindow(\'\',\'\')">+ 윈도우 추가</button>'
+        + '<button type="button" class="btn btn-ghost btn-sm" onclick="ssWindowsPreset(\'lunch\')">🍱 점심만 (12:30~13:30)</button>'
+        + '<button type="button" class="btn btn-ghost btn-sm" onclick="ssWindowsPreset(\'dinner\')">🍽 저녁만 (18:30~19:30)</button>'
+        + '<button type="button" class="btn btn-ghost btn-sm" onclick="ssWindowsPreset(\'mealtimes\')">🍱🍽 점심+저녁 둘 다</button>'
+        + '<button type="button" class="btn btn-ghost btn-sm" onclick="ssWindowsPreset(\'school\')">🏫 수업시간 (09:00~17:00)</button>'
+        + '<button type="button" class="btn btn-ghost btn-sm" onclick="ssWindowsPreset(\'clear\')">🗑 비우기 (종일)</button>'
+      + '</div>'
+      + '<div style="font-size:.82rem;color:var(--txt2);margin-top:6px">💡 윈도우를 비워두면 종일 활성. 여러 윈도우 입력 시 그 시간대만 활성됩니다.</div>'
     + '</div>'
-    + '<div style="font-size:.82rem;color:var(--txt2);margin-top:6px">💡 시간대를 비워두면 종일 활성</div>'
     + '<div style="margin-top:18px;display:flex;gap:8px;justify-content:flex-end">'
       + '<button class="btn btn-pri btn-lg" onclick="startSeason()">🚀 시즌 시작</button>'
     + '</div>';
@@ -1306,7 +1314,9 @@ function renderActiveSeasonPanel(r) {
           + (c.theme ? '<div style="color:var(--txt2);margin-top:4px">📚 테마: ' + _h(c.theme) + '</div>' : '')
           + '<div style="color:var(--txt2);font-size:.88rem;margin-top:8px">⏰ ' + fmtDateTime(c.startsAt) + ' ~ ' + fmtDateTime(c.endsAt) + '</div>'
           + (c.activeDays?.length ? '<div style="color:var(--txt2);font-size:.85rem;margin-top:4px">🗓 ' + c.activeDays.map(d => DAY_LABEL[d]).join('·') + '요일</div>' : '')
-          + (c.dailyStart ? '<div style="color:var(--txt2);font-size:.85rem;margin-top:4px">⏱ ' + c.dailyStart + ' ~ ' + c.dailyEnd + '</div>' : '')
+          + (Array.isArray(c.activeWindows) && c.activeWindows.length > 0
+              ? '<div style="color:var(--txt2);font-size:.85rem;margin-top:4px">⏱ ' + c.activeWindows.map(w => w.start + '~' + w.end).join(' · ') + '</div>'
+              : (c.dailyStart ? '<div style="color:var(--txt2);font-size:.85rem;margin-top:4px">⏱ ' + c.dailyStart + ' ~ ' + c.dailyEnd + '</div>' : ''))
         + '</div>'
         + '<div style="display:flex;gap:6px;flex-wrap:wrap">'
           + '<button class="btn ' + (c.manualPaused ? 'btn-sec' : 'btn-acc') + ' btn-sm" onclick="toggleSeasonPause()">' + (c.manualPaused ? '▶ 재개' : '⏸ 일시정지') + '</button>'
@@ -1345,6 +1355,37 @@ async function loadSeasonLeaderboard() {
 
 // (시즌 점수판은 loadSeason 내부에서 직접 호출하도록 변경)
 
+// 다중 활성 윈도우 — 시즌 시작 폼
+function addSsWindow(start, end) {
+  const list = document.getElementById('ss-windows-list');
+  if (!list) return;
+  const row = document.createElement('div');
+  row.className = 'ss-win-row';
+  row.style.cssText = 'display:flex;gap:6px;align-items:center';
+  row.innerHTML = '<input type="time" class="ss-win-start" value="' + (start||'') + '" style="width:130px"> ~ <input type="time" class="ss-win-end" value="' + (end||'') + '" style="width:130px"> <button type="button" class="btn btn-ghost btn-sm" onclick="this.closest(\'.ss-win-row\').remove()">🗑</button>';
+  list.appendChild(row);
+}
+function ssWindowsPreset(kind) {
+  const list = document.getElementById('ss-windows-list');
+  if (!list) return;
+  list.innerHTML = '';
+  if (kind === 'lunch') addSsWindow('12:30','13:30');
+  else if (kind === 'dinner') addSsWindow('18:30','19:30');
+  else if (kind === 'mealtimes') { addSsWindow('12:30','13:30'); addSsWindow('18:30','19:30'); }
+  else if (kind === 'school') addSsWindow('09:00','17:00');
+  // 'clear' 면 그냥 비움
+}
+function collectActiveWindows(rootEl) {
+  const root = rootEl || document;
+  const wins = [];
+  root.querySelectorAll('.ss-win-row, .ed-win-row').forEach(r => {
+    const s = r.querySelector('.ss-win-start, .ed-win-start')?.value;
+    const e = r.querySelector('.ss-win-end, .ed-win-end')?.value;
+    if (s && e) wins.push({ start: s, end: e });
+  });
+  return wins;
+}
+
 async function startSeason() {
   const name = document.getElementById('ss-name').value.trim();
   const theme = document.getElementById('ss-theme').value.trim();
@@ -1354,10 +1395,8 @@ async function startSeason() {
   if (!startsAt || !endsAt) { toast('시작/종료 일시를 입력하세요', 'warn'); return; }
   if (startsAt >= endsAt) { toast('종료가 시작보다 빠릅니다', 'err'); return; }
   const activeDays = Array.from(document.querySelectorAll('.ss-day:checked')).map(c => parseInt(c.value));
-  const dailyStart = document.getElementById('ss-daily-start').value || null;
-  const dailyEnd = document.getElementById('ss-daily-end').value || null;
-  if ((dailyStart && !dailyEnd) || (!dailyStart && dailyEnd)) { toast('활성 시간대 시작/종료 모두 입력하세요', 'warn'); return; }
-  const r = await teacherApi('/api/teacher/season/start', { method:'POST', body: { name, theme, startsAt, endsAt, activeDays, dailyStart, dailyEnd } });
+  const activeWindows = collectActiveWindows();
+  const r = await teacherApi('/api/teacher/season/start', { method:'POST', body: { name, theme, startsAt, endsAt, activeDays, activeWindows: activeWindows.length ? activeWindows : null } });
   if (r.error) { toast(r.error, 'err'); return; }
   toast('시즌 "' + name + '" 시작!', 'ok');
   loadSeason();
@@ -1425,34 +1464,75 @@ async function showEditSeasonModal() {
   const c = r.season;
   if (!c) return;
   const wrap = document.createElement('div');
+  const existingWindows = Array.isArray(c.activeWindows) && c.activeWindows.length > 0
+    ? c.activeWindows
+    : (c.dailyStart && c.dailyEnd ? [{ start: c.dailyStart, end: c.dailyEnd }] : []);
   wrap.innerHTML = '<div class="grid" style="display:grid;grid-template-columns:1fr 1fr;gap:10px">'
     + '<div><label>이름</label><input class="ed-name" type="text" value="' + _h(c.name) + '" maxlength="30" style="width:100%"></div>'
     + '<div><label>테마</label><input class="ed-theme" type="text" value="' + _h(c.theme||'') + '" maxlength="50" style="width:100%"></div>'
     + '<div><label>시작 일시</label><input class="ed-starts" type="datetime-local" value="' + toLocalInput(c.startsAt) + '" style="width:100%"></div>'
     + '<div><label>종료 일시</label><input class="ed-ends" type="datetime-local" value="' + toLocalInput(c.endsAt) + '" style="width:100%"></div>'
-    + '<div><label>활성 시작 시간</label><input class="ed-dstart" type="time" value="' + (c.dailyStart||'') + '" style="width:100%"></div>'
-    + '<div><label>활성 종료 시간</label><input class="ed-dend" type="time" value="' + (c.dailyEnd||'') + '" style="width:100%"></div>'
     + '</div>'
     + '<div style="margin-top:14px"><label style="display:block;margin-bottom:6px">활성 요일</label>'
     + '<div style="display:flex;gap:6px;flex-wrap:wrap">'
     + [0,1,2,3,4,5,6].map(d => '<label style="display:inline-flex;align-items:center;gap:4px;background:var(--bg);padding:6px 12px;border-radius:8px;border:1px solid var(--bg3);cursor:pointer"><input type="checkbox" class="ed-day" value="'+d+'" '+((c.activeDays||[]).includes(d)?'checked':'')+'> '+DAY_LABEL[d]+'</label>').join('')
-    + '</div></div>';
+    + '</div></div>'
+    + '<div style="margin-top:14px"><label style="display:block;margin-bottom:6px">⏱ 활성 시간 윈도우 (여러 개 가능)</label>'
+    + '<div class="ed-windows-list" style="display:flex;flex-direction:column;gap:6px"></div>'
+    + '<div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap">'
+      + '<button type="button" class="btn btn-ghost btn-sm" onclick="addEdWindow(this)">+ 윈도우</button>'
+      + '<button type="button" class="btn btn-ghost btn-sm" onclick="edWindowsPreset(this,\'lunch\')">🍱 점심</button>'
+      + '<button type="button" class="btn btn-ghost btn-sm" onclick="edWindowsPreset(this,\'dinner\')">🍽 저녁</button>'
+      + '<button type="button" class="btn btn-ghost btn-sm" onclick="edWindowsPreset(this,\'mealtimes\')">🍱🍽 점심+저녁</button>'
+      + '<button type="button" class="btn btn-ghost btn-sm" onclick="edWindowsPreset(this,\'clear\')">🗑 비우기</button>'
+    + '</div>'
+    + '<div style="font-size:.82rem;color:var(--txt2);margin-top:6px">💡 비우면 종일 활성</div>'
+    + '</div>';
+  // 기존 윈도우 채우기
+  const list = wrap.querySelector('.ed-windows-list');
+  for (const w of existingWindows) {
+    const row = document.createElement('div');
+    row.className = 'ed-win-row';
+    row.style.cssText = 'display:flex;gap:6px;align-items:center';
+    row.innerHTML = '<input type="time" class="ed-win-start" value="' + w.start + '" style="width:130px"> ~ <input type="time" class="ed-win-end" value="' + w.end + '" style="width:130px"> <button type="button" class="btn btn-ghost btn-sm" onclick="this.closest(\'.ed-win-row\').remove()">🗑</button>';
+    list.appendChild(row);
+  }
   const v = await modal({ title: '✏️ 시즌 일정 수정', body: wrap, wide: true,
     actions: [{label:'취소',value:null,kind:'ghost'},{label:'✅ 저장',value:'save',kind:'pri'}],
   });
   if (v !== 'save') return;
+  const wins = collectActiveWindows(wrap);
   const body = {
     name: wrap.querySelector('.ed-name').value.trim(),
     theme: wrap.querySelector('.ed-theme').value.trim(),
     startsAt: parseLocalInput(wrap.querySelector('.ed-starts').value),
     endsAt: parseLocalInput(wrap.querySelector('.ed-ends').value),
     activeDays: Array.from(wrap.querySelectorAll('.ed-day:checked')).map(c => parseInt(c.value)),
-    dailyStart: wrap.querySelector('.ed-dstart').value || null,
-    dailyEnd: wrap.querySelector('.ed-dend').value || null,
+    activeWindows: wins.length ? wins : null,
+    // 레거시 dailyStart/dailyEnd 도 함께 비우기 (혼동 방지)
+    dailyStart: null, dailyEnd: null,
   };
   const r2 = await teacherApi('/api/teacher/season/edit', { method:'POST', body });
   if (r2.error) toast(r2.error, 'err'); else toast('시즌 일정 수정됨', 'ok');
   loadSeason();
+}
+// ed-* 헬퍼 (편집 모달 내부)
+function addEdWindow(btn, start, end) {
+  const list = btn.closest('.modal-back').querySelector('.ed-windows-list');
+  if (!list) return;
+  const row = document.createElement('div');
+  row.className = 'ed-win-row';
+  row.style.cssText = 'display:flex;gap:6px;align-items:center';
+  row.innerHTML = '<input type="time" class="ed-win-start" value="' + (start||'') + '" style="width:130px"> ~ <input type="time" class="ed-win-end" value="' + (end||'') + '" style="width:130px"> <button type="button" class="btn btn-ghost btn-sm" onclick="this.closest(\'.ed-win-row\').remove()">🗑</button>';
+  list.appendChild(row);
+}
+function edWindowsPreset(btn, kind) {
+  const list = btn.closest('.modal-back').querySelector('.ed-windows-list');
+  if (!list) return;
+  list.innerHTML = '';
+  if (kind === 'lunch') addEdWindow(btn, '12:30','13:30');
+  else if (kind === 'dinner') addEdWindow(btn, '18:30','19:30');
+  else if (kind === 'mealtimes') { addEdWindow(btn, '12:30','13:30'); addEdWindow(btn, '18:30','19:30'); }
 }
 
 async function showSeasonDetail(id) {

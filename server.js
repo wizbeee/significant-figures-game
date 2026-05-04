@@ -22,8 +22,9 @@ const BACKUPS_DIR = path.join(DATA_DIR, 'backups');
 // (레거시) 단일 교실용 파일 — 있으면 자동으로 default 교실로 이관
 const LEGACY_CONFIG_FILE = path.join(DATA_DIR, 'config.json');
 const DEFAULT_CLASSROOM = 'default';
-const STUDENT_TOKEN_TTL_MS = 1000 * 60 * 60 * 6;   // 6시간 — 정규수업 한 차시 + 여유
-const TEACHER_TOKEN_TTL_MS = 1000 * 60 * 60 * 12;  // 12시간
+// #B-token-ttl — 환경변수로 조절 가능 (점심/저녁 운영 시 24시간 권장)
+const STUDENT_TOKEN_TTL_MS = (parseInt(process.env.STUDENT_TOKEN_TTL_HOURS) || 24) * 1000 * 60 * 60;
+const TEACHER_TOKEN_TTL_MS = (parseInt(process.env.TEACHER_TOKEN_TTL_HOURS) || 24) * 1000 * 60 * 60;
 
 // ==================== 버전 (#73) ====================
 const APP_VERSION = (() => {
@@ -375,7 +376,15 @@ function seasonState(cls, now) {
     const day = new Date(now).getDay();
     if (!c.activeDays.includes(day)) return 'paused';
   }
-  if (c.dailyStart && c.dailyEnd) {
+  // #B-multi — 다중 활성 시간 윈도우 (예: [{start:'12:30',end:'13:30'},{start:'18:30',end:'19:30'}])
+  // activeWindows 가 있으면 우선 — 비어있지 않은 배열일 때만
+  if (Array.isArray(c.activeWindows) && c.activeWindows.length > 0) {
+    const d2 = new Date(now);
+    const hm = String(d2.getHours()).padStart(2,'0') + ':' + String(d2.getMinutes()).padStart(2,'0');
+    const inAny = c.activeWindows.some(w => w && w.start && w.end && hm >= w.start && hm < w.end);
+    if (!inAny) return 'paused';
+  } else if (c.dailyStart && c.dailyEnd) {
+    // 레거시 단일 윈도우
     const d2 = new Date(now);
     const hm = String(d2.getHours()).padStart(2,'0') + ':' + String(d2.getMinutes()).padStart(2,'0');
     if (hm < c.dailyStart || hm >= c.dailyEnd) return 'paused';
@@ -458,6 +467,8 @@ function tickSeasons() {
   }
 }
 setInterval(tickSeasons, 1000 * 30);  // 30초마다 체크
+// #B-boot — 부팅 직후 즉시 1회 실행 (서버 꺼진 동안 종료 시각 도달한 시즌 처리)
+setTimeout(() => { try { tickSeasons(); } catch (e) { console.error('[season] boot tick err:', e.message); } }, 500);
 
 // ==================== Rate Limiter (DoS / brute-force 방어) ====================
 const rateBuckets = new Map();
@@ -3194,11 +3205,27 @@ async function handleApi(req, res, pathname, query) {
     const dailyEnd = hmRe.test(body.dailyEnd) ? body.dailyEnd : null;
     if ((dailyStart && !dailyEnd) || (!dailyStart && dailyEnd)) return sendJSON(res, { error: '활성 시간대는 시작/종료 모두 필요' }, 400);
     if (dailyStart && dailyEnd && dailyStart >= dailyEnd) return sendJSON(res, { error: '활성 시간 범위가 잘못되었습니다' }, 400);
+    // #B-multi — 다중 활성 윈도우 검증 (점심+저녁 등)
+    let activeWindows = null;
+    if (Array.isArray(body.activeWindows) && body.activeWindows.length > 0) {
+      activeWindows = [];
+      for (const w of body.activeWindows) {
+        if (!w || !hmRe.test(w.start) || !hmRe.test(w.end)) return sendJSON(res, { error: '활성 윈도우 시간 형식 오류 (HH:MM)' }, 400);
+        if (w.start >= w.end) return sendJSON(res, { error: `활성 윈도우 ${w.start}~${w.end} — 시작이 종료보다 같거나 늦을 수 없음 (자정 가로지름 미지원)` }, 400);
+        activeWindows.push({ start: w.start, end: w.end });
+      }
+      // 윈도우끼리 겹침 검사 — 정렬 후 인접 비교
+      activeWindows.sort((a, b) => a.start.localeCompare(b.start));
+      for (let i = 1; i < activeWindows.length; i++) {
+        if (activeWindows[i].start < activeWindows[i-1].end) return sendJSON(res, { error: `활성 윈도우 겹침: ${activeWindows[i-1].start}~${activeWindows[i-1].end} 와 ${activeWindows[i].start}~${activeWindows[i].end}` }, 400);
+      }
+      if (activeWindows.length > 6) return sendJSON(res, { error: '활성 윈도우는 최대 6개' }, 400);
+    }
     const id = 's' + Date.now() + '_' + Math.random().toString(36).slice(2, 6);
     d.current = {
       id, name, theme,
       startsAt, endsAt,
-      activeDays, dailyStart, dailyEnd,
+      activeDays, dailyStart, dailyEnd, activeWindows,
       manualPaused: false, scheduledPause: null,
       createdAt: Date.now(),
     };
@@ -3254,6 +3281,25 @@ async function handleApi(req, res, pathname, query) {
     if (newDS && newDE && newDS >= newDE) return sendJSON(res, { error: '활성 시간대 — 시작이 종료보다 같거나 늦을 수 없습니다 (자정 가로지름은 미지원)' }, 400);
     c.dailyStart = newDS;
     c.dailyEnd = newDE;
+    // #B-multi — activeWindows 변경 (점심+저녁 둘 다)
+    if (body.activeWindows !== undefined) {
+      if (!Array.isArray(body.activeWindows) || body.activeWindows.length === 0) {
+        c.activeWindows = null;
+      } else {
+        const wins = [];
+        for (const w of body.activeWindows) {
+          if (!w || !hmRe.test(w.start) || !hmRe.test(w.end)) return sendJSON(res, { error: '활성 윈도우 시간 형식 오류' }, 400);
+          if (w.start >= w.end) return sendJSON(res, { error: `활성 윈도우 ${w.start}~${w.end} — 시작이 종료보다 같거나 늦을 수 없음` }, 400);
+          wins.push({ start: w.start, end: w.end });
+        }
+        wins.sort((a, b) => a.start.localeCompare(b.start));
+        for (let i = 1; i < wins.length; i++) {
+          if (wins[i].start < wins[i-1].end) return sendJSON(res, { error: '활성 윈도우 겹침' }, 400);
+        }
+        if (wins.length > 6) return sendJSON(res, { error: '활성 윈도우는 최대 6개' }, 400);
+        c.activeWindows = wins;
+      }
+    }
     // 일정 변경으로 scheduledPause 윈도우가 시즌 외로 벗어나면 자동 정리
     if (c.scheduledPause && (c.scheduledPause.from < c.startsAt || c.scheduledPause.to > c.endsAt)) {
       c.scheduledPause = null;
@@ -3657,7 +3703,24 @@ setInterval(() => {
 
 // 클라우드 배포 시 0.0.0.0 에 바인딩 — 모든 인터페이스에서 수신
 const HOST = process.env.HOST || '0.0.0.0';
-// Graceful shutdown — 즉시 flush (디바운스 우회)
+// Graceful shutdown — 진행 중 게임 finalize + 즉시 flush (#B-shutdown)
+function gracefulShutdown(signal) {
+  console.log(`[shutdown] ${signal} 수신 — 진행 중 게임 finalize 시작`);
+  let finalized = 0;
+  for (const [code, room] of rooms) {
+    try {
+      if (room.phase === 'question' || room.phase === 'reveal') {
+        if (room.phaseTimer) clearTimeout(room.phaseTimer);
+        if (room.multiTick) { clearInterval(room.multiTick); room.multiTick = null; }
+        room.phase = 'results';
+        finalizeRoom(room);
+        finalized++;
+      }
+    } catch (e) { console.error('[shutdown] finalize 실패:', code, e.message); }
+  }
+  if (finalized > 0) console.log(`[shutdown] ${finalized}개 진행 중 게임 finalize 완료`);
+  flushAll();
+}
 function flushAll() {
   try { atomicWrite(LB_FILE, JSON.stringify(leaderboards)); } catch(_){}
   try { atomicWrite(STUDENTS_FILE, JSON.stringify(studentsDb)); } catch(_){}
@@ -3669,9 +3732,9 @@ function flushAll() {
   try { atomicWrite(SRS_FILE, JSON.stringify(srsDb)); } catch(_){}
   console.log('[shutdown] all data flushed');
 }
-process.on('SIGTERM', () => { flushAll(); process.exit(0); });
-process.on('SIGINT',  () => { flushAll(); process.exit(0); });
-process.on('uncaughtException', (e) => { console.error('[uncaught]', e); flushAll(); });
+process.on('SIGTERM', () => { gracefulShutdown('SIGTERM'); process.exit(0); });
+process.on('SIGINT',  () => { gracefulShutdown('SIGINT'); process.exit(0); });
+process.on('uncaughtException', (e) => { console.error('[uncaught]', e); gracefulShutdown('uncaught'); });
 process.on('unhandledRejection', (e) => { console.error('[unhandled]', e); });
 
 server.listen(PORT, HOST, () => {
