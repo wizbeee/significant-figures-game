@@ -4,4 +4,29 @@
 requirements.txt
 입학전형위원_전자서명/
 .claude/
+
+# 데이터 (개인정보·비밀번호 해시 보호)
 data/
+
+# 환경변수 (실제 값은 깃에 올리지 않음)
+.env
+.env.local
+
+# Node 부산물 (사용 시 대비)
+node_modules/
+npm-debug.log
+.npm/
+
+# OS 부산물
+.DS_Store
+Thumbs.db
+
+# 에디터
+.vscode/
+.idea/
+*.swp
+
+# 임시 작업 스크립트 (이전 세션 잔재 정리용)
+_apply_*.js
+_teacher_inline.js
+_w*.js

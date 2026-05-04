@@ -5,7 +5,11 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "test": "node --test test/"
+    "test": "node --test test/analyze.test.js test/parseUserNum.test.js test/hasBadWord.test.js",
+    "test:watch": "node --test --watch test/analyze.test.js test/parseUserNum.test.js test/hasBadWord.test.js",
+    "syntax": "node -c server.js && echo OK",
+    "health": "curl -s http://localhost:8093/api/health | node -e \"let s='';process.stdin.on('data',c=>s+=c).on('end',()=>console.log(JSON.parse(s)))\"",
+    "version": "node -e \"console.log(require('child_process').execSync('git rev-parse --short HEAD').toString().trim())\""
   },
   "engines": {
     "node": ">=18"
