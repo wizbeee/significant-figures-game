@@ -391,7 +391,15 @@ function endSeasonNow(cls, now) {
   const d = clsSeasons(cls);
   const c = d.current;
   if (!c) return null;
-  const lb = (d.leaderboard || []).slice().sort((a,b) => b.score - a.score);
+  // #B28 — 명시적 tiebreaker: 점수 ↓ → 정답률 ↓ → 게임 수 ↓ → 먼저 누적된 학생 우선
+  const lb = (d.leaderboard || []).slice().sort((a, b) => {
+    if (b.score !== a.score) return b.score - a.score;
+    const accA = a.totalTotal > 0 ? a.correctTotal / a.totalTotal : 0;
+    const accB = b.totalTotal > 0 ? b.correctTotal / b.totalTotal : 0;
+    if (accB !== accA) return accB - accA;
+    if ((b.gamesPlayed||0) !== (a.gamesPlayed||0)) return (b.gamesPlayed||0) - (a.gamesPlayed||0);
+    return (a.firstAt || 0) - (b.firstAt || 0);  // 먼저 시작한 학생 우선
+  });
   // 랭크 부여 — 마스터 5% / 다이아 15% / 골드 30% / 실버 30% / 브론즈 나머지
   const total = lb.length;
   const ranked = lb.map((e, i) => {
@@ -1641,6 +1649,9 @@ function startRoom(room) {
   room.phase = 'question';
   room.currentQStart = Date.now();
   room.submittedToLB = false;
+  // #B22 — 게임 시작 시점에 시즌 활성 여부 캡처 (이후 종료 시점에 변경되어도 결정 유지)
+  room.seasonActiveAtStart = isSeasonActive(room.classroomCode);
+  room.seasonIdAtStart = clsSeasons(room.classroomCode).current?.id || null;
   if (isTimed) {
     room.timedStartAt = Date.now();
     room.timedEndAt = Date.now() + room.config.timeLimit * 1000;
@@ -1830,9 +1841,12 @@ function finalizeRoom(room) {
       playerCount: players.length,
     }));
   }
-  // 시즌 활성 상태일 때만 — 시즌 점수판에도 기록 (점수 합산 — 학생별 누적)
-  if (isSeasonActive(cCode)) {
-    const sd = clsSeasons(cCode);
+  // #B22 — 게임 시작 시점에 시즌 활성이었던 경우만 누적 (게임 도중 정지/종료되어도 OK)
+  // 단 시즌이 그 사이 다른 시즌으로 교체된 경우엔 누적 X (seasonId 일치 검사)
+  const sdCur = clsSeasons(cCode);
+  const seasonOk = room.seasonActiveAtStart && sdCur.current && sdCur.current.id === room.seasonIdAtStart;
+  if (seasonOk) {
+    const sd = sdCur;
     const winnerId = type === 'battle' ? players.slice().sort((a,b)=>b.score-a.score)[0]?.id : null;
     // #21 — Map 기반 lookup (O(1)) 위해 1회 인덱싱
     const lbIndex = new Map();
@@ -3119,7 +3133,15 @@ async function handleApi(req, res, pathname, query) {
     const tch = teacherClassroom(req);
     const cls = sess ? sess.classroomCode : (tch || normCode(query.classroomCode));
     if (!cls) return sendJSON(res, { error: 'classroomCode 필요' }, 400);
-    const lb = (clsSeasons(cls).leaderboard || []).slice().sort((a,b) => b.score - a.score);
+    // #B28 — 일관된 tiebreaker (점수↓ 정답률↓ 게임수↓ 먼저시작↑)
+    const lb = (clsSeasons(cls).leaderboard || []).slice().sort((a, b) => {
+      if (b.score !== a.score) return b.score - a.score;
+      const accA = a.totalTotal > 0 ? a.correctTotal / a.totalTotal : 0;
+      const accB = b.totalTotal > 0 ? b.correctTotal / b.totalTotal : 0;
+      if (accB !== accA) return accB - accA;
+      if ((b.gamesPlayed||0) !== (a.gamesPlayed||0)) return (b.gamesPlayed||0) - (a.gamesPlayed||0);
+      return (a.firstAt || 0) - (b.firstAt || 0);
+    });
     return sendJSON(res, { entries: lb.slice(0, 200), total: lb.length });
   }
 
@@ -3160,6 +3182,8 @@ async function handleApi(req, res, pathname, query) {
     const startsAt = parseInt(body.startsAt);
     const endsAt = parseInt(body.endsAt);
     if (!startsAt || !endsAt || startsAt >= endsAt) return sendJSON(res, { error: '시작/종료 일시가 올바르지 않습니다' }, 400);
+    // sanity — 2020년 이후 ms timestamp 만 허용
+    if (startsAt < 1577836800000 || endsAt < 1577836800000) return sendJSON(res, { error: '일시 값이 너무 과거입니다 (2020년 이후만)' }, 400);
     if (endsAt - startsAt < 60_000) return sendJSON(res, { error: '시즌은 최소 1분 이상이어야 합니다' }, 400);
     if (endsAt - startsAt > 1000 * 60 * 60 * 24 * 365) return sendJSON(res, { error: '시즌은 1년을 넘을 수 없습니다' }, 400);
     const name = sanitizeStr(body.name, 30) || '시즌';
@@ -3180,6 +3204,7 @@ async function handleApi(req, res, pathname, query) {
     };
     d.leaderboard = [];
     saveSeasons();
+    audit(req, 'season_start', { cls, season: d.current.id, name, startsAt, endsAt });
     return sendJSON(res, { ok: true, season: d.current });
   }
 
@@ -3189,6 +3214,7 @@ async function handleApi(req, res, pathname, query) {
     if (!cls) return sendJSON(res, { error: '교사 권한' }, 401);
     const archived = endSeasonNow(cls);
     if (!archived) return sendJSON(res, { error: '진행 중인 시즌 없음' }, 400);
+    audit(req, 'season_end_now', { cls, season: archived.id, name: archived.name, totalParticipants: archived.totalParticipants });
     return sendJSON(res, { ok: true, archived });
   }
 
@@ -3199,25 +3225,43 @@ async function handleApi(req, res, pathname, query) {
     const body = await readBody(req);
     const c = clsSeasons(cls).current;
     if (!c) return sendJSON(res, { error: '진행 중인 시즌 없음' }, 400);
+    // #B16 — 두 값 모두 동시에 검증 (atomic)
+    let newStarts = c.startsAt, newEnds = c.endsAt;
     if (body.startsAt !== undefined) {
       const v = parseInt(body.startsAt);
-      if (isNaN(v)) return sendJSON(res, { error: 'startsAt 오류' }, 400);
-      c.startsAt = v;
+      if (isNaN(v) || v < 1577836800000 /* 2020-01-01 */) return sendJSON(res, { error: 'startsAt 오류 (2020년 이후 ms)' }, 400);
+      newStarts = v;
     }
     if (body.endsAt !== undefined) {
       const v = parseInt(body.endsAt);
-      if (isNaN(v) || v <= c.startsAt) return sendJSON(res, { error: 'endsAt 오류' }, 400);
-      c.endsAt = v;
+      if (isNaN(v) || v < 1577836800000) return sendJSON(res, { error: 'endsAt 오류' }, 400);
+      newEnds = v;
     }
+    if (newStarts >= newEnds) return sendJSON(res, { error: '시작 일시가 종료 일시보다 같거나 늦을 수 없습니다' }, 400);
+    if (newEnds - newStarts < 60_000) return sendJSON(res, { error: '시즌은 최소 1분 이상이어야 합니다' }, 400);
+    if (newEnds - newStarts > 1000 * 60 * 60 * 24 * 365) return sendJSON(res, { error: '시즌은 1년을 넘을 수 없습니다' }, 400);
+    c.startsAt = newStarts;
+    c.endsAt = newEnds;
     if (body.activeDays !== undefined) {
       c.activeDays = Array.isArray(body.activeDays) ? body.activeDays.filter(x => x>=0 && x<=6).map(Number) : [];
     }
     const hmRe = /^([01]\d|2[0-3]):[0-5]\d$/;
-    if (body.dailyStart !== undefined) c.dailyStart = hmRe.test(body.dailyStart) ? body.dailyStart : null;
-    if (body.dailyEnd !== undefined)   c.dailyEnd = hmRe.test(body.dailyEnd) ? body.dailyEnd : null;
+    // #B18 — dailyStart/dailyEnd 둘 다 valid 일 때만, 그리고 같이 변경 시 순서 검증
+    let newDS = c.dailyStart, newDE = c.dailyEnd;
+    if (body.dailyStart !== undefined) newDS = hmRe.test(body.dailyStart) ? body.dailyStart : null;
+    if (body.dailyEnd !== undefined)   newDE = hmRe.test(body.dailyEnd) ? body.dailyEnd : null;
+    if ((newDS && !newDE) || (!newDS && newDE)) return sendJSON(res, { error: '활성 시간대는 시작/종료 모두 필요' }, 400);
+    if (newDS && newDE && newDS >= newDE) return sendJSON(res, { error: '활성 시간대 — 시작이 종료보다 같거나 늦을 수 없습니다 (자정 가로지름은 미지원)' }, 400);
+    c.dailyStart = newDS;
+    c.dailyEnd = newDE;
+    // 일정 변경으로 scheduledPause 윈도우가 시즌 외로 벗어나면 자동 정리
+    if (c.scheduledPause && (c.scheduledPause.from < c.startsAt || c.scheduledPause.to > c.endsAt)) {
+      c.scheduledPause = null;
+    }
     if (body.name) c.name = sanitizeStr(body.name, 30);
     if (body.theme !== undefined) c.theme = sanitizeStr(body.theme, 50);
     saveSeasons();
+    audit(req, 'season_edit', { cls, season: c.id });
     return sendJSON(res, { ok: true, season: c });
   }
 
@@ -3255,8 +3299,12 @@ async function handleApi(req, res, pathname, query) {
     const d = clsSeasons(cls);
     if (!d.current) return sendJSON(res, { error: '진행 중인 시즌 없음' }, 400);
     const removed = d.leaderboard.length;
+    // 안전장치 — 100건 이상 reset 시엔 confirm=true 필요 (실수 방지)
+    const body = await readBody(req);
+    if (removed >= 100 && !body.confirm) return sendJSON(res, { error: '100건 이상 점수판 초기화 — body.confirm:true 필요', removed }, 400);
     d.leaderboard = [];
     saveSeasons();
+    audit(req, 'season_lb_reset', { cls, season: d.current.id, removed });
     return sendJSON(res, { ok: true, removed });
   }
 
