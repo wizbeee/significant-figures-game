@@ -6,6 +6,7 @@ services:
     region: singapore
     buildCommand: "echo 'no build needed — zero-dependency'"
     startCommand: "node server.js"
+    autoDeploy: true
     envVars:
       - key: NODE_VERSION
         value: "20"
@@ -13,7 +14,20 @@ services:
         value: "/var/data"
       - key: TEACHER_PASSWORD
         generateValue: true
+      # 학생 토큰 유효시간 — 점심+저녁 단절 운영 시 48 권장
+      - key: STUDENT_TOKEN_TTL_HOURS
+        value: "48"
+      - key: TEACHER_TOKEN_TTL_HOURS
+        value: "48"
+      # 점수판 상한 (학기 누적 큰 학교는 10000)
+      - key: LB_CAP
+        value: "10000"
+      # CORS — 배포 후 본인 도메인으로 좁히는 게 안전
+      # 예: https://sigfig-xxx.onrender.com
+      - key: CORS_ORIGIN
+        value: "*"
     disk:
       name: game-data
       mountPath: /var/data
       sizeGB: 1
+    healthCheckPath: /api/health
