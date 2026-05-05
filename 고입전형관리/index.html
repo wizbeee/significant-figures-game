@@ -46,6 +46,13 @@ th.sortable.sort-active .sort-arrow { opacity: 1; color: #2563eb; }
 .year-btn:not(.active) { background: #fff; color: #64748b; border-color: #e2e8f0; }
 .year-btn:not(.active):hover { background: #eff6ff; color: #1d4ed8; }
 .report-editable:focus { outline: 2px solid #3b82f6; outline-offset: 2px; border-radius: 4px; }
+.report-section { scroll-margin-top: 60px; }
+.report-section.has-pagebreak { border-bottom: 2px dashed #cbd5e1; padding-bottom: 12px; }
+.pagebreak-toggle { font-size: 11px; padding: 3px 8px; border-radius: 6px; cursor: pointer; user-select: none; transition: all .15s; }
+.pagebreak-toggle.off { background: #f1f5f9; color: #64748b; border: 1px solid #e2e8f0; }
+.pagebreak-toggle.on { background: #2563eb; color: #fff; border: 1px solid #1d4ed8; }
+.pagebreak-toggle:hover { transform: translateY(-1px); }
+@media print { .pagebreak-toggle, .report-section-toolbar { display: none !important; } .print-break { page-break-after: always; } }
 
 /* ── Dark mode ── */
 body.dark { background: #0f172a; color: #e2e8f0; }
@@ -2341,67 +2348,105 @@ function renderReport(el) {
         </div>
       </div>
       ${yearFilterHtml()}
-      <p class="text-xs text-gray-500">보고서 내용을 직접 클릭하여 수정할 수 있습니다. 그래프 삽입 버튼으로 차트를 추가할 수 있습니다.</p>
+      <p class="text-xs text-gray-500">제목을 클릭해 직접 편집할 수 있고, 각 섹션의 <span class="pagebreak-toggle off" style="display:inline-block; pointer-events:none;">📄 페이지 나눔</span> 버튼을 켜면 인쇄·PDF에서 그 섹션 뒤에 페이지가 넘어갑니다. <strong>PPTX는 편집한 제목과 표가 그대로 슬라이드로 변환됩니다.</strong></p>
 
       <div id="report-content" class="space-y-6">
         <div class="card p-6 space-y-4">
-          <h2 class="text-xl font-bold text-center text-gray-900 pb-4 border-b report-editable" contenteditable="true">${yearLabel}입학전형 결과 보고서</h2>
+          <section class="report-section" data-sec="title">
+            <h2 class="text-xl font-bold text-center text-gray-900 pb-4 border-b report-editable" contenteditable="true">${yearLabel}입학전형 결과 보고서</h2>
+          </section>
 
-          <h3 class="font-semibold text-gray-800 mt-4 report-editable" contenteditable="true">1. 지원 현황</h3>
-          <table class="w-full text-sm border-collapse">
-            <tr class="border-b"><td class="py-2 text-gray-600">총 지원자</td><td class="py-2 text-right font-semibold">${total}명</td></tr>
-            <tr class="border-b"><td class="py-2 text-gray-600">합격자</td><td class="py-2 text-right font-semibold text-green-700">${pass.length}명</td></tr>
-            <tr class="border-b"><td class="py-2 text-gray-600">불합격자</td><td class="py-2 text-right font-semibold text-red-600">${fail.length}명</td></tr>
-            <tr class="border-b"><td class="py-2 text-gray-600">경쟁률</td><td class="py-2 text-right font-semibold">${pass.length ? (total/pass.length).toFixed(2) : '-'} : 1</td></tr>
-            <tr class="border-b"><td class="py-2 text-gray-600">출신중학교 수</td><td class="py-2 text-right font-semibold">${schools.length}개교</td></tr>
-          </table>
+          <section class="report-section" data-sec="overview">
+            <div class="flex items-center justify-between mt-4 report-section-toolbar">
+              <h3 class="font-semibold text-gray-800 report-editable" contenteditable="true">1. 지원 현황</h3>
+              <span class="pagebreak-toggle off" data-break-btn="overview" onclick="togglePageBreak('overview')" title="이 섹션 후 페이지 나눔">📄 페이지 나눔</span>
+            </div>
+            <table class="w-full text-sm border-collapse">
+              <tr class="border-b"><td class="py-2 text-gray-600">총 지원자</td><td class="py-2 text-right font-semibold">${total}명</td></tr>
+              <tr class="border-b"><td class="py-2 text-gray-600">합격자</td><td class="py-2 text-right font-semibold text-green-700">${pass.length}명</td></tr>
+              <tr class="border-b"><td class="py-2 text-gray-600">불합격자</td><td class="py-2 text-right font-semibold text-red-600">${fail.length}명</td></tr>
+              <tr class="border-b"><td class="py-2 text-gray-600">경쟁률</td><td class="py-2 text-right font-semibold">${pass.length ? (total/pass.length).toFixed(2) : '-'} : 1</td></tr>
+              <tr class="border-b"><td class="py-2 text-gray-600">출신중학교 수</td><td class="py-2 text-right font-semibold">${schools.length}개교</td></tr>
+            </table>
+          </section>
 
-          <h3 class="font-semibold text-gray-800 mt-4 report-editable" contenteditable="true">2. 전형구분별 현황</h3>
-          <table class="w-full text-sm border-collapse">
-            <thead><tr class="border-b"><th class="py-2 text-left text-gray-500">전형구분</th><th class="py-2 text-right text-gray-500">인원</th><th class="py-2 text-right text-gray-500">비율</th><th class="py-2 text-right text-gray-500">합격</th><th class="py-2 text-right text-gray-500">합격률</th></tr></thead>
-            <tbody>${Object.entries(types).map(([t,c]) => {
-              const typePass = data.filter(r => (r['전형구분']||'미지정')===t && r['합불여부']==='합격').length;
-              return `<tr class="border-b border-gray-50"><td class="py-2">${t}</td><td class="py-2 text-right font-mono">${c}명</td><td class="py-2 text-right font-mono">${(c/total*100).toFixed(1)}%</td><td class="py-2 text-right font-mono text-green-700">${typePass}명</td><td class="py-2 text-right font-mono">${c ? (typePass/c*100).toFixed(1) : 0}%</td></tr>`;
-            }).join('')}</tbody>
-          </table>
+          <section class="report-section" data-sec="types">
+            <div class="flex items-center justify-between mt-4 report-section-toolbar">
+              <h3 class="font-semibold text-gray-800 report-editable" contenteditable="true">2. 전형구분별 현황</h3>
+              <span class="pagebreak-toggle off" data-break-btn="types" onclick="togglePageBreak('types')" title="이 섹션 후 페이지 나눔">📄 페이지 나눔</span>
+            </div>
+            <table class="w-full text-sm border-collapse">
+              <thead><tr class="border-b"><th class="py-2 text-left text-gray-500">전형구분</th><th class="py-2 text-right text-gray-500">인원</th><th class="py-2 text-right text-gray-500">비율</th><th class="py-2 text-right text-gray-500">합격</th><th class="py-2 text-right text-gray-500">합격률</th></tr></thead>
+              <tbody>${Object.entries(types).map(([t,c]) => {
+                const typePass = data.filter(r => (r['전형구분']||'미지정')===t && r['합불여부']==='합격').length;
+                return `<tr class="border-b border-gray-50"><td class="py-2">${t}</td><td class="py-2 text-right font-mono">${c}명</td><td class="py-2 text-right font-mono">${(c/total*100).toFixed(1)}%</td><td class="py-2 text-right font-mono text-green-700">${typePass}명</td><td class="py-2 text-right font-mono">${c ? (typePass/c*100).toFixed(1) : 0}%</td></tr>`;
+              }).join('')}</tbody>
+            </table>
+          </section>
 
           ${Object.keys(regions).length > 1 ? `
-          <h3 class="font-semibold text-gray-800 mt-4 report-editable" contenteditable="true">3. 지역별 현황</h3>
-          <table class="w-full text-sm border-collapse">
-            <thead><tr class="border-b"><th class="py-2 text-left text-gray-500">지역</th><th class="py-2 text-right text-gray-500">인원</th><th class="py-2 text-right text-gray-500">비율</th></tr></thead>
-            <tbody>${Object.entries(regions).sort((a,b)=>b[1]-a[1]).map(([r,c]) => `<tr class="border-b border-gray-50"><td class="py-2">${r}</td><td class="py-2 text-right font-mono">${c}명</td><td class="py-2 text-right font-mono">${(c/total*100).toFixed(1)}%</td></tr>`).join('')}</tbody>
-          </table>` : ''}
+          <section class="report-section" data-sec="regions">
+            <div class="flex items-center justify-between mt-4 report-section-toolbar">
+              <h3 class="font-semibold text-gray-800 report-editable" contenteditable="true">3. 지역별 현황</h3>
+              <span class="pagebreak-toggle off" data-break-btn="regions" onclick="togglePageBreak('regions')" title="이 섹션 후 페이지 나눔">📄 페이지 나눔</span>
+            </div>
+            <table class="w-full text-sm border-collapse">
+              <thead><tr class="border-b"><th class="py-2 text-left text-gray-500">지역</th><th class="py-2 text-right text-gray-500">인원</th><th class="py-2 text-right text-gray-500">비율</th></tr></thead>
+              <tbody>${Object.entries(regions).sort((a,b)=>b[1]-a[1]).map(([r,c]) => `<tr class="border-b border-gray-50"><td class="py-2">${r}</td><td class="py-2 text-right font-mono">${c}명</td><td class="py-2 text-right font-mono">${(c/total*100).toFixed(1)}%</td></tr>`).join('')}</tbody>
+            </table>
+          </section>` : ''}
 
-          <h3 class="font-semibold text-gray-800 mt-4 report-editable" contenteditable="true">${Object.keys(regions).length > 1 ? '4' : '3'}. 성적 분석</h3>
-          <table class="w-full text-sm border-collapse">
-            <thead><tr class="border-b"><th class="py-2 text-left text-gray-500">항목</th><th class="py-2 text-center text-gray-500">전체 평균</th><th class="py-2 text-center text-gray-500">합격자 평균</th><th class="py-2 text-center text-gray-500">불합격자 평균</th></tr></thead>
-            <tbody>
-              ${cutMetrics.map(key => `<tr class="border-b border-gray-50"><td class="py-2">${key}</td><td class="py-2 text-center font-mono">${avg(data,key)}</td><td class="py-2 text-center font-mono text-green-700">${avg(pass,key)}</td><td class="py-2 text-center font-mono text-red-600">${avg(fail,key)}</td></tr>`).join('')}
-            </tbody>
-          </table>
+          <section class="report-section" data-sec="grades">
+            <div class="flex items-center justify-between mt-4 report-section-toolbar">
+              <h3 class="font-semibold text-gray-800 report-editable" contenteditable="true">${Object.keys(regions).length > 1 ? '4' : '3'}. 성적 분석</h3>
+              <span class="pagebreak-toggle off" data-break-btn="grades" onclick="togglePageBreak('grades')" title="이 섹션 후 페이지 나눔">📄 페이지 나눔</span>
+            </div>
+            <table class="w-full text-sm border-collapse">
+              <thead><tr class="border-b"><th class="py-2 text-left text-gray-500">항목</th><th class="py-2 text-center text-gray-500">전체 평균</th><th class="py-2 text-center text-gray-500">합격자 평균</th><th class="py-2 text-center text-gray-500">불합격자 평균</th></tr></thead>
+              <tbody>
+                ${cutMetrics.map(key => `<tr class="border-b border-gray-50"><td class="py-2">${key}</td><td class="py-2 text-center font-mono">${avg(data,key)}</td><td class="py-2 text-center font-mono text-green-700">${avg(pass,key)}</td><td class="py-2 text-center font-mono text-red-600">${avg(fail,key)}</td></tr>`).join('')}
+              </tbody>
+            </table>
+          </section>
 
-          <h3 class="font-semibold text-gray-800 mt-4 report-editable" contenteditable="true">${Object.keys(regions).length > 1 ? '5' : '4'}. 컷트라인 분석</h3>
-          <table class="w-full text-sm border-collapse">
-            <thead><tr class="border-b"><th class="py-2 text-left text-gray-500">항목</th><th class="py-2 text-center text-gray-500">최고점</th><th class="py-2 text-center text-gray-500">상위50%</th><th class="py-2 text-center text-gray-500">상위70%</th><th class="py-2 text-center text-gray-500">컷트라인</th></tr></thead>
-            <tbody>
-              ${cutMetrics.map(key => { const c = reportCutline(key); return `<tr class="border-b border-gray-50"><td class="py-2">${key}</td><td class="py-2 text-center font-mono text-green-600">${c.top}</td><td class="py-2 text-center font-mono text-blue-600">${c.at50}</td><td class="py-2 text-center font-mono text-orange-600">${c.at70}</td><td class="py-2 text-center font-mono text-red-600">${c.at100}</td></tr>`; }).join('')}
-            </tbody>
-          </table>
+          <section class="report-section" data-sec="cutline">
+            <div class="flex items-center justify-between mt-4 report-section-toolbar">
+              <h3 class="font-semibold text-gray-800 report-editable" contenteditable="true">${Object.keys(regions).length > 1 ? '5' : '4'}. 컷트라인 분석</h3>
+              <span class="pagebreak-toggle off" data-break-btn="cutline" onclick="togglePageBreak('cutline')" title="이 섹션 후 페이지 나눔">📄 페이지 나눔</span>
+            </div>
+            <table class="w-full text-sm border-collapse">
+              <thead><tr class="border-b"><th class="py-2 text-left text-gray-500">항목</th><th class="py-2 text-center text-gray-500">최고점</th><th class="py-2 text-center text-gray-500">상위50%</th><th class="py-2 text-center text-gray-500">상위70%</th><th class="py-2 text-center text-gray-500">컷트라인</th></tr></thead>
+              <tbody>
+                ${cutMetrics.map(key => { const c = reportCutline(key); return `<tr class="border-b border-gray-50"><td class="py-2">${key}</td><td class="py-2 text-center font-mono text-green-600">${c.top}</td><td class="py-2 text-center font-mono text-blue-600">${c.at50}</td><td class="py-2 text-center font-mono text-orange-600">${c.at70}</td><td class="py-2 text-center font-mono text-red-600">${c.at100}</td></tr>`; }).join('')}
+              </tbody>
+            </table>
+          </section>
 
-          <h3 class="font-semibold text-gray-800 mt-4 report-editable" contenteditable="true">${Object.keys(regions).length > 1 ? '6' : '5'}. 출신중학교 TOP 10</h3>
-          <table class="w-full text-sm border-collapse">
-            <thead><tr class="border-b"><th class="py-2 text-left text-gray-500">중학교</th><th class="py-2 text-center text-gray-500">지원</th><th class="py-2 text-center text-gray-500">합격</th><th class="py-2 text-center text-gray-500">합격률</th></tr></thead>
-            <tbody>${schools.slice(0,10).map(([name,info]) => `<tr class="border-b border-gray-50"><td class="py-2">${name}</td><td class="py-2 text-center">${info.total}명</td><td class="py-2 text-center text-green-700">${info.pass}명</td><td class="py-2 text-center font-mono">${(info.pass/info.total*100).toFixed(1)}%</td></tr>`).join('')}</tbody>
-          </table>
+          <section class="report-section" data-sec="schools">
+            <div class="flex items-center justify-between mt-4 report-section-toolbar">
+              <h3 class="font-semibold text-gray-800 report-editable" contenteditable="true">${Object.keys(regions).length > 1 ? '6' : '5'}. 출신중학교 TOP 10</h3>
+              <span class="pagebreak-toggle off" data-break-btn="schools" onclick="togglePageBreak('schools')" title="이 섹션 후 페이지 나눔">📄 페이지 나눔</span>
+            </div>
+            <table class="w-full text-sm border-collapse">
+              <thead><tr class="border-b"><th class="py-2 text-left text-gray-500">중학교</th><th class="py-2 text-center text-gray-500">지원</th><th class="py-2 text-center text-gray-500">합격</th><th class="py-2 text-center text-gray-500">합격률</th></tr></thead>
+              <tbody>${schools.slice(0,10).map(([name,info]) => `<tr class="border-b border-gray-50"><td class="py-2">${name}</td><td class="py-2 text-center">${info.total}명</td><td class="py-2 text-center text-green-700">${info.pass}명</td><td class="py-2 text-center font-mono">${(info.pass/info.total*100).toFixed(1)}%</td></tr>`).join('')}</tbody>
+            </table>
+          </section>
 
-          <div id="report-charts" class="space-y-4 mt-6"></div>
+          <section class="report-section" data-sec="charts">
+            <div id="report-charts" class="space-y-4 mt-6"></div>
+          </section>
 
-          <div class="mt-6 pt-4 border-t report-editable" contenteditable="true">
-            <p class="text-sm text-gray-500 text-center">※ 추가 메모를 여기에 작성할 수 있습니다.</p>
-          </div>
+          <section class="report-section" data-sec="memo">
+            <div class="mt-6 pt-4 border-t report-editable" contenteditable="true">
+              <p class="text-sm text-gray-500 text-center">※ 추가 메모를 여기에 작성할 수 있습니다.</p>
+            </div>
+          </section>
         </div>
       </div>
     </div>`;
+  // Apply persisted page-break state to toggle buttons
+  setTimeout(syncPageBreakUi, 0);
 }
 
 function insertReportChart() {
@@ -2461,110 +2506,135 @@ function drawReportChart(chartId) {
   }
 }
 
+// ── Page-break toggle (per-section, persisted in localStorage) ──
+function getPageBreaks() { try { return JSON.parse(localStorage.getItem('reportPageBreaks') || '{}'); } catch { return {}; } }
+function togglePageBreak(sec) {
+  const breaks = getPageBreaks();
+  breaks[sec] = !breaks[sec];
+  localStorage.setItem('reportPageBreaks', JSON.stringify(breaks));
+  syncPageBreakUi();
+  toast(breaks[sec] ? `'${sec}' 섹션 뒤 페이지 나눔 활성화` : `'${sec}' 페이지 나눔 해제`, 'info', 1500);
+}
+function syncPageBreakUi() {
+  const breaks = getPageBreaks();
+  document.querySelectorAll('[data-break-btn]').forEach(btn => {
+    const on = !!breaks[btn.dataset.breakBtn];
+    btn.classList.toggle('on', on);
+    btn.classList.toggle('off', !on);
+    const sec = btn.closest('.report-section');
+    if (sec) sec.classList.toggle('has-pagebreak', on);
+  });
+}
+
+// ── DOM-driven PPTX export ──
+function _extractTableForPptx(table) {
+  const rows = [];
+  table.querySelectorAll('tr').forEach((tr, idx) => {
+    const cells = tr.querySelectorAll('th, td');
+    const isHeader = tr.querySelector('th') !== null;
+    rows.push([...cells].map(c => {
+      const cls = c.className || '';
+      let color = '1E293B';
+      if (/text-green-(?:600|700)/.test(cls)) color = '15803D';
+      else if (/text-red-(?:600|700)/.test(cls)) color = 'DC2626';
+      else if (/text-blue-(?:600|700)/.test(cls)) color = '2563EB';
+      else if (/text-orange-(?:600|700)/.test(cls)) color = 'EA580C';
+      else if (/text-gray-(?:500|600)/.test(cls)) color = '64748B';
+      const align = /text-center/.test(cls) ? 'center' : /text-right/.test(cls) ? 'right' : 'left';
+      return {
+        text: c.innerText.trim(),
+        options: {
+          bold: isHeader || /font-(?:semibold|bold)/.test(cls),
+          fill: isHeader ? { color: 'E2E8F0' } : undefined,
+          color, align,
+        }
+      };
+    }));
+  });
+  return rows;
+}
+
 async function exportReportPptx() {
   if (typeof PptxGenJS === 'undefined') { alert('PPTX 라이브러리 로드 실패. 인터넷 연결을 확인하세요.'); return; }
   const data = getFilteredData();
   if (!data.length) { alert('데이터가 없습니다.'); return; }
   toast('PPTX 생성 중...', 'info', 2000);
 
-  const total = data.length;
-  const pass = data.filter(r => r['합불여부']==='합격');
-  const fail = data.filter(r => r['합불여부']==='불합격');
-  const types = {};
-  data.forEach(r => { const t = r['전형구분']||'미지정'; types[t] = (types[t]||0)+1; });
-  const schools = getSchoolList(data);
-  const yearLabel = yearFilter ? `${yearFilter}학년도 ` : '';
-
   const pptx = new PptxGenJS();
   pptx.layout = 'LAYOUT_WIDE'; // 13.33 x 7.5 inches
+  const todayKr = new Date().toLocaleDateString('ko-KR');
   pptx.defineSlideMaster({
     title: 'MASTER',
     background: { fill: 'FFFFFF' },
     objects: [
       { rect: { x: 0, y: 7.1, w: 13.33, h: 0.4, fill: { color: 'F1F5F9' } } },
-      { text: { text: `고입전형 결과 보고서 · ${new Date().toLocaleDateString('ko-KR')}`, options: { x: 0.3, y: 7.15, w: 12, h: 0.3, fontSize: 9, color: '64748B' } } },
+      { text: { text: `고입전형 결과 보고서 · ${todayKr}`, options: { x: 0.3, y: 7.15, w: 12, h: 0.3, fontSize: 9, color: '64748B' } } },
     ],
   });
 
-  // Slide 1: Title
-  const s1 = pptx.addSlide({ masterName: 'MASTER' });
-  s1.addText(`${yearLabel}입학전형 결과 보고서`, { x: 0.5, y: 2.5, w: 12.3, h: 1.5, fontSize: 44, bold: true, color: '1E40AF', align: 'center' });
-  s1.addText('자율형사립고등학교', { x: 0.5, y: 4.0, w: 12.3, h: 0.5, fontSize: 20, color: '64748B', align: 'center' });
-  s1.addText(new Date().toLocaleDateString('ko-KR'), { x: 0.5, y: 5.5, w: 12.3, h: 0.4, fontSize: 14, color: '94A3B8', align: 'center' });
+  // ── Title slide: pulled from edited <h2> in section[data-sec="title"] ──
+  const titleH2 = document.querySelector('#report-content [data-sec="title"] h2');
+  const titleText = (titleH2?.innerText || '입학전형 결과 보고서').trim();
+  const sTitle = pptx.addSlide({ masterName: 'MASTER' });
+  sTitle.addText(titleText, { x: 0.5, y: 2.5, w: 12.3, h: 1.8, fontSize: 44, bold: true, color: '1E40AF', align: 'center' });
+  sTitle.addText(todayKr, { x: 0.5, y: 5.0, w: 12.3, h: 0.5, fontSize: 16, color: '94A3B8', align: 'center' });
 
-  // Slide 2: Overview stats
-  const s2 = pptx.addSlide({ masterName: 'MASTER' });
-  s2.addText('1. 지원 현황', { x: 0.5, y: 0.3, w: 12, h: 0.6, fontSize: 28, bold: true, color: '1E293B' });
-  const cards = [
-    { label: '총 지원자', value: `${total}명`, color: '1E40AF' },
-    { label: '합격', value: `${pass.length}명`, color: '16A34A' },
-    { label: '불합격', value: `${fail.length}명`, color: 'DC2626' },
-    { label: '경쟁률', value: `${pass.length ? (total/pass.length).toFixed(2) : '-'} : 1`, color: '7C3AED' },
-    { label: '출신중', value: `${schools.length}개교`, color: 'EA580C' },
-  ];
-  cards.forEach((c, i) => {
-    const x = 0.5 + i * 2.5, y = 1.2;
-    s2.addShape(pptx.ShapeType.roundRect, { x, y, w: 2.3, h: 2.0, fill: { color: 'F8FAFC' }, line: { color: 'E2E8F0', width: 1 }, rectRadius: 0.1 });
-    s2.addText(c.label, { x, y: y + 0.2, w: 2.3, h: 0.4, fontSize: 12, color: '64748B', align: 'center' });
-    s2.addText(c.value, { x, y: y + 0.7, w: 2.3, h: 0.9, fontSize: 24, bold: true, color: c.color, align: 'center' });
-  });
+  // ── Walk every report section in DOM order; one slide per section ──
+  const sections = document.querySelectorAll('#report-content .report-section');
+  for (const sec of sections) {
+    const id = sec.dataset.sec;
+    if (id === 'title') continue;
 
-  // Slide 3: Type breakdown
-  const s3 = pptx.addSlide({ masterName: 'MASTER' });
-  s3.addText('2. 전형구분별 현황', { x: 0.5, y: 0.3, w: 12, h: 0.6, fontSize: 28, bold: true, color: '1E293B' });
-  const tRows = [[
-    { text: '전형구분', options: { bold: true, fill: { color: 'E2E8F0' } } },
-    { text: '인원', options: { bold: true, fill: { color: 'E2E8F0' }, align: 'center' } },
-    { text: '비율', options: { bold: true, fill: { color: 'E2E8F0' }, align: 'center' } },
-    { text: '합격', options: { bold: true, fill: { color: 'E2E8F0' }, align: 'center' } },
-    { text: '합격률', options: { bold: true, fill: { color: 'E2E8F0' }, align: 'center' } },
-  ]];
-  Object.entries(types).forEach(([t, c]) => {
-    const typePass = data.filter(r => (r['전형구분']||'미지정') === t && r['합불여부'] === '합격').length;
-    tRows.push([
-      { text: t, options: {} },
-      { text: `${c}명`, options: { align: 'center' } },
-      { text: `${(c/total*100).toFixed(1)}%`, options: { align: 'center' } },
-      { text: `${typePass}명`, options: { align: 'center', color: '16A34A' } },
-      { text: `${c ? (typePass/c*100).toFixed(1) : 0}%`, options: { align: 'center', bold: true } },
-    ]);
-  });
-  s3.addTable(tRows, { x: 0.5, y: 1.2, w: 12.3, fontSize: 14, border: { type: 'solid', pt: 0.5, color: 'CBD5E1' } });
+    if (id === 'charts') {
+      // Each inserted chart → its own slide; title from the chart's <select> label
+      const wraps = sec.querySelectorAll('#report-charts > div');
+      for (const wrap of wraps) {
+        const canvas = wrap.querySelector('canvas');
+        if (!canvas) continue;
+        const sel = wrap.querySelector('select');
+        const label = sel ? sel.options[sel.selectedIndex]?.text || '추가 차트' : '추가 차트';
+        const slide = pptx.addSlide({ masterName: 'MASTER' });
+        slide.addText(label, { x: 0.5, y: 0.3, w: 12.3, h: 0.6, fontSize: 28, bold: true, color: '1E293B' });
+        try {
+          slide.addImage({ data: canvas.toDataURL('image/png'), x: 1.5, y: 1.1, w: 10.3, h: 5.7 });
+        } catch (e) { console.warn('chart export failed', e); }
+      }
+      continue;
+    }
 
-  // Chart slide: use doughnut
-  const s4 = pptx.addSlide({ masterName: 'MASTER' });
-  s4.addText('3. 합격/불합격 분포', { x: 0.5, y: 0.3, w: 12, h: 0.6, fontSize: 28, bold: true, color: '1E293B' });
-  s4.addChart(pptx.ChartType.doughnut, [
-    { name: '결과', labels: ['합격', '불합격', '기타'], values: [pass.length, fail.length, total - pass.length - fail.length] }
-  ], { x: 2, y: 1.2, w: 9, h: 5.5, showLegend: true, legendPos: 'b', chartColors: ['22C55E', 'EF4444', '94A3B8'] });
+    if (id === 'memo') {
+      const memoText = (sec.innerText || '').trim();
+      // Skip default placeholder
+      if (!memoText || memoText.startsWith('※ 추가 메모를 여기에')) continue;
+      const slide = pptx.addSlide({ masterName: 'MASTER' });
+      slide.addText('메모', { x: 0.5, y: 0.3, w: 12.3, h: 0.6, fontSize: 28, bold: true, color: '1E293B' });
+      slide.addText(memoText, { x: 0.7, y: 1.2, w: 11.9, h: 5.5, fontSize: 16, color: '334155', valign: 'top' });
+      continue;
+    }
 
-  // Slide: School top 10 bar chart
-  const s5 = pptx.addSlide({ masterName: 'MASTER' });
-  s5.addText('4. 출신중학교 TOP 10', { x: 0.5, y: 0.3, w: 12, h: 0.6, fontSize: 28, bold: true, color: '1E293B' });
-  const top10 = schools.slice(0, 10);
-  s5.addChart(pptx.ChartType.bar, [
-    { name: '합격', labels: top10.map(s => s[0]), values: top10.map(s => s[1].pass) },
-    { name: '불합격', labels: top10.map(s => s[0]), values: top10.map(s => s[1].fail) },
-  ], { x: 0.5, y: 1.2, w: 12.3, h: 5.5, showLegend: true, legendPos: 'b', chartColors: ['22C55E', 'EF4444'], barGrouping: 'stacked' });
-
-  // Slide: Score averages
-  const s6 = pptx.addSlide({ masterName: 'MASTER' });
-  s6.addText('5. 성적 분석 (합격 vs 불합격 평균)', { x: 0.5, y: 0.3, w: 12, h: 0.6, fontSize: 28, bold: true, color: '1E293B' });
-  const keys = ['교과성적', '1단계 최종점수', '면접점수', '최종점수'];
-  const avgOf = (arr, key) => { const vs = arr.map(r => num(r[key])).filter(v => v > 0); return vs.length ? vs.reduce((s,v)=>s+v,0)/vs.length : 0; };
-  s6.addChart(pptx.ChartType.bar, [
-    { name: '합격 평균', labels: keys, values: keys.map(k => +avgOf(pass, k).toFixed(2)) },
-    { name: '불합격 평균', labels: keys, values: keys.map(k => +avgOf(fail, k).toFixed(2)) },
-  ], { x: 0.5, y: 1.2, w: 12.3, h: 5.5, showLegend: true, legendPos: 'b', chartColors: ['22C55E', 'EF4444'] });
-
-  // Insert any user-created report charts as images
-  const reportCharts = document.querySelectorAll('#report-charts canvas');
-  for (const canvas of reportCharts) {
+    // Standard section: h3 title + tables
+    const h3 = sec.querySelector('h3');
     const slide = pptx.addSlide({ masterName: 'MASTER' });
-    slide.addText('추가 차트', { x: 0.5, y: 0.3, w: 12, h: 0.6, fontSize: 28, bold: true, color: '1E293B' });
-    try {
-      slide.addImage({ data: canvas.toDataURL('image/png'), x: 1, y: 1, w: 11, h: 6 });
-    } catch (e) { console.warn('chart export failed', e); }
+    if (h3) {
+      slide.addText(h3.innerText.trim(), { x: 0.5, y: 0.3, w: 12.3, h: 0.6, fontSize: 28, bold: true, color: '1E293B' });
+    }
+
+    let yCursor = 1.2;
+    const tables = sec.querySelectorAll('table');
+    for (const t of tables) {
+      const rows = _extractTableForPptx(t);
+      if (!rows.length) continue;
+      const rowH = Math.max(0.32, Math.min(0.5, 5.5 / rows.length));
+      slide.addTable(rows, {
+        x: 0.5, y: yCursor, w: 12.3,
+        fontSize: rows.length > 12 ? 11 : 13,
+        rowH,
+        border: { type: 'solid', pt: 0.5, color: 'CBD5E1' },
+        valign: 'middle',
+      });
+      yCursor += rows.length * rowH + 0.4;
+      if (yCursor > 6.7) break; // out of room — overflow ignored
+    }
   }
 
   const fname = `고입전형_보고서_${new Date().toISOString().slice(0,10)}.pptx`;
@@ -2572,9 +2642,21 @@ async function exportReportPptx() {
   toast('PPTX 내보내기 완료: ' + fname, 'success');
 }
 
+// ── Print: respects per-section page-break flags ──
 function printReport() {
   const content = document.getElementById('report-content');
   if (!content) return;
+
+  // Apply page-break class to flagged sections
+  const breaks = getPageBreaks();
+  const flagged = [];
+  content.querySelectorAll('.report-section').forEach(sec => {
+    if (breaks[sec.dataset.sec]) {
+      sec.classList.add('print-break');
+      flagged.push(sec);
+    }
+  });
+
   // Convert canvases to images for print
   const canvases = content.querySelectorAll('canvas');
   const images = [];
@@ -2589,16 +2671,24 @@ function printReport() {
 
   const html = content.innerHTML;
 
-  // Restore canvases
-  images.forEach(({ img, canvas }) => {
-    img.remove();
-    canvas.style.display = '';
-  });
+  // Restore DOM
+  images.forEach(({ img, canvas }) => { img.remove(); canvas.style.display = ''; });
+  flagged.forEach(sec => sec.classList.remove('print-break'));
 
   const w = window.open('', '_blank');
   w.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>입학전형 결과 보고서</title>
     <script src="https://cdn.tailwindcss.com"><\/script>
-    <style>@media print { body { font-size: 12px; } .card { border: 1px solid #ddd; box-shadow: none; } } [contenteditable] { outline: none; }</style>
+    <style>
+      @media print {
+        body { font-size: 12px; }
+        .card { border: 1px solid #ddd; box-shadow: none; }
+        .pagebreak-toggle, .report-section-toolbar > .pagebreak-toggle { display: none !important; }
+        .print-break { page-break-after: always; }
+        .report-section { page-break-inside: avoid; }
+      }
+      [contenteditable] { outline: none; }
+      .pagebreak-toggle { display: none; }
+    </style>
   </head><body class="p-6 max-w-4xl mx-auto" style="font-family: 'Malgun Gothic', sans-serif">${html}</body></html>`);
   w.document.close();
   setTimeout(() => w.print(), 500);
