@@ -2363,20 +2363,21 @@ async function handleApi(req, res, pathname, query) {
   // 교실 로그인 — 교실이 없으면 이 비밀번호로 새로 생성 (claim 방식)
   if (method === 'POST' && pathname === '/api/teacher/login') {
     const body = await readBody(req);
-    const code = normCode(body.classroomCode || body.classCode);
+    // 교실 코드 시스템 단순화 (2026-05-10) — 모든 교사 로그인은 'default' 교실 고정
+    // 학생과 동일하게 비밀번호만 검증
+    const code = DEFAULT_CLASSROOM;
     const pw = String(body.password || '');
-    const name = String(body.name || '').trim().slice(0, 30);
-    if (!validCode(code)) return sendJSON(res, { error: '교실 코드는 2~20자 (한글/영문/숫자/-/_)' }, 400);
-    if (pw.length < 4) return sendJSON(res, { error: '비밀번호는 4자 이상' }, 400);
-    // Rate limit (교실+IP 기준 — 5분에 10회)
+    if (pw.length < 1) return sendJSON(res, { error: '비밀번호를 입력하세요' }, 400);
+    // Rate limit (IP 기준 — 5분에 10회)
     const ipKey = (req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'unknown').toString().split(',')[0].trim();
-    if (!rateLimitOK('teacherlogin:' + ipKey + ':' + code, 10, 5 * 60_000)) return sendJSON(res, { error: '비밀번호 시도 횟수 초과 — 5분 후 다시 시도하세요' }, 429);
+    if (!rateLimitOK('teacherlogin:' + ipKey, 10, 5 * 60_000)) return sendJSON(res, { error: '비밀번호 시도 횟수 초과 — 5분 후 다시 시도하세요' }, 429);
+    // default 교실 자동 생성 (없으면)
     let c = clsroom(code);
     if (!c) {
       c = classrooms[code] = {
-        code, name: name || code,
+        code, name: '기본 교실',
         passwordHash: hashPw(pw), createdAt: Date.now(),
-        config: { autoApproveRooms: false, sheetsUrl: '' },
+        config: { autoApproveRooms: true, sheetsUrl: '' },
       };
       saveClassrooms();
     } else {
