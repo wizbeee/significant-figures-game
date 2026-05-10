@@ -1385,9 +1385,13 @@ const CORS_ORIGIN = process.env.CORS_ORIGIN || '*';
 // #15 응답 압축 — accept-encoding 보고 gzip/br 선택
 function maybeCompress(req, res, body, baseHeaders) {
   const acceptEnc = String(req.headers['accept-encoding'] || '');
+  // status 분리 (baseHeaders는 순수 헤더 객체로만)
+  const headers = { ...baseHeaders };
+  const status = headers.status || 200;
+  delete headers.status;
   // 1KB 미만은 압축 손해 — 그대로 전송
   if (body.length < 1024) {
-    res.writeHead(baseHeaders.status || 200, { ...baseHeaders, headers: undefined });
+    res.writeHead(status, headers);
     res.end(body);
     return;
   }
@@ -1395,10 +1399,10 @@ function maybeCompress(req, res, body, baseHeaders) {
   if (acceptEnc.includes('br')) { encoded = zlib.brotliCompressSync(body, { params: { [zlib.constants.BROTLI_PARAM_QUALITY]: 4 } }); encoding = 'br'; }
   else if (acceptEnc.includes('gzip')) { encoded = zlib.gzipSync(body, { level: 6 }); encoding = 'gzip'; }
   else { encoded = body; encoding = null; }
-  const status = baseHeaders.status || 200;
-  const headers = { ...baseHeaders };
-  delete headers.status;
-  if (encoding) { headers['Content-Encoding'] = encoding; headers['Vary'] = (headers['Vary'] ? headers['Vary'] + ', ' : '') + 'Accept-Encoding'; }
+  if (encoding) {
+    headers['Content-Encoding'] = encoding;
+    headers['Vary'] = (headers['Vary'] ? headers['Vary'] + ', ' : '') + 'Accept-Encoding';
+  }
   res.writeHead(status, headers);
   res.end(encoded);
 }
