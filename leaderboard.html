@@ -61,9 +61,10 @@
   <h2>싱글 / 멀티 / 대전 기록을 확인하세요</h2>
 
   <div class="tabs">
-    <button data-type="single" class="active" onclick="switchTab('single')">🎯 싱글 플레이</button>
-    <button data-type="multi" onclick="switchTab('multi')">👥 멀티 플레이</button>
-    <button data-type="battle" onclick="switchTab('battle')">⚔️ 대전 플레이</button>
+    <button data-type="combined" class="active" onclick="switchTab('combined')">🏆 종합</button>
+    <button data-type="single" onclick="switchTab('single')">🎯 싱글</button>
+    <button data-type="multi" onclick="switchTab('multi')">👥 멀티</button>
+    <button data-type="battle" onclick="switchTab('battle')">⚔️ 대전</button>
   </div>
 
   <div id="admin-banner" class="admin-banner" style="display:none">
@@ -108,7 +109,7 @@
 
 <script src="common.js"></script>
 <script>
-let currentType = 'single';
+let currentType = 'combined';
 let entries = [];
 let editingIdx = -1;  // 원본 배열 인덱스 (필터 전)
 let selected = new Set();  // "at|studentId" 키 집합
@@ -131,11 +132,14 @@ async function loadClassroomOptions() {
 }
 
 async function load() {
-  const r = await api('/api/leaderboard?type=' + currentType);
+  const path = currentType === 'combined' ? '/api/leaderboard/combined' : ('/api/leaderboard?type=' + currentType);
+  const r = await api(path);
   entries = r.entries || [];
   const admin = isAdmin();
-  document.getElementById('admin-banner').style.display = admin ? 'flex' : 'none';
-  document.getElementById('bulk-bar').style.display = admin ? 'flex' : 'none';
+  // 종합 탭은 관리 모드 X (집계 데이터라 직접 편집 의미 없음)
+  const showAdmin = admin && currentType !== 'combined';
+  document.getElementById('admin-banner').style.display = showAdmin ? 'flex' : 'none';
+  document.getElementById('bulk-bar').style.display = showAdmin ? 'flex' : 'none';
   const validKeys = new Set(entries.map(e => e.at + '|' + e.studentId));
   for (const k of Array.from(selected)) if (!validKeys.has(k)) selected.delete(k);
   render();
@@ -264,6 +268,34 @@ async function saveEdit(at, sid) {
 }
 
 function render() {
+  // 🏆 종합 탭 — 학생별 합산 점수 (모드/난이도/교실 필터 미적용)
+  if (currentType === 'combined') {
+    const list = entries.slice();  // 이미 서버에서 score 정렬됨
+    document.getElementById('count-label').textContent = `총 ${list.length}명 (전체 모드 합산)`;
+    if (list.length === 0) {
+      document.getElementById('lb-area').innerHTML = '<div class="empty">아직 기록이 없어요. 첫 기록의 주인공이 되어보세요!</div>';
+      return;
+    }
+    const head = `<tr>
+      <th>순위</th><th>학생</th><th>총점</th><th>게임 수</th>
+      <th>🎯/👥/⚔️</th><th>정답률</th><th>최대 콤보</th><th>⚔️ 승</th>
+    </tr>`;
+    const rows = list.map((e, i) => {
+      const medal = ['🥇','🥈','🥉'][i] || '';
+      return `<tr>
+        <td><span class="rk">${medal} ${i+1}</span></td>
+        <td><b>${_h(e.name)}</b> <span style="color:var(--txt2);font-size:.78rem">${_h(e.studentId)}</span></td>
+        <td class="score-cell">${(e.score||0).toLocaleString()}점</td>
+        <td>${e.games||0}</td>
+        <td style="font-size:.82rem;color:var(--txt2)">${e.single||0}/${e.multi||0}/${e.battle||0}</td>
+        <td>${e.accuracy||0}%</td>
+        <td>${e.maxStreak||0}회</td>
+        <td>${e.battleWins||0}</td>
+      </tr>`;
+    }).join('');
+    document.getElementById('lb-area').innerHTML = `<table class="lb-table"><thead>${head}</thead><tbody>${rows}</tbody></table>`;
+    return;
+  }
   const gm = document.getElementById('flt-gm').value;
   const diff = document.getElementById('flt-diff').value;
   const cls = document.getElementById('flt-cls')?.value || 'all';

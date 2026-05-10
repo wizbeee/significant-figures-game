@@ -1964,11 +1964,21 @@ async function handleApi(req, res, pathname, query) {
   // ---------- 학생 로그인 ----------
   if (method === 'POST' && pathname === '/api/student/login') {
     const body = await readBody(req);
-    const classroomCode = normCode(body.classroomCode || body.classCode);
+    // 교실 코드 시스템 단순화 (2026-05-10) — 모든 학생을 'default' 교실로 자동 배정
+    // 학생은 학번+이름만 입력. classroomCode 보내도 무시함.
+    const classroomCode = DEFAULT_CLASSROOM;
+    // default 교실이 없으면 자동 생성 (안전망)
+    if (!clsroom(classroomCode)) {
+      classrooms[classroomCode] = {
+        code: classroomCode, name: '기본 교실',
+        passwordHash: hashPw(process.env.TEACHER_PASSWORD || '3000'),
+        createdAt: Date.now(),
+        config: { autoApproveRooms: true, sheetsUrl: '' },
+      };
+      saveClassrooms();
+    }
     const studentId = String(body.studentId || '').trim().slice(0, 10);
     const name = String(body.name || '').trim().slice(0, 12);
-    if (!classroomCode) return sendJSON(res, { error: '교실 코드가 필요해요. 선생님께 문의하세요.' }, 400);
-    if (!clsroom(classroomCode)) return sendJSON(res, { error: '존재하지 않는 교실 코드예요.' }, 404);
     if (!studentId || !name) return sendJSON(res, { error: '학번과 이름을 입력하세요.' }, 400);
     if (!/^[0-9A-Za-z]+$/.test(studentId)) return sendJSON(res, { error: '학번은 숫자/영문만 가능' }, 400);
     if (hasBadWord(name)) return sendJSON(res, { error: '닉네임에 부적절한 단어가 포함되어 있어요.' }, 400);
@@ -2074,8 +2084,8 @@ async function handleApi(req, res, pathname, query) {
     const body = await readBody(req);
     const classroomCode = s ? s.classroomCode : teacherCls;
     const type = ['single','multi','battle'].includes(body.type) ? body.type : 'single';
-    const cCfg = clsCfg(classroomCode) || {};
-    const autoApprove = !!teacherCls || !!cCfg.autoApproveRooms;
+    // 모든 방 자동 승인 (2026-05-10) — 학생도 교사 허가 없이 즉시 시작 가능
+    const autoApprove = true;
     const room = createRoom(classroomCode, type, body.config || {}, s, autoApprove);
     if (s) {
       // 학생은 생성 후 자동 입장
@@ -2125,7 +2135,8 @@ async function handleApi(req, res, pathname, query) {
     const room = rooms.get(body.code);
     if (!room) return sendJSON(res, { error: '방 없음' }, 404);
     if (!isT && s && room.ownerId !== s.studentId) return sendJSON(res, { error: '방장만 시작 가능' }, 403);
-    if (!room.approved) return sendJSON(res, { error: '교사 승인 대기 중' }, 403);
+    // 자동 승인 (2026-05-10) — 모든 방 즉시 시작 가능
+    if (!room.approved) room.approved = true;
     const n = Object.keys(room.players).length;
     if (n === 0) return sendJSON(res, { error: '참여자 없음' }, 400);
     if (room.type === 'battle' && n < 2) return sendJSON(res, { error: '대전은 최소 2명' }, 400);
@@ -2239,6 +2250,35 @@ async function handleApi(req, res, pathname, query) {
       list = list.filter(e => (e.classroomCode || DEFAULT_CLASSROOM) === f);
     }
     return sendJSON(res, { type, entries: list });
+  }
+  // 종합 점수판 (2026-05-10) — 모든 모드 점수 학생별 합산 + 게임 수 + 평균 정답률
+  if (method === 'GET' && pathname === '/api/leaderboard/combined') {
+    const agg = new Map();  // studentId → { studentId, name, score, games, single, multi, battle, correct, total, maxStreak, lastAt }
+    const types = ['single','multi','battle'];
+    for (const t of types) {
+      for (const e of (leaderboards[t] || [])) {
+        if (query.classroomCode && (e.classroomCode || DEFAULT_CLASSROOM) !== normCode(query.classroomCode)) continue;
+        let r = agg.get(e.studentId);
+        if (!r) {
+          r = { studentId: e.studentId, name: e.name, score: 0, games: 0, single: 0, multi: 0, battle: 0,
+                correct: 0, total: 0, maxStreak: 0, battleWins: 0, lastAt: 0 };
+          agg.set(e.studentId, r);
+        }
+        r.name = e.name;  // 최신 이름
+        r.score += e.score || 0;
+        r.games += 1;
+        r[t] += 1;
+        r.correct += e.correct || 0;
+        r.total += e.total || 0;
+        if ((e.maxStreak||0) > r.maxStreak) r.maxStreak = e.maxStreak;
+        if (e.at && e.at > r.lastAt) r.lastAt = e.at;
+        if (t === 'battle' && e.result === 'win') r.battleWins += 1;
+      }
+    }
+    const list = [...agg.values()];
+    list.forEach(r => { r.accuracy = r.total > 0 ? Math.round(r.correct / r.total * 100) : 0; });
+    list.sort((a, b) => b.score - a.score);
+    return sendJSON(res, { entries: list.slice(0, 200), total: list.length });
   }
   // 교사 수정/삭제는 "본인 교실의 기록"에만 가능
   if (method === 'POST' && pathname === '/api/leaderboard/clear') {
