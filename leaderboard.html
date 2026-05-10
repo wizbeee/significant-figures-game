@@ -81,10 +81,7 @@
     <button class="danger" onclick="resetCurrent()">⚠️ 현재 탭 초기화</button>
   </div>
   <div class="filter-row">
-    <label>교실:</label>
-    <select id="flt-cls">
-      <option value="all">🌏 전체 교실</option>
-    </select>
+    <select id="flt-cls" style="display:none"><option value="all">all</option></select>
     <label>게임:</label>
     <select id="flt-gm">
       <option value="all">전체</option>
@@ -271,7 +268,9 @@ function render() {
   // 🏆 종합 탭 — 학생별 합산 점수 (모드/난이도/교실 필터 미적용)
   if (currentType === 'combined') {
     const list = entries.slice();  // 이미 서버에서 score 정렬됨
-    document.getElementById('count-label').textContent = `총 ${list.length}명 (전체 모드 합산)`;
+    const mySid = localStorage.getItem('sigfig-studentId');
+    const myRank = mySid ? list.findIndex(e => e.studentId === mySid) : -1;
+    document.getElementById('count-label').textContent = `총 ${list.length}명 (전체 모드 합산)` + (myRank >= 0 ? ` · 내 순위 ${myRank+1}위` : '');
     if (list.length === 0) {
       document.getElementById('lb-area').innerHTML = '<div class="empty">아직 기록이 없어요. 첫 기록의 주인공이 되어보세요!</div>';
       return;
@@ -282,15 +281,18 @@ function render() {
     </tr>`;
     const rows = list.map((e, i) => {
       const medal = ['🥇','🥈','🥉'][i] || '';
-      return `<tr>
-        <td><span class="rk">${medal} ${i+1}</span></td>
-        <td><b>${_h(e.name)}</b> <span style="color:var(--txt2);font-size:.78rem">${_h(e.studentId)}</span></td>
-        <td class="score-cell">${(e.score||0).toLocaleString()}점</td>
-        <td>${e.games||0}</td>
-        <td style="font-size:.82rem;color:var(--txt2)">${e.single||0}/${e.multi||0}/${e.battle||0}</td>
-        <td>${e.accuracy||0}%</td>
-        <td>${e.maxStreak||0}회</td>
-        <td>${e.battleWins||0}</td>
+      const isMe = mySid && e.studentId === mySid;
+      const meBg = isMe ? 'background:rgba(99,102,241,.18) !important;' : '';
+      const meTag = isMe ? ' <span class="badge pri" style="font-size:.7rem">나</span>' : '';
+      return `<tr style="${meBg}">
+        <td style="${meBg}"><span class="rk">${medal} ${i+1}</span></td>
+        <td style="${meBg}"><b>${_h(e.name)}</b>${meTag} <span style="color:var(--txt2);font-size:.78rem">${_h(e.studentId)}</span></td>
+        <td class="score-cell" style="${meBg}">${(e.score||0).toLocaleString()}점</td>
+        <td style="${meBg}">${e.games||0}</td>
+        <td style="font-size:.82rem;color:var(--txt2);${meBg}">${e.single||0}/${e.multi||0}/${e.battle||0}</td>
+        <td style="${meBg}">${e.accuracy||0}%</td>
+        <td style="${meBg}">${e.maxStreak||0}회</td>
+        <td style="${meBg}">${e.battleWins||0}</td>
       </tr>`;
     }).join('');
     document.getElementById('lb-area').innerHTML = `<table class="lb-table"><thead>${head}</thead><tbody>${rows}</tbody></table>`;
@@ -321,10 +323,8 @@ function render() {
     const k = e.at + '|' + e.studentId;
     return `<td><input type="checkbox" ${selected.has(k)?'checked':''} onchange="toggleSelect('${k}', this.checked)"></td>`;
   };
-  const clsCell = (e) => {
-    const code = e.classroomCode || 'default';
-    return `<td style="font-size:.82rem"><span style="display:inline-block;padding:2px 8px;background:var(--bg3);border-radius:6px">${code}</span></td>`;
-  };
+  // 교실 시스템 단순화 — 컬럼 표시 안 함
+  const clsCell = () => '';
   const actionCell = (e) => {
     if (!admin) return '';
     const key = e.at + '|' + e.studentId;
@@ -343,7 +343,7 @@ function render() {
 
   let colsHead, rowRenderer;
   if (currentType === 'single') {
-    colsHead = `<tr>${selHead}<th>순위</th><th>이름 (학번)</th><th>🏫 교실</th><th>점수</th><th>정답</th><th>최대 콤보</th><th>게임</th><th>난이도</th><th>일시</th>${adminHead}</tr>`;
+    colsHead = `<tr>${selHead}<th>순위</th><th>이름 (학번)</th><th>점수</th><th>정답</th><th>최대 콤보</th><th>게임</th><th>난이도</th><th>일시</th>${adminHead}</tr>`;
     rowRenderer = (e, i) => isEditing(e) ? `<tr>
       ${selCell(e)}<td><span class="rk">${i+1}</span></td>
       <td class="edit-cell"><input id="ed-name" value="${e.name}"> <input id="ed-sid" value="${e.studentId}" style="margin-top:3px"></td>
@@ -368,7 +368,7 @@ function render() {
       ${actionCell(e)}
     </tr>`;
   } else if (currentType === 'multi') {
-    colsHead = `<tr>${selHead}<th>순위</th><th>이름 (학번)</th><th>🏫 교실</th><th>점수</th><th>정답</th><th>방 이름</th><th>참여자</th><th>게임</th><th>난이도</th><th>일시</th>${adminHead}</tr>`;
+    colsHead = `<tr>${selHead}<th>순위</th><th>이름 (학번)</th><th>점수</th><th>정답</th><th>방 이름</th><th>참여자</th><th>게임</th><th>난이도</th><th>일시</th>${adminHead}</tr>`;
     rowRenderer = (e, i) => isEditing(e) ? `<tr>
       ${selCell(e)}<td><span class="rk">${i+1}</span></td>
       <td class="edit-cell"><input id="ed-name" value="${e.name}"> <input id="ed-sid" value="${e.studentId}" style="margin-top:3px"></td>
@@ -396,7 +396,7 @@ function render() {
       ${actionCell(e)}
     </tr>`;
   } else {
-    colsHead = `<tr>${selHead}<th>순위</th><th>이름 (학번)</th><th>🏫 교실</th><th>점수</th><th>승패</th><th>정답</th><th>참여자</th><th>게임</th><th>난이도</th><th>일시</th>${adminHead}</tr>`;
+    colsHead = `<tr>${selHead}<th>순위</th><th>이름 (학번)</th><th>점수</th><th>승패</th><th>정답</th><th>참여자</th><th>게임</th><th>난이도</th><th>일시</th>${adminHead}</tr>`;
     rowRenderer = (e, i) => isEditing(e) ? `<tr>
       ${selCell(e)}<td><span class="rk">${i+1}</span></td>
       <td class="edit-cell"><input id="ed-name" value="${e.name}"> <input id="ed-sid" value="${e.studentId}" style="margin-top:3px"></td>

@@ -97,7 +97,7 @@
     <div class="stat-row">
       <div class="stat"><div class="lbl">접속자</div><div class="val" id="st-students">0</div></div>
       <div class="stat"><div class="lbl">활성 방</div><div class="val" id="st-rooms">0</div></div>
-      <div class="stat"><div class="lbl">승인 대기</div><div class="val" id="st-pending" style="color:var(--acc)">0</div></div>
+      <div class="stat"><div class="lbl">총 학생 수</div><div class="val" id="st-total" style="color:var(--pri)">0</div></div>
       <div class="stat"><div class="lbl">진행 중 게임</div><div class="val" id="st-active" style="color:var(--sec)">0</div></div>
     </div>
 
@@ -228,16 +228,8 @@
           <h3>🚪 방 관리
             <button class="btn btn-pri btn-sm" onclick="createRoomDialog()">+ 방 직접 만들기</button>
             <button class="btn btn-sec btn-sm" onclick="showPresetsModal()" title="자주 쓰는 설정">⭐ 프리셋</button>
-            <button class="btn btn-ghost btn-sm" onclick="bulkRoomOp('approve-all')" title="대기 중인 방 모두 승인">✅ 일괄 승인</button>
             <button class="btn btn-ghost btn-sm" onclick="bulkRoomOp('stop-all')" title="진행 중인 모든 방 종료">⏹ 일괄 종료</button>
-            <label id="auto-approve-wrap" style="display:inline-flex;align-items:center;gap:6px;margin-left:10px;font-size:.88rem;font-weight:600;cursor:pointer">
-              <input type="checkbox" id="auto-approve-tog" onchange="toggleAutoApprove()" style="width:18px;height:18px;cursor:pointer">
-              <span id="auto-approve-label" style="color:var(--txt2)">🔁 자동 승인</span>
-            </label>
           </h3>
-          <div id="auto-approve-hint" style="color:var(--txt2);font-size:.82rem;margin-bottom:10px;display:none">
-            ✅ <b style="color:var(--sec)">자동 승인 ON</b> — 학생이 만드는 모든 방이 즉시 승인됩니다.
-          </div>
           <div id="rooms-area"></div>
         </div>
         <div class="panel">
@@ -400,9 +392,10 @@ async function init() {
   if (ov.error) { localStorage.removeItem('sigfig-teacher-token'); show('login'); return; }
   show('counter');
   const brandCls = document.getElementById('brand-cls');
-  if (brandCls && ov.classroomCode) brandCls.textContent = `🏫 ${ov.classroomName || ov.classroomCode} (${ov.classroomCode})`;
+  // 교실 시스템 단순화로 brand 상세 표시 안 함
+  if (brandCls) brandCls.textContent = '';
   refresh(ov);
-  loadAutoApprove();
+  // loadAutoApprove(); — 단순화 후 제거 (모든 방 자동 승인 고정)
   pollTimer = setInterval(() => refresh(), 1500);
 }
 
@@ -432,7 +425,9 @@ async function refresh(ov) {
   const rooms = ov.rooms || [], students = ov.students || [];
   document.getElementById('st-students').textContent = students.filter(s => s.online).length;
   document.getElementById('st-rooms').textContent = rooms.length;
-  document.getElementById('st-pending').textContent = rooms.filter(r => !r.approved).length;
+  // 총 학생 수 (등록된 모든 학생)
+  const totalEl = document.getElementById('st-total');
+  if (totalEl) totalEl.textContent = (studentsDbCache?.length || students.length || 0);
   document.getElementById('st-active').textContent = rooms.filter(r => r.phase === 'question' || r.phase === 'reveal').length;
 
   const typeEmo = { single:'🎯', multi:'👥', battle:'⚔️' };
@@ -449,15 +444,12 @@ async function refresh(ov) {
           <div>
             <b>${typeEmo[r.type]||''} ${r.label || '방 #' + r.code}</b>
             <span class="badge pri">${r.code}</span>
-            ${!r.approved ? '<span class="badge acc">⏳ 승인대기</span>' : ''}
             ${r.phase !== 'lobby' ? `<span class="badge ok">${phaseLabel[r.phase]}</span>` : ''}
           </div>
         </div>
         <div class="meta">${gmLabel[r.gameMode]||'?'} · ${diffLabel[r.difficulty]} · ${r.questionCount}문제 · 방장: ${_h(r.ownerName||'-')} · ${r.playerCount}/${r.capacity}명${r.phase !== 'lobby' && r.total > 0 ? ` · 진행 ${r.qIndex+1}/${r.total} (${Math.round((r.qIndex+1)/r.total*100)}%)` : ''}</div>
         ${r.players.length ? `<div class="players">참여자: ${r.players.map(p => `${p.name}(${p.score}점)`).join(', ')}</div>` : ''}
         <div class="btns">
-          ${!r.approved ? `<button class="btn btn-sec btn-sm" onclick="approveRoom('${r.code}',true)">✅ 승인</button>` : ''}
-          ${r.approved && r.phase === 'lobby' ? `<button class="btn btn-ghost btn-sm" onclick="approveRoom('${r.code}',false)">↩ 승인 취소</button>` : ''}
           ${r.phase === 'question' || r.phase === 'reveal' ? `<button class="btn btn-err btn-sm" onclick="stopRoom('${r.code}')">⏹ 강제 종료</button>` : ''}
           <button class="btn btn-err btn-sm" onclick="closeRoom('${r.code}')">🗑 방 삭제</button>
           <a class="btn btn-ghost btn-sm" href="/room.html?code=${r.code}&watch=1" target="_blank">👁 관전</a>
@@ -626,14 +618,13 @@ async function submitCreateRoom() {
 
 async function showRoomShareModal(code) {
   const url = location.origin + '/';
-  const cls = (document.getElementById('brand-cls')?.textContent || '').match(/\(([^)]+)\)/)?.[1] || '';
   const wrap = document.createElement('div');
   wrap.innerHTML = '<div style="text-align:center;line-height:1.6">'
-    + '<div style="font-size:.88rem;color:var(--txt2)">학생들에게 알려주세요</div>'
+    + '<div style="font-size:.88rem;color:var(--txt2)">학생들에게 방 코드를 알려주세요</div>'
     + '<div style="font-size:2.2rem;font-weight:900;color:var(--acc);letter-spacing:6px;margin:8px 0;font-family:Courier New,monospace">' + code + '</div>'
     + '<div style="margin:14px 0">' + qrSvg(url, 200) + '</div>'
-    + '<div style="font-size:.85rem;color:var(--txt2)">학생 입장 URL: <code>' + url + '</code></div>'
-    + (cls ? '<div style="font-size:.85rem;color:var(--txt2);margin-top:6px">교실 코드: <b style="color:var(--pri)">' + _h(cls) + '</b></div>' : '')
+    + '<div style="font-size:.85rem;color:var(--txt2)">학생 입장: <code>' + url + '</code></div>'
+    + '<div style="font-size:.82rem;color:var(--txt2);margin-top:6px">학번+이름 입력 후 로비에서 <b>🔢 방 코드</b>로 입장</div>'
     + '</div>';
   await modal({
     title: '🆕 방 #' + code + ' 생성됨',
@@ -1555,22 +1546,19 @@ async function showSeasonDetail(id) {
 
 
 function shareClassroom() {
-  const code = (document.getElementById('brand-cls')?.textContent || '').match(/\(([^)]+)\)/)?.[1] || '';
   const url = location.origin + '/';
   const wrap = document.createElement('div');
   wrap.innerHTML = '<div style="text-align:center;line-height:1.6">'
-    + '<div style="font-size:.88rem;color:var(--txt2)">학생들에게 알려주세요</div>'
-    + '<div style="font-size:1.6rem;font-weight:900;color:var(--pri);letter-spacing:3px;margin:8px 0">' + _h(code) + '</div>'
+    + '<div style="font-size:.88rem;color:var(--txt2)">학생들에게 이 주소를 알려주세요</div>'
+    + '<div style="font-size:1.4rem;font-weight:800;color:var(--pri);margin:14px 0;font-family:Courier New,monospace">' + url + '</div>'
     + '<div style="margin:14px 0">' + qrSvg(url, 200) + '</div>'
-    + '<div style="font-size:.85rem;color:var(--txt2)">학생 입장: <code>' + url + '</code></div>'
+    + '<div style="font-size:.85rem;color:var(--txt2)">학생은 <b>학번 + 이름</b>만 입력하면 즉시 입장 가능합니다.</div>'
     + '</div>';
-  modal({ title: '🏫 교실 공유', body: wrap, actions: [
+  modal({ title: '🔗 학생 접속 주소 공유', body: wrap, actions: [
     { label: '🔗 URL 복사', value: 'url', kind: 'sec' },
-    { label: '🏫 교실 코드 복사', value: 'code', kind: 'sec' },
     { label: '닫기', value: null, kind: 'ghost' },
   ]}).then(v => {
     if (v === 'url') copyToClipboard(url, '학생 입장 URL');
-    else if (v === 'code') copyToClipboard(code, '교실 코드');
   });
 }
 
