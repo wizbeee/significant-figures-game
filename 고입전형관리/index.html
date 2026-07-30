@@ -4,10 +4,16 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>고입전형 관리 시스템</title>
-<script src="https://cdn.tailwindcss.com"></script>
-<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.min.js"></script>
+<!-- 라이브러리: 로컬(lib/) 우선, 실패 시 CDN 폴백 — 오프라인/망분리 PC 지원 -->
+<script src="lib/tailwind.js"></script>
+<script>if (!window.tailwind) document.write('<script src="https://cdn.tailwindcss.com"><\/script>');</script>
+<script src="lib/xlsx.full.min.js"></script>
+<script>if (typeof XLSX === 'undefined') document.write('<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"><\/script>');</script>
+<script src="lib/chart.umd.min.js"></script>
+<script>if (typeof Chart === 'undefined') document.write('<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"><\/script>');</script>
+<!-- pptxgen은 bundle 빌드 사용 (dist/pptxgen.min.js는 JSZip을 외부 전역으로 요구해 단독 로드 시 실패) -->
+<script src="lib/pptxgen.bundle.js"></script>
+<script>if (typeof PptxGenJS === 'undefined') document.write('<script src="https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.js"><\/script>');</script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Pretendard:wght@300;400;500;600;700;800&display=swap');
 * { font-family: 'Pretendard', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif; }
@@ -52,7 +58,15 @@ th.sortable.sort-active .sort-arrow { opacity: 1; color: #2563eb; }
 .pagebreak-toggle.off { background: #f1f5f9; color: #64748b; border: 1px solid #e2e8f0; }
 .pagebreak-toggle.on { background: #2563eb; color: #fff; border: 1px solid #1d4ed8; }
 .pagebreak-toggle:hover { transform: translateY(-1px); }
-@media print { .pagebreak-toggle, .report-section-toolbar { display: none !important; } .print-break { page-break-after: always; } }
+@media print {
+  .pagebreak-toggle { display: none !important; }
+  .print-break { page-break-after: always; }
+  aside, #toast-stack { display: none !important; }
+  /* 다크 모드 상태에서 직접 인쇄해도 항상 라이트로 출력 */
+  body.dark, body.dark .card, body.dark table th { background: #fff !important; }
+  body.dark, body.dark * { color: #111 !important; border-color: #ddd !important; }
+}
+body.dark .pagebreak-toggle.off { background: #334155; color: #cbd5e1; border-color: #475569; }
 
 /* ── Dark mode ── */
 body.dark { background: #0f172a; color: #e2e8f0; }
@@ -144,9 +158,10 @@ function escapeHtml(s) {
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
+// 인라인 onclick="fn('...')" 류 JS 문자열 리터럴에 안전하게 삽입 (백슬래시·따옴표·태그 이스케이프)
 function escapeAttr(s) {
   if (s == null) return '';
-  return String(s).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+  return String(s).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
 // Toast notifications
@@ -217,6 +232,7 @@ function toggleDark() {
   if (btn) btn.textContent = isDark() ? '☀️ 라이트' : '🌙 다크';
   // Redraw charts so they pick up colors
   destroyCharts();
+  applyChartTheme();
   if (typeof currentPage !== 'undefined' && currentPage) navigateTo(currentPage);
 }
 function applySavedTheme() {
@@ -242,9 +258,14 @@ function percentile(sortedAsc, p) {
 }
 function percentileRank(sortedAsc, value) {
   if (!sortedAsc.length) return null;
-  let count = 0;
-  for (const v of sortedAsc) { if (v < value) count++; else break; }
-  return (count / sortedAsc.length) * 100;
+  // 수능식 백분위: (미만 인원 + 동점 인원/2) / 전체 × 100
+  let below = 0, ties = 0;
+  for (const v of sortedAsc) {
+    if (v < value) below++;
+    else if (v === value) ties++;
+    else break;
+  }
+  return ((below + ties / 2) / sortedAsc.length) * 100;
 }
 function zScore(value, m, sd) { return sd > 0 ? (value - m) / sd : 0; }
 function iqrOutliers(vals) {
@@ -259,6 +280,21 @@ function iqrOutliers(vals) {
 // Chart color palette (dark mode aware)
 function chartTextColor() { return isDark() ? '#cbd5e1' : '#334155'; }
 function chartGridColor() { return isDark() ? '#334155' : '#e2e8f0'; }
+// Chart.js 전역 기본색을 현재 테마에 맞춤 — 차트 생성 전 호출
+function applyChartTheme() {
+  if (typeof Chart === 'undefined') return;
+  Chart.defaults.color = chartTextColor();
+  Chart.defaults.borderColor = chartGridColor();
+}
+// 안전한 차트 생성: 캔버스 부재(빠른 화면 전환)·중복 생성(연속 렌더) 모두 방어
+function mkChart(id, cfg) {
+  if (typeof Chart === 'undefined') return null;
+  const canvas = document.getElementById(id);
+  if (!canvas || !canvas.isConnected) return null;
+  const old = Chart.getChart(canvas);
+  if (old) old.destroy();
+  return new Chart(canvas, cfg);
+}
 
 // ══════════════════════════════════════════════
 // DATA LAYER - IndexedDB
@@ -416,6 +452,11 @@ async function addMockExams(records) {
   const store = txStore('mockExams', 'readwrite');
   let added = 0, updated = 0;
   for (const r of records) {
+    // 백업 복원 등 외부 경로에서 온 레코드도 타입 정규화 (기수 숫자/누락 → localeCompare TypeError 방지)
+    r.기수 = String(r.기수 ?? '').trim();
+    r.실시년월 = String(r.실시년월 ?? '').trim();
+    r.이름 = String(r.이름 ?? '').trim();
+    if (r.응시학년 != null && r.응시학년 !== '') r.응시학년 = parseInt(r.응시학년) || r.응시학년;
     if (!r._dedupe) r._dedupe = `${r.기수||''}_${r.실시년월||''}_${r.응시학년||''}_${r.이름||''}_${r.반||''}_${r.번호||''}`;
     if (keySet.has(r._dedupe)) {
       // update existing
@@ -481,10 +522,10 @@ function normalizeRecord(row) {
   }
   const numFields = ['교과성적', '출석', '1단계 최종점수', '면접점수', '감점', '최종점수', '무단 결석', '무단 지각, 조퇴, 결과'];
   for (const f of numFields) {
-    if (r[f] !== undefined && r[f] !== '') r[f] = parseFloat(r[f]) || 0;
+    if (r[f] !== undefined && r[f] !== '') r[f] = numOrNull(r[f]) ?? 0;
   }
   for (const [k, v] of Object.entries(r)) {
-    if (/학기|환산점수|평균|검정고시/.test(k) && v !== '') r[k] = parseFloat(v) || 0;
+    if (/학기|환산점수|평균|검정고시/.test(k) && v !== '') r[k] = numOrNull(v) ?? 0;
   }
   return r;
 }
@@ -492,12 +533,14 @@ function normalizeRecord(row) {
 function extractYearFromSheetName(name) {
   const m = name.match(/(\d{4})\s*학년도/);
   if (m) return m[1];
-  const m2 = name.match(/(\d{4})/);
+  // 폴백은 앞뒤가 숫자가 아닌 독립된 20xx만 인정 — '2500명', '1000번대', '12025' 오인 방지
+  const m2 = name.match(/(?:^|[^\d])(20\d{2})(?![\d])/);
   return m2 ? m2[1] : '미지정';
 }
 
 function readFileAsWorkbook(file) {
   return new Promise((res, rej) => {
+    if (typeof XLSX === 'undefined') { rej(new Error('엑셀 라이브러리(XLSX)가 로드되지 않았습니다. lib 폴더가 함께 있는지 또는 인터넷 연결을 확인하세요.')); return; }
     const reader = new FileReader();
     reader.onload = e => {
       try { res(XLSX.read(e.target.result, { type: 'array' })); }
@@ -510,7 +553,7 @@ function readFileAsWorkbook(file) {
 
 function parseSheet(wb, sheetName) {
   const ws = wb.Sheets[sheetName];
-  if (!ws) throw new Error(`시트 "${sheetName}"를 찾을 수 없습니다.`);
+  if (!ws) throw new Error(`시트 "${sheetName}"을(를) 찾을 수 없습니다.`);
   const rows = XLSX.utils.sheet_to_json(ws, { defval: '' });
   const year = extractYearFromSheetName(sheetName);
   const results = [];
@@ -784,8 +827,26 @@ let pendingMockExam = null; // {sheetName, format, records, columns, wb, fileNam
 // ══════════════════════════════════════════════
 // UTILITY
 // ══════════════════════════════════════════════
-function num(v) { return parseFloat(v) || 0; }
-function fmt(v, d = 1) { return v != null && v !== '' ? Number(v).toFixed(d) : '-'; }
+// 결측(빈칸·비숫자)은 null, 실제 0점은 0으로 구분. 천단위 콤마 제거 후 파싱.
+function numOrNull(v) {
+  if (v == null || v === '') return null;
+  const n = parseFloat(String(v).replace(/,/g, ''));
+  return isNaN(n) ? null : n;
+}
+function num(v) { const n = numOrNull(v); return n == null ? 0 : n; }
+function fmt(v, d = 1) { return v != null && v !== '' && !isNaN(v) ? Number(v).toFixed(d) : '-'; }
+// 통계용: 결측을 제외하고(실제 0점은 포함) 숫자 배열 추출 — 모든 평균·컷 계산의 단일 기준
+function valsOf(arr, key) {
+  const out = [];
+  for (const r of arr) { const v = numOrNull(r[key]); if (v != null) out.push(v); }
+  return out;
+}
+function avgOf(arr, key) {
+  const vs = valsOf(arr, key);
+  return vs.length ? vs.reduce((s, v) => s + v, 0) / vs.length : null;
+}
+// 상위 p 컷 인덱스: 내림차순 배열에서 등수 ceil(n·p)의 인덱스 (기존 floor(n·p)는 한 등수 아래를 가리키는 off-by-one)
+function cutIdx(n, p) { return Math.min(Math.max(Math.ceil(n * p) - 1, 0), n - 1); }
 
 function getGradeFields(record) {
   const converted = {};
@@ -813,6 +874,7 @@ function getSchoolList(data) {
 }
 
 function destroyCharts() {
+  if (typeof Chart === 'undefined') return;
   Object.values(Chart.instances || {}).forEach(c => c.destroy());
 }
 
@@ -830,6 +892,14 @@ function getYears() {
 function getFilteredData() {
   if (!yearFilter) return allData;
   return allData.filter(r => (r['_학년도'] || '미지정') === yearFilter);
+}
+
+// 데이터 교체·초기화·undo 후 필터가 사라진 학년도를 가리키면 자동 해제 (막다른 빈 화면 방지)
+function sanitizeYearFilter() {
+  if (yearFilter && !getYears().includes(yearFilter)) {
+    yearFilter = '';
+    toast('선택했던 학년도 데이터가 없어 필터를 해제했습니다', 'info', 3000);
+  }
 }
 
 function yearFilterHtml(extraClass = '') {
@@ -875,9 +945,11 @@ function updateDataCount() {
 async function navigateTo(page) {
   currentPage = page;
   destroyCharts();
+  applyChartTheme();
   renderNav();
   const main = document.getElementById('main-content');
   if (page !== 'upload' && allData.length === 0) allData = await getAllApplicants();
+  sanitizeYearFilter();
   switch (page) {
     case 'upload': renderUpload(main); break;
     case 'dashboard': renderDashboard(main); break;
@@ -952,6 +1024,7 @@ function renderUpload(el) {
       <div class="card p-5 space-y-3">
         <h3 class="font-semibold text-gray-900">데이터 관리</h3>
         <p class="text-xs text-gray-500">모든 데이터는 이 브라우저에만 로컬 저장됩니다. 다른 컴퓨터에서 작업하려면 백업 파일을 이동하세요.</p>
+        <p class="text-xs text-amber-700 bg-amber-50 rounded-lg p-2">⚠️ 브라우저의 '인터넷 사용기록 삭제(사이트 데이터 정리)'를 실행하면 저장된 데이터가 모두 사라집니다. 작업 후에는 백업 다운로드를 권장합니다. <span id="backup-info" class="font-medium"></span></p>
         <div class="flex gap-2 flex-wrap">
           <button onclick="exportBackup()" class="px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-xl text-sm font-medium hover:bg-gray-50 transition flex items-center gap-2">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
@@ -959,18 +1032,48 @@ function renderUpload(el) {
           <button onclick="document.getElementById('restore-input').click()" class="px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-xl text-sm font-medium hover:bg-gray-50 transition flex items-center gap-2">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
             복원하기 (누적)</button>
-          <button onclick="if(confirm('모든 데이터를 삭제하시겠습니까?\\n\\n※ Ctrl+Z로 되돌릴 수 있습니다.')){pushHistory('전체 초기화 이전').then(()=>clearAllData()).then(()=>{allData=[];updateDataCount();renderUpload(document.getElementById('main-content'));toast('전체 초기화 완료 (Ctrl+Z로 복구 가능)','warn',5000);})}" class="px-4 py-2 bg-white border border-red-200 text-red-600 rounded-xl text-sm font-medium hover:bg-red-50 transition">전체 초기화</button>
+          <button onclick="clearAllApplicantsFlow()" class="px-4 py-2 bg-white border border-red-200 text-red-600 rounded-xl text-sm font-medium hover:bg-red-50 transition">전체 초기화</button>
           <input type="file" id="restore-input" accept=".json" class="hidden" onchange="restoreBackup(event)">
         </div>
       </div>
     </div>`;
   renderUploadMeta();
+  renderPendingFiles();   // 화면 재진입 시 선택해 둔 파일 목록 복원 (상태-화면 불일치로 인한 중복 업로드 방지)
+  updateBackupInfo();
+}
+
+async function clearAllApplicantsFlow() {
+  if (!confirm('지원자 데이터를 모두 삭제하시겠습니까?\n(모의고사 성적은 별도로 유지됩니다)\n\n※ 되돌리기(Ctrl+Z)는 이 페이지를 닫기 전까지만 가능합니다.')) return;
+  await pushHistory('전체 초기화 이전');
+  await clearAllData();
+  allData = [];
+  if (allMockExams.length && confirm(`모의고사 성적 ${allMockExams.length}건도 함께 삭제할까요?\n(모의고사 삭제는 되돌리기가 지원되지 않습니다)`)) {
+    await clearAllMockExams();
+    allMockExams = [];
+  }
+  yearFilter = '';
+  updateDataCount();
+  renderUpload(document.getElementById('main-content'));
+  toast('초기화 완료 — 지원자 데이터는 페이지를 닫기 전까지 Ctrl+Z로 복구 가능', 'warn', 5000);
+}
+
+async function updateBackupInfo() {
+  const el = document.getElementById('backup-info');
+  if (!el) return;
+  try {
+    await openDB();
+    const m = await pr(txStore('meta').get('lastBackup'));
+    el.textContent = m && m.date ? `(마지막 백업: ${new Date(m.date).toLocaleString('ko-KR')})` : '(아직 백업한 적 없음)';
+  } catch { el.textContent = ''; }
 }
 
 async function handleDrop(e) {
   e.preventDefault();
   e.currentTarget.classList.remove('dragover');
-  const files = [...e.dataTransfer.files].filter(f => /\.(xlsx|xls|csv)$/i.test(f.name));
+  const all = [...e.dataTransfer.files];
+  const files = all.filter(f => /\.(xlsx|xls|csv)$/i.test(f.name));
+  const ignored = all.filter(f => !/\.(xlsx|xls|csv)$/i.test(f.name));
+  if (ignored.length) toast(`지원하지 않는 형식 ${ignored.length}개 무시됨: ${ignored.map(f => f.name).join(', ')}`, 'warn', 5000);
   if (files.length) await addFilesToPending(files);
 }
 
@@ -980,9 +1083,14 @@ async function handleFileSelect(e) {
   e.target.value = '';
 }
 
+let pendingFileErrors = [];
+
 async function addFilesToPending(files) {
-  const listEl = document.getElementById('file-list');
   for (const file of files) {
+    if (pendingFiles.some(pf => pf.file.name === file.name && pf.file.size === file.size)) {
+      toast(`'${file.name}'은(는) 이미 추가된 파일입니다`, 'warn');
+      continue;
+    }
     try {
       const wb = await readFileAsWorkbook(file);
       const sheetNames = wb.SheetNames;
@@ -996,9 +1104,9 @@ async function addFilesToPending(files) {
       const selectedSheets = sheetInfo.filter(si => si.validRows > 0).map(si => si.name);
       pendingFiles.push({ file, wb, sheetNames, sheetInfo, selectedSheets });
     } catch (err) {
-      listEl.innerHTML += `<div class="card p-3 border-red-200 bg-red-50 text-sm text-red-700 flex items-center gap-2">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
-        ${file.name}: ${err.message}</div>`;
+      // 오류는 상태에 쌓아 renderPendingFiles가 함께 그림 (즉시 innerHTML 덮어쓰기로 사라지는 문제 방지)
+      pendingFileErrors.push({ name: file.name, message: err.message });
+      toast(`${file.name} 읽기 실패`, 'error');
     }
   }
   renderPendingFiles();
@@ -1015,15 +1123,24 @@ function toggleSheet(fileIdx, sheetName) {
 function renderPendingFiles() {
   const listEl = document.getElementById('file-list');
   const actionsEl = document.getElementById('upload-actions');
-  if (!pendingFiles.length) { listEl.innerHTML = ''; actionsEl.classList.add('hidden'); return; }
+  if (!listEl || !actionsEl) return;
+
+  const errHtml = pendingFileErrors.map((er, i) => `
+    <div class="card p-3 border-red-200 bg-red-50 text-sm text-red-700 flex items-center gap-2">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+      <span>${escapeHtml(er.name)}: ${escapeHtml(er.message)}</span>
+      <button onclick="pendingFileErrors.splice(${i},1); renderPendingFiles()" class="ml-auto text-xs text-red-400 hover:text-red-600 shrink-0">닫기</button>
+    </div>`).join('');
+
+  if (!pendingFiles.length) { listEl.innerHTML = errHtml; actionsEl.classList.add('hidden'); return; }
   actionsEl.classList.remove('hidden');
 
-  listEl.innerHTML = pendingFiles.map((pf, idx) => `
+  listEl.innerHTML = errHtml + pendingFiles.map((pf, idx) => `
     <div class="card p-4 space-y-3">
       <div class="flex items-center justify-between">
         <div class="flex items-center gap-2">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#16a34a" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-          <span class="text-sm font-semibold text-gray-900">${pf.file.name}</span>
+          <span class="text-sm font-semibold text-gray-900">${escapeHtml(pf.file.name)}</span>
           <span class="text-xs text-gray-400">(${(pf.file.size/1024).toFixed(0)} KB)</span>
         </div>
         <button onclick="pendingFiles.splice(${idx},1); renderPendingFiles()" class="p-1.5 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500 transition" title="제거">
@@ -1039,8 +1156,8 @@ function renderPendingFiles() {
             <label class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition cursor-pointer ${checked
               ? 'bg-blue-600 text-white border-blue-600'
               : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'}">
-              <input type="checkbox" class="hidden" ${checked?'checked':''} onchange="toggleSheet(${idx},'${si.name.replace(/'/g,"\\'")}')">
-              ${si.name} <span class="opacity-70">(${si.validRows}명 · ${si.year})</span>
+              <input type="checkbox" class="hidden" ${checked?'checked':''} onchange="toggleSheet(${idx},'${escapeAttr(si.name)}')">
+              ${escapeHtml(si.name)} <span class="opacity-70">(${si.validRows}명 · ${escapeHtml(si.year)})</span>
             </label>`;
           }).join('')}
         </div>
@@ -1052,6 +1169,9 @@ function renderPendingFiles() {
 async function executeUpload() {
   if (!pendingFiles.length) return;
   const mode = document.querySelector('input[name="upload-mode"]:checked')?.value || 'append';
+  if (mode === 'replace' && allData.length > 0) {
+    if (!confirm(`전체 교체 모드입니다.\n기존 지원자 ${allData.length}명의 데이터가 삭제되고 새 데이터로 교체됩니다.\n\n계속하시겠습니까?`)) return;
+  }
   const statusEl = document.getElementById('upload-status');
   statusEl.innerHTML = '<div class="card p-4 text-center text-sm text-gray-500"><div class="animate-pulse">업로드 처리 중...</div></div>';
 
@@ -1085,8 +1205,10 @@ async function executeUpload() {
     }
 
     allData = await getAllApplicants();
+    sanitizeYearFilter();
     updateDataCount();
     pendingFiles = [];
+    pendingFileErrors = [];
     renderPendingFiles();
 
     const sampleHtml = (result.skippedSamples && result.skippedSamples.length)
@@ -1149,12 +1271,17 @@ function renderUploadMeta() {
 async function exportBackup() {
   const data = await getAllApplicants();
   const mocks = await getAllMockExams();
-  if (!data.length && !mocks.length) { alert('데이터가 없습니다.'); return; }
+  if (!data.length && !mocks.length) { toast('백업할 데이터가 없습니다', 'warn'); return; }
   const cleanData = data.map(r => { const { id, ...rest } = r; return rest; });
   const cleanMocks = mocks.map(r => { const { id, ...rest } = r; return rest; });
   const blob = new Blob([JSON.stringify({ version: 4, date: new Date().toISOString(), count: data.length, mockCount: mocks.length, applicants: cleanData, mockExams: cleanMocks }, null, 2)], { type: 'application/json' });
   const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
   a.download = `고입전형_백업_${new Date().toISOString().slice(0,10)}.json`; a.click();
+  try {
+    await pr(txStore('meta', 'readwrite').put({ key: 'lastBackup', date: new Date().toISOString() }));
+    updateBackupInfo();
+  } catch {}
+  toast('백업 파일 다운로드 완료', 'success');
 }
 
 function validateBackup(backup) {
@@ -1218,13 +1345,12 @@ async function restoreBackup(e) {
       allMockExams = await getAllMockExams();
       msg.push(`모의고사 추가 ${res2.added}건, 갱신 ${res2.updated}건`);
     }
+    sanitizeYearFilter();
     updateDataCount();
-    toast('복원 완료', 'success');
-    alert('복원 완료!\n\n' + msg.join('\n'));
+    toast('복원 완료 — ' + msg.join(' / '), 'success', 6000);
     navigateTo('upload');
   } catch (err) {
-    toast('복원 실패', 'error');
-    alert('복원 오류:\n\n' + err.message);
+    toast('복원 실패: ' + err.message, 'error', 7000);
   }
   e.target.value = '';
 }
@@ -1243,7 +1369,7 @@ function renderDashboard(el) {
   const types = {};
   d.forEach(r => { const t = r['전형구분'] || '미지정'; types[t] = (types[t] || 0) + 1; });
   const schools = getSchoolList(d);
-  const safeDivAvg = (arr, key) => { const valid = arr.filter(r => num(r[key])); return valid.length ? valid.reduce((s,r) => s + num(r[key]), 0) / valid.length : 0; };
+  const safeDivAvg = (arr, key) => avgOf(arr, key);
 
   el.innerHTML = `
     <div class="p-6 max-w-7xl mx-auto space-y-6">
@@ -1272,18 +1398,18 @@ function renderDashboard(el) {
 
   setTimeout(() => {
     const colors6 = ['#3b82f6','#10b981','#f59e0b','#ef4444','#8b5cf6','#ec4899','#14b8a6','#f97316'];
-    new Chart(document.getElementById('chart-type'), {
+    mkChart('chart-type', {
       type: 'doughnut',
       data: { labels: Object.keys(types), datasets: [{ data: Object.values(types), backgroundColor: colors6 }] },
       options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } }
     });
-    new Chart(document.getElementById('chart-result'), {
+    mkChart('chart-result', {
       type: 'doughnut',
       data: { labels: ['합격', '불합격', '기타'], datasets: [{ data: [pass, fail, etc], backgroundColor: ['#22c55e','#ef4444','#94a3b8'] }] },
       options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } }
     });
     const top10 = schools.slice(0, 10);
-    new Chart(document.getElementById('chart-school'), {
+    mkChart('chart-school', {
       type: 'bar',
       data: { labels: top10.map(s => s[0]), datasets: [
         { label: '합격', data: top10.map(s => s[1].pass), backgroundColor: '#22c55e' },
@@ -1301,17 +1427,13 @@ function renderDashboard(el) {
 let listPage = 1, listSearch = '', listTypeFilter = '', listResultFilter = '';
 let listSortKey = '최종점수', listSortDir = 'desc';
 
-function renderList(el) {
+// 검색·필터·정렬을 적용한 목록 계산 (renderList와 부분 갱신이 공유)
+function computeListRows() {
   const data = getFilteredData();
-  if (!data.length) { el.innerHTML = '<div class="p-8 text-gray-400 text-center">데이터를 먼저 업로드하세요.</div>'; return; }
-
-  const types = [...new Set(data.map(r => r['전형구분']).filter(Boolean))];
   let filtered = data;
-  if (listSearch) { const q = listSearch.toLowerCase(); filtered = filtered.filter(r => (r['성명']||'').toLowerCase().includes(q) || (r['수험번호']||'').includes(q) || (r['출신중']||'').toLowerCase().includes(q)); }
+  if (listSearch) { const q = listSearch.toLowerCase(); filtered = filtered.filter(r => (r['성명']||'').toLowerCase().includes(q) || String(r['수험번호']||'').includes(q) || (r['출신중']||'').toLowerCase().includes(q)); }
   if (listTypeFilter) filtered = filtered.filter(r => r['전형구분'] === listTypeFilter);
   if (listResultFilter) filtered = filtered.filter(r => r['합불여부'] === listResultFilter);
-
-  // Sort
   filtered = [...filtered].sort((a, b) => {
     let va = a[listSortKey], vb = b[listSortKey];
     const na = num(va), nb = num(vb);
@@ -1320,30 +1442,90 @@ function renderList(el) {
     if (va > vb) return listSortDir === 'asc' ? 1 : -1;
     return 0;
   });
-
   const pageSize = 50;
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
   listPage = Math.min(listPage, totalPages);
   const rows = filtered.slice((listPage - 1) * pageSize, listPage * pageSize);
+  return { filtered, rows, totalPages };
+}
+
+function listRowHtml(r) {
+  return `
+    <tr class="border-b border-gray-50 hover:bg-blue-50/30 transition-colors cursor-pointer" onclick="showDetail(${r.id})">
+      <td class="px-3 py-2 text-gray-600">${escapeHtml(r['접수번호']||'-')}</td>
+      <td class="px-3 py-2 font-mono text-gray-600">${escapeHtml(r['수험번호']||'-')}</td>
+      <td class="px-3 py-2 font-semibold text-gray-900">${escapeHtml(r['성명']||'-')}</td>
+      <td class="px-3 py-2 text-gray-600">${escapeHtml(r['출신중']||'-')}</td>
+      <td class="px-3 py-2 text-gray-600">${escapeHtml(r['전형구분']||'-')}</td>
+      <td class="px-3 py-2 text-center font-mono">${fmt(r['교과성적'])}</td>
+      <td class="px-3 py-2 text-center font-mono">${fmt(r['출석'])}</td>
+      <td class="px-3 py-2 text-center font-mono font-semibold text-blue-600">${fmt(r['1단계 최종점수'])}</td>
+      <td class="px-3 py-2 text-center font-mono">${fmt(r['면접점수'])}</td>
+      <td class="px-3 py-2 text-center font-mono font-bold text-purple-700">${fmt(r['최종점수'])}</td>
+      <td class="px-3 py-2 text-center"><span class="badge ${r['합불여부']==='합격'?'badge-pass':r['합불여부']==='불합격'?'badge-fail':'badge-wait'}">${escapeHtml(r['합불여부']||'-')}</span></td>
+    </tr>`;
+}
+
+function listPaginationHtml(totalPages) {
+  if (totalPages <= 1) return '';
+  return `
+    <button onclick="listPage=Math.max(1,listPage-1); updateListView()" class="px-3 py-1.5 rounded-lg border border-gray-200 text-sm ${listPage===1?'opacity-40':'hover:bg-gray-50'}">이전</button>
+    <span class="text-sm text-gray-600">${listPage} / ${totalPages}</span>
+    <button onclick="listPage=Math.min(${totalPages},listPage+1); updateListView()" class="px-3 py-1.5 rounded-lg border border-gray-200 text-sm ${listPage===totalPages?'opacity-40':'hover:bg-gray-50'}">다음</button>`;
+}
+
+// 검색 입력: 화면 전체 재렌더 대신 표 본문만 교체 → 검색창이 파괴되지 않아 포커스·한글 조합 유지
+let listSearchTimer = null;
+function onListSearchInput(value) {
+  listSearch = value;
+  listPage = 1;
+  clearTimeout(listSearchTimer);
+  listSearchTimer = setTimeout(updateListView, 150);
+}
+
+function updateListView() {
+  const tbody = document.getElementById('list-tbody');
+  if (!tbody) return;
+  const { filtered, rows, totalPages } = computeListRows();
+  tbody.innerHTML = rows.map(listRowHtml).join('');
+  const cnt = document.getElementById('list-count');
+  if (cnt) cnt.textContent = `총 ${filtered.length}명`;
+  const pag = document.getElementById('list-pagination');
+  if (pag) pag.innerHTML = listPaginationHtml(totalPages);
+}
+
+function setListSort(key) {
+  if (listSortKey === key) listSortDir = listSortDir === 'desc' ? 'asc' : 'desc';
+  else { listSortKey = key; listSortDir = 'desc'; }
+  listPage = 1;
+  renderList(document.getElementById('main-content'));
+}
+
+function renderList(el) {
+  const data = getFilteredData();
+  if (!data.length) { el.innerHTML = '<div class="p-8 text-gray-400 text-center">데이터를 먼저 업로드하세요.</div>'; return; }
+
+  const types = [...new Set(data.map(r => r['전형구분']).filter(Boolean))];
+  const { filtered, rows, totalPages } = computeListRows();
 
   const sortTh = (key, label, align = 'left') => {
     const active = listSortKey === key;
     const arrow = active ? (listSortDir === 'asc' ? '▲' : '▼') : '⇅';
-    return `<th class="px-3 py-2.5 text-${align} text-xs font-semibold text-gray-500 sortable ${active?'sort-active':''}" onclick="listSortKey='${key}'; listSortDir=listSortKey==='${key}'&&listSortDir==='desc'?'asc':'desc'; listPage=1; renderList(document.getElementById('main-content'))">${label}<span class="sort-arrow">${arrow}</span></th>`;
+    return `<th class="px-3 py-2.5 text-${align} text-xs font-semibold text-gray-500 sortable ${active?'sort-active':''}" onclick="setListSort('${escapeAttr(key)}')">${label}<span class="sort-arrow">${arrow}</span></th>`;
   };
 
   el.innerHTML = `
     <div class="p-6 max-w-7xl mx-auto space-y-4">
       <div class="flex items-center justify-between">
-        <div><h1 class="text-2xl font-bold text-gray-900">지원자 목록</h1><p class="text-sm text-gray-500 mt-1">총 ${filtered.length}명</p></div>
+        <div><h1 class="text-2xl font-bold text-gray-900">지원자 목록</h1><p class="text-sm text-gray-500 mt-1" id="list-count">총 ${filtered.length}명</p></div>
         <button onclick="exportFiltered()" class="px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-xl text-sm font-medium hover:bg-gray-50 transition">CSV 내보내기</button>
       </div>
       ${yearFilterHtml()}
       <div class="card p-3 flex items-center gap-3">
-        <input type="text" id="list-search" value="${listSearch}" onkeyup="listSearch=this.value; listPage=1; renderList(document.getElementById('main-content'))" placeholder="이름, 수험번호, 출신중 검색..." class="flex-1">
+        <input type="text" id="list-search" value="${escapeHtml(listSearch)}" oninput="onListSearchInput(this.value)" placeholder="이름, 수험번호, 출신중 검색..." class="flex-1">
         <select onchange="listTypeFilter=this.value; listPage=1; renderList(document.getElementById('main-content'))">
           <option value="">전체 전형</option>
-          ${types.map(t => `<option value="${t}" ${listTypeFilter===t?'selected':''}>${t}</option>`).join('')}
+          ${types.map(t => `<option value="${escapeHtml(t)}" ${listTypeFilter===t?'selected':''}>${escapeHtml(t)}</option>`).join('')}
         </select>
         <select onchange="listResultFilter=this.value; listPage=1; renderList(document.getElementById('main-content'))">
           <option value="">전체 결과</option>
@@ -1357,30 +1539,12 @@ function renderList(el) {
             ${sortTh('접수번호','접수번호')}${sortTh('수험번호','수험번호')}${sortTh('성명','성명')}${sortTh('출신중','출신중')}${sortTh('전형구분','전형구분')}
             ${sortTh('교과성적','교과성적','center')}${sortTh('출석','출석','center')}${sortTh('1단계 최종점수','1단계','center')}${sortTh('면접점수','면접','center')}${sortTh('최종점수','최종점수','center')}${sortTh('합불여부','합불','center')}
           </tr></thead>
-          <tbody>
-            ${rows.map(r => `
-              <tr class="border-b border-gray-50 hover:bg-blue-50/30 transition-colors cursor-pointer" onclick="showDetail(${r.id})">
-                <td class="px-3 py-2 text-gray-600">${r['접수번호']||'-'}</td>
-                <td class="px-3 py-2 font-mono text-gray-600">${r['수험번호']||'-'}</td>
-                <td class="px-3 py-2 font-semibold text-gray-900">${r['성명']||'-'}</td>
-                <td class="px-3 py-2 text-gray-600">${r['출신중']||'-'}</td>
-                <td class="px-3 py-2 text-gray-600">${r['전형구분']||'-'}</td>
-                <td class="px-3 py-2 text-center font-mono">${fmt(r['교과성적'])}</td>
-                <td class="px-3 py-2 text-center font-mono">${fmt(r['출석'])}</td>
-                <td class="px-3 py-2 text-center font-mono font-semibold text-blue-600">${fmt(r['1단계 최종점수'])}</td>
-                <td class="px-3 py-2 text-center font-mono">${fmt(r['면접점수'])}</td>
-                <td class="px-3 py-2 text-center font-mono font-bold text-purple-700">${fmt(r['최종점수'])}</td>
-                <td class="px-3 py-2 text-center"><span class="badge ${r['합불여부']==='합격'?'badge-pass':r['합불여부']==='불합격'?'badge-fail':'badge-wait'}">${r['합불여부']||'-'}</span></td>
-              </tr>
-            `).join('')}
+          <tbody id="list-tbody">
+            ${rows.map(listRowHtml).join('')}
           </tbody>
         </table>
       </div></div>
-      ${totalPages > 1 ? `<div class="flex items-center justify-center gap-2">
-        <button onclick="listPage=Math.max(1,listPage-1); renderList(document.getElementById('main-content'))" class="px-3 py-1.5 rounded-lg border border-gray-200 text-sm ${listPage===1?'opacity-40':'hover:bg-gray-50'}">이전</button>
-        <span class="text-sm text-gray-600">${listPage} / ${totalPages}</span>
-        <button onclick="listPage=Math.min(${totalPages},listPage+1); renderList(document.getElementById('main-content'))" class="px-3 py-1.5 rounded-lg border border-gray-200 text-sm ${listPage===totalPages?'opacity-40':'hover:bg-gray-50'}">다음</button>
-      </div>` : ''}
+      <div class="flex items-center justify-center gap-2" id="list-pagination">${listPaginationHtml(totalPages)}</div>
     </div>`;
 }
 
@@ -1397,7 +1561,7 @@ function showDetail(id) {
   semesters.forEach(sem => {
     gradesHtml += `<tr class="border-b border-gray-50"><td class="py-1 font-medium">${sem}</td>`;
     subjects.forEach(sub => {
-      gradesHtml += `<td class="py-1 text-center">${r[`${sem} ${sub}`] || '-'}</td>`;
+      gradesHtml += `<td class="py-1 text-center">${escapeHtml(r[`${sem} ${sub}`] || '-')}</td>`;
       gradesHtml += `<td class="py-1 text-center text-blue-600 font-medium">${fmt(r[`${sem} ${sub}(환산점수)`])}</td>`;
     });
     gradesHtml += '</tr>';
@@ -1417,16 +1581,16 @@ function showDetail(id) {
     <div class="bg-white rounded-2xl shadow-2xl w-[900px] max-h-[90vh] overflow-auto p-6 space-y-4" onclick="event.stopPropagation()">
       <div class="flex items-center justify-between">
         <div>
-          <h2 class="text-xl font-bold">${r['성명']} <span class="badge ${r['합불여부']==='합격'?'badge-pass':'badge-fail'} ml-2">${r['합불여부']||'-'}</span></h2>
-          <p class="text-sm text-gray-500">${r['수험번호']||''} · ${r['출신중']||''} · ${r['전형구분']||''} · ${r['_학년도']||''}학년도</p>
+          <h2 class="text-xl font-bold">${escapeHtml(r['성명'])} <span class="badge ${r['합불여부']==='합격'?'badge-pass':'badge-fail'} ml-2">${escapeHtml(r['합불여부']||'-')}</span></h2>
+          <p class="text-sm text-gray-500">${escapeHtml(r['수험번호']||'')} · ${escapeHtml(r['출신중']||'')} · ${escapeHtml(r['전형구분']||'')} · ${escapeHtml(r['_학년도']||'')}학년도</p>
         </div>
         <button onclick="this.closest('.fixed').remove()" class="p-2 rounded-lg hover:bg-gray-100 text-xl">&times;</button>
       </div>
       <div class="grid grid-cols-3 gap-3 text-sm">
-        <div class="bg-gray-50 rounded-lg p-3"><span class="text-gray-500">성별:</span> ${r['성별']||'-'}</div>
-        <div class="bg-gray-50 rounded-lg p-3"><span class="text-gray-500">연락처:</span> ${r['연락처(본인)']||'-'}</div>
-        <div class="bg-gray-50 rounded-lg p-3"><span class="text-gray-500">보호자:</span> ${r['연락처(보호자)']||'-'}</div>
-        <div class="bg-gray-50 rounded-lg p-3 col-span-3"><span class="text-gray-500">주소:</span> ${r['주소']||'-'}</div>
+        <div class="bg-gray-50 rounded-lg p-3"><span class="text-gray-500">성별:</span> ${escapeHtml(r['성별']||'-')}</div>
+        <div class="bg-gray-50 rounded-lg p-3"><span class="text-gray-500">연락처:</span> ${escapeHtml(r['연락처(본인)']||'-')}</div>
+        <div class="bg-gray-50 rounded-lg p-3"><span class="text-gray-500">보호자:</span> ${escapeHtml(r['연락처(보호자)']||'-')}</div>
+        <div class="bg-gray-50 rounded-lg p-3 col-span-3"><span class="text-gray-500">주소:</span> ${escapeHtml(r['주소']||'-')}</div>
       </div>
       <div class="grid grid-cols-4 gap-3">
         <div class="card p-3 text-center border-blue-200"><div class="text-xs text-gray-500">교과성적</div><div class="text-xl font-bold text-blue-600">${fmt(r['교과성적'])}</div></div>
@@ -1446,7 +1610,7 @@ function exportFiltered() {
   if (listSearch) { const q = listSearch.toLowerCase(); filtered = filtered.filter(r => (r['성명']||'').toLowerCase().includes(q) || (r['수험번호']||'').includes(q) || (r['출신중']||'').toLowerCase().includes(q)); }
   if (listTypeFilter) filtered = filtered.filter(r => r['전형구분'] === listTypeFilter);
   if (listResultFilter) filtered = filtered.filter(r => r['합불여부'] === listResultFilter);
-  if (!filtered.length) { alert('내보낼 데이터가 없습니다.'); return; }
+  if (!filtered.length) { toast('내보낼 데이터가 없습니다', 'warn'); return; }
   const keys = ['접수번호','수험번호','성명','출신중','전형구분','교과성적','출석','1단계 최종점수','면접점수','최종점수','합불여부','_학년도'];
   const csv = '\uFEFF' + keys.join(',') + '\n' + filtered.map(r => keys.map(k => { const v = String(r[k]??''); return v.includes(',') ? `"${v}"` : v; }).join(',')).join('\n');
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
@@ -1468,7 +1632,7 @@ function renderAnalysis(el) {
   ];
 
   function calcStats(arr, key) {
-    const vals = arr.map(r => num(r[key])).filter(v => v > 0);
+    const vals = valsOf(arr, key);
     if (!vals.length) return { avg: 0, max: 0, min: 0, std: 0, median: 0, count: 0 };
     vals.sort((a, b) => a - b);
     const avg = vals.reduce((s, v) => s + v, 0) / vals.length;
@@ -1478,18 +1642,18 @@ function renderAnalysis(el) {
   }
 
   function passFailStats(arr, key) {
-    const passVals = arr.filter(r => r['합불여부']==='합격').map(r => num(r[key])).filter(v => v > 0);
-    const failVals = arr.filter(r => r['합불여부']==='불합격').map(r => num(r[key])).filter(v => v > 0);
-    const avg = a => a.length ? a.reduce((s,v)=>s+v,0)/a.length : 0;
-    return { passAvg: avg(passVals), failAvg: avg(failVals) };
+    return {
+      passAvg: avgOf(arr.filter(r => r['합불여부']==='합격'), key) ?? 0,
+      failAvg: avgOf(arr.filter(r => r['합불여부']==='불합격'), key) ?? 0,
+    };
   }
 
   function cutlineHtml(arr, metricsList) {
     return metricsList.map(m => {
-      const vals = arr.map(r => num(r[m.key])).filter(v => v > 0).sort((a,b) => b - a);
+      const vals = valsOf(arr, m.key).sort((a,b) => b - a);
       const n = vals.length;
       if (!n) return `<tr class="border-b border-gray-50"><td class="py-2 font-medium">${m.label}</td><td colspan="5" class="py-2 text-center text-gray-400">데이터 없음</td></tr>`;
-      return `<tr class="border-b border-gray-50"><td class="py-2 font-medium">${m.label}</td><td class="py-2 text-center">${n}</td><td class="py-2 text-center font-mono text-green-600 font-semibold">${fmt(vals[0])}</td><td class="py-2 text-center font-mono text-blue-600 font-semibold">${fmt(vals[Math.min(Math.floor(n*0.5),n-1)])}</td><td class="py-2 text-center font-mono text-orange-600 font-semibold">${fmt(vals[Math.min(Math.floor(n*0.7),n-1)])}</td><td class="py-2 text-center font-mono text-red-600 font-semibold">${fmt(vals[n-1])}</td></tr>`;
+      return `<tr class="border-b border-gray-50"><td class="py-2 font-medium">${m.label}</td><td class="py-2 text-center">${n}</td><td class="py-2 text-center font-mono text-green-600 font-semibold">${fmt(vals[0])}</td><td class="py-2 text-center font-mono text-blue-600 font-semibold">${fmt(vals[cutIdx(n,0.5)])}</td><td class="py-2 text-center font-mono text-orange-600 font-semibold">${fmt(vals[cutIdx(n,0.7)])}</td><td class="py-2 text-center font-mono text-red-600 font-semibold">${fmt(vals[n-1])}</td></tr>`;
     }).join('');
   }
 
@@ -1515,11 +1679,11 @@ function renderAnalysis(el) {
       </div>
 
       <div class="card p-5">
-        <h3 class="font-semibold text-gray-900 mb-4">컷트라인 분석</h3>
+        <h3 class="font-semibold text-gray-900 mb-4">커트라인 분석</h3>
         <p class="text-xs text-gray-500 mb-3">점수를 내림차순 정렬하여 상위 50%, 70%, 100%(최하위) 위치의 점수를 표시합니다.</p>
         <div class="overflow-x-auto">
           <table class="w-full text-sm">
-            <thead><tr class="border-b"><th class="py-2 text-left text-xs text-gray-500">항목</th><th class="py-2 text-center text-xs text-gray-500">N</th><th class="py-2 text-center text-xs text-gray-500">최고점</th><th class="py-2 text-center text-xs text-gray-500">상위 50%</th><th class="py-2 text-center text-xs text-gray-500">상위 70%</th><th class="py-2 text-center text-xs text-gray-500">컷트라인(100%)</th></tr></thead>
+            <thead><tr class="border-b"><th class="py-2 text-left text-xs text-gray-500">항목</th><th class="py-2 text-center text-xs text-gray-500">N</th><th class="py-2 text-center text-xs text-gray-500">최고점</th><th class="py-2 text-center text-xs text-gray-500">상위 50%</th><th class="py-2 text-center text-xs text-gray-500">상위 70%</th><th class="py-2 text-center text-xs text-gray-500">커트라인(100%)</th></tr></thead>
             <tbody>${cutlineHtml(data, metrics)}</tbody>
           </table>
         </div>
@@ -1557,40 +1721,42 @@ function renderAnalysis(el) {
 
   setTimeout(() => {
     metrics.forEach(m => {
-      const vals = data.map(r => num(r[m.key])).filter(v => v > 0);
+      const vals = valsOf(data, m.key);
       if (!vals.length) return;
       const min = Math.floor(Math.min(...vals)), max = Math.ceil(Math.max(...vals));
       const binSize = Math.max(1, Math.ceil((max - min) / 15));
       const bins = {};
       for (let i = min; i <= max; i += binSize) bins[`${i}-${i+binSize}`] = 0;
       vals.forEach(v => { const idx = Math.floor((v - min) / binSize) * binSize + min; const label = `${idx}-${idx+binSize}`; if (bins[label] !== undefined) bins[label]++; });
-      const canvas = document.getElementById(`chart-dist-${m.key.replace(/\s/g,'-')}`);
-      if (canvas) new Chart(canvas, { type: 'bar', data: { labels: Object.keys(bins), datasets: [{ data: Object.values(bins), backgroundColor: m.color + '99', borderColor: m.color, borderWidth: 1 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } } });
+      mkChart(`chart-dist-${m.key.replace(/\s/g,'-')}`, { type: 'bar', data: { labels: Object.keys(bins), datasets: [{ data: Object.values(bins), backgroundColor: m.color + '99', borderColor: m.color, borderWidth: 1 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } } });
     });
 
     const passAvgs = metrics.map(m => passFailStats(data, m.key).passAvg);
     const failAvgs = metrics.map(m => passFailStats(data, m.key).failAvg);
-    new Chart(document.getElementById('chart-compare'), { type: 'bar', data: { labels: metrics.map(m => m.label), datasets: [{ label: '합격 평균', data: passAvgs, backgroundColor: '#22c55e' }, { label: '불합격 평균', data: failAvgs, backgroundColor: '#ef4444' }] }, options: { responsive: true, maintainAspectRatio: false } });
+    mkChart('chart-compare', { type: 'bar', data: { labels: metrics.map(m => m.label), datasets: [{ label: '합격 평균', data: passAvgs, backgroundColor: '#22c55e' }, { label: '불합격 평균', data: failAvgs, backgroundColor: '#ef4444' }] }, options: { responsive: true, maintainAspectRatio: false } });
 
-    const scatterData = data.filter(r => num(r['1단계 최종점수']) > 0 && num(r['최종점수']) > 0);
-    new Chart(document.getElementById('chart-scatter'), { type: 'scatter', data: { datasets: [
+    const scatterData = data.filter(r => numOrNull(r['1단계 최종점수']) != null && numOrNull(r['최종점수']) != null);
+    mkChart('chart-scatter', { type: 'scatter', data: { datasets: [
       { label: '합격', data: scatterData.filter(r => r['합불여부']==='합격').map(r => ({ x: num(r['1단계 최종점수']), y: num(r['최종점수']) })), backgroundColor: '#22c55e88', borderColor: '#22c55e', pointRadius: 4 },
       { label: '불합격', data: scatterData.filter(r => r['합불여부']!=='합격').map(r => ({ x: num(r['1단계 최종점수']), y: num(r['최종점수']) })), backgroundColor: '#ef444488', borderColor: '#ef4444', pointRadius: 4 },
     ]}, options: { responsive: true, maintainAspectRatio: false, scales: { x: { title: { display: true, text: '1단계 최종점수' } }, y: { title: { display: true, text: '최종점수' } } } } });
+
+    // What-if 초기 결과 렌더 (innerHTML로 삽입된 <script>는 실행되지 않으므로 여기서 호출)
+    if (whatIfCutoff != null && !isNaN(whatIfCutoff)) updateWhatIf(whatIfCutoff);
   }, 50);
 }
 
 // ── What-if Cutoff Simulator ──
 let whatIfCutoff = null; // filled lazily
 function renderWhatIf(data) {
-  const vals = data.map(r => num(r['최종점수'])).filter(v => v > 0).sort((a, b) => b - a);
+  const vals = valsOf(data, '최종점수').sort((a, b) => b - a);
   if (!vals.length) return '<p class="text-sm text-gray-400">최종점수 데이터가 없습니다.</p>';
   const minV = Math.floor(vals[vals.length - 1]);
   const maxV = Math.ceil(vals[0]);
   const actualPass = data.filter(r => r['합불여부'] === '합격').length;
-  // Use cached or median
-  if (whatIfCutoff == null || whatIfCutoff < minV || whatIfCutoff > maxV) {
-    whatIfCutoff = vals.length ? vals[Math.min(actualPass, vals.length - 1)] : (minV + maxV) / 2;
+  // 기본값: 실제 합격자 수를 재현하는 컷(합격자 수 번째 점수). NaN·범위 밖이면 재설정
+  if (whatIfCutoff == null || isNaN(whatIfCutoff) || whatIfCutoff < minV || whatIfCutoff > maxV) {
+    whatIfCutoff = actualPass > 0 ? vals[Math.min(actualPass - 1, vals.length - 1)] : vals[cutIdx(vals.length, 0.5)];
   }
   const step = Math.max(0.1, ((maxV - minV) / 200)).toFixed(2);
   return `
@@ -1599,17 +1765,23 @@ function renderWhatIf(data) {
       <input type="number" id="whatif-input" value="${whatIfCutoff.toFixed(2)}" step="0.1" oninput="updateWhatIf(this.value)" class="w-24 text-right">
     </div>
     <div id="whatif-result" class="mt-3"></div>
-    <script>setTimeout(() => updateWhatIf(${whatIfCutoff}), 10);<\/script>
   `;
 }
 function updateWhatIf(cutoff) {
-  whatIfCutoff = parseFloat(cutoff);
+  const parsed = parseFloat(cutoff);
+  if (isNaN(parsed)) {
+    // 입력칸을 비운 상태 — 이전 값 유지, 안내만 표시
+    const hint = document.getElementById('whatif-result');
+    if (hint) hint.innerHTML = '<p class="text-sm text-gray-400 mt-2">컷오프 값을 입력하거나 슬라이더를 움직여 주세요.</p>';
+    return;
+  }
+  whatIfCutoff = parsed;
   const slider = document.getElementById('whatif-slider');
   const input = document.getElementById('whatif-input');
   if (slider && document.activeElement !== slider) slider.value = whatIfCutoff;
   if (input && document.activeElement !== input) input.value = whatIfCutoff.toFixed(2);
   const data = getFilteredData();
-  const withScore = data.filter(r => num(r['최종점수']) > 0);
+  const withScore = data.filter(r => numOrNull(r['최종점수']) != null);
   const wouldPass = withScore.filter(r => num(r['최종점수']) >= whatIfCutoff);
   const wouldFail = withScore.filter(r => num(r['최종점수']) < whatIfCutoff);
   const actualPass = withScore.filter(r => r['합불여부'] === '합격');
@@ -1646,7 +1818,7 @@ function updateWhatIf(cutoff) {
 
 // ── Percentile / Z-score Table ──
 function renderPercentileTable(data) {
-  const rows = data.filter(r => num(r['최종점수']) > 0).map(r => ({ r, v: num(r['최종점수']) }));
+  const rows = data.map(r => ({ r, v: numOrNull(r['최종점수']) })).filter(x => x.v != null);
   if (!rows.length) return '<p class="text-sm text-gray-400">최종점수 데이터가 없습니다.</p>';
   const vals = rows.map(x => x.v);
   const sortedAsc = [...vals].sort((a, b) => a - b);
@@ -1698,7 +1870,7 @@ function renderOutliers(data) {
   ];
   const outliers = [];
   metrics.forEach(m => {
-    const withVal = data.filter(r => num(r[m.key]) > 0);
+    const withVal = data.filter(r => numOrNull(r[m.key]) != null);
     const vals = withVal.map(r => num(r[m.key]));
     if (vals.length < 10) return;
     const { low, high, q1, q3 } = iqrOutliers(vals);
@@ -1711,7 +1883,7 @@ function renderOutliers(data) {
   });
 
   // Edge case: 1단계 상위권 탈락자 (1단계 > 상위 30% cutoff AND fail)
-  const stage1 = data.map(r => num(r['1단계 최종점수'])).filter(v => v > 0).sort((a, b) => b - a);
+  const stage1 = valsOf(data, '1단계 최종점수').sort((a, b) => b - a);
   if (stage1.length >= 10) {
     const top30 = stage1[Math.floor(stage1.length * 0.3)];
     data.forEach(r => {
@@ -1771,6 +1943,7 @@ function toggleCompareSelection(val) {
 }
 
 function renderCompare(el) {
+  destroyCharts(); // 화면 내부 재렌더(비교 대상 토글 등) 시 기존 차트 인스턴스 누수 방지
   if (!allData.length) { el.innerHTML = '<div class="p-8 text-gray-400 text-center">데이터를 먼저 업로드하세요.</div>'; return; }
 
   const years = getYears();
@@ -1799,7 +1972,7 @@ function renderCompare(el) {
   function groupStats(arr) {
     const result = {};
     for (const key of metrics) {
-      const vals = arr.map(r => num(r[key])).filter(v => v > 0);
+      const vals = valsOf(arr, key);
       if (!vals.length) { result[key] = { avg: 0, median: 0, max: 0, min: 0, count: 0 }; continue; }
       vals.sort((a,b) => a - b);
       const avg = vals.reduce((s,v) => s+v, 0) / vals.length;
@@ -1836,9 +2009,9 @@ function renderCompare(el) {
             const idx = compareSelected.indexOf(o);
             const checked = idx >= 0;
             const colorDot = checked ? `<span class="w-3 h-3 rounded-full inline-block" style="background:${CMP_COLORS[idx]}"></span>` : '';
-            return `<label class="cmp-opt flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border cursor-pointer transition ${checked ? 'bg-gray-900 text-white border-gray-900' : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'}" data-name="${o}">
-              <input type="checkbox" class="hidden" ${checked?'checked':''} onchange="toggleCompareSelection('${o.replace(/'/g,"\\'")}')">
-              ${colorDot} ${o}
+            return `<label class="cmp-opt flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border cursor-pointer transition ${checked ? 'bg-gray-900 text-white border-gray-900' : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'}" data-name="${escapeHtml(o)}">
+              <input type="checkbox" class="hidden" ${checked?'checked':''} onchange="toggleCompareSelection('${escapeAttr(o)}')">
+              ${colorDot} ${escapeHtml(o)}
             </label>`;
           }).join('')}
         </div>
@@ -1849,7 +2022,7 @@ function renderCompare(el) {
       <div class="grid grid-cols-${Math.min(groups.length, 5)} gap-3">
         ${groups.map(g => `
           <div class="card p-4 ${g.bg}">
-            <h4 class="font-semibold ${g.text} text-sm">${g.sel}</h4>
+            <h4 class="font-semibold ${g.text} text-sm">${escapeHtml(g.sel)}</h4>
             <div class="grid grid-cols-3 gap-1 mt-2 text-xs">
               <div><span class="text-gray-500">지원</span> <b>${g.stats._total}</b></div>
               <div><span class="text-green-600">합격</span> <b>${g.stats._pass}</b></div>
@@ -1866,7 +2039,7 @@ function renderCompare(el) {
           <table class="w-full text-sm">
             <thead><tr class="border-b">
               <th class="py-2 text-left text-xs text-gray-500">항목</th>
-              ${groups.map(g => `<th class="py-2 text-center text-xs" style="color:${g.color}">${g.sel}</th>`).join('')}
+              ${groups.map(g => `<th class="py-2 text-center text-xs" style="color:${g.color}">${escapeHtml(g.sel)}</th>`).join('')}
             </tr></thead>
             <tbody>
               ${metrics.map(key => `<tr class="border-b border-gray-50">
@@ -1880,21 +2053,21 @@ function renderCompare(el) {
 
       <!-- Cutline comparison -->
       <div class="card p-5">
-        <h3 class="font-semibold text-gray-900 mb-4">컷트라인 비교 (상위 50% / 70% / 100%)</h3>
+        <h3 class="font-semibold text-gray-900 mb-4">커트라인 비교 (상위 50% / 70% / 100%)</h3>
         <div class="overflow-x-auto">
           <table class="w-full text-sm">
             <thead><tr class="border-b">
               <th class="py-2 text-left text-xs text-gray-500">항목</th>
-              ${groups.map(g => `<th class="py-2 text-center text-xs" style="color:${g.color}">${g.sel}</th>`).join('')}
+              ${groups.map(g => `<th class="py-2 text-center text-xs" style="color:${g.color}">${escapeHtml(g.sel)}</th>`).join('')}
             </tr></thead>
             <tbody>
               ${metrics.map(key => `<tr class="border-b border-gray-50">
                 <td class="py-2 font-medium">${key}</td>
                 ${groups.map(g => {
-                  const vals = g.data.map(r => num(r[key])).filter(v => v > 0).sort((a,b) => b - a);
+                  const vals = valsOf(g.data, key).sort((a,b) => b - a);
                   const n = vals.length;
                   if (!n) return '<td class="py-2 text-center text-gray-400 text-xs">-</td>';
-                  return `<td class="py-2 text-center font-mono text-xs"><span class="text-blue-600">${fmt(vals[Math.min(Math.floor(n*0.5),n-1)])}</span> / <span class="text-orange-600">${fmt(vals[Math.min(Math.floor(n*0.7),n-1)])}</span> / <span class="text-red-600">${fmt(vals[n-1])}</span></td>`;
+                  return `<td class="py-2 text-center font-mono text-xs"><span class="text-blue-600">${fmt(vals[cutIdx(n,0.5)])}</span> / <span class="text-orange-600">${fmt(vals[cutIdx(n,0.7)])}</span> / <span class="text-red-600">${fmt(vals[n-1])}</span></td>`;
                 }).join('')}
               </tr>`).join('')}
             </tbody>
@@ -1910,12 +2083,12 @@ function renderCompare(el) {
   if (!groups.length) return;
 
   setTimeout(() => {
-    new Chart(document.getElementById('chart-cmp-bar'), {
+    mkChart('chart-cmp-bar', {
       type: 'bar',
       data: { labels: metrics, datasets: groups.map(g => ({ label: g.sel, data: metrics.map(k => g.stats[k].avg), backgroundColor: g.color })) },
       options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'top' } } }
     });
-    new Chart(document.getElementById('chart-cmp-rate'), {
+    mkChart('chart-cmp-rate', {
       type: 'bar',
       data: { labels: groups.map(g => g.sel), datasets: [{ label: '합격률(%)', data: groups.map(g => g.stats._total ? (g.stats._pass/g.stats._total*100) : 0), backgroundColor: groups.map(g => g.color) }] },
       options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, scales: { x: { max: 100 } }, plugins: { legend: { display: false } } }
@@ -1968,32 +2141,33 @@ function renderSchool(el) {
 
     const pass = students.filter(r => r['합불여부']==='합격');
     const fail = students.filter(r => r['합불여부']==='불합격');
-    const avg = (arr, key) => arr.length ? arr.reduce((s,r)=>s+num(r[key]),0)/arr.length : 0;
+    // 결측 점수(면접 미응시 등)를 0으로 섞지 않는 평균 — 학교 간 비교 왜곡 방지
+    const avg = (arr, key) => avgOf(arr, key);
 
     function schoolCutline(arr, key) {
-      const vals = arr.map(r => num(r[key])).filter(v => v > 0).sort((a,b) => b - a);
+      const vals = valsOf(arr, key).sort((a,b) => b - a);
       const n = vals.length;
       if (!n) return { n: 0, top: '-', at50: '-', at70: '-', at100: '-' };
-      return { n, top: fmt(vals[0]), at50: fmt(vals[Math.min(Math.floor(n*0.5),n-1)]), at70: fmt(vals[Math.min(Math.floor(n*0.7),n-1)]), at100: fmt(vals[n-1]) };
+      return { n, top: fmt(vals[0]), at50: fmt(vals[cutIdx(n,0.5)]), at70: fmt(vals[cutIdx(n,0.7)]), at100: fmt(vals[n-1]) };
     }
 
     const schoolSortTh = (key, label, align = 'center') => {
       const active = schoolSortKey === key;
       const arrow = active ? (schoolSortDir === 'asc' ? '▲' : '▼') : '⇅';
-      return `<th class="px-3 py-2 text-${align} text-xs text-gray-500 sortable ${active?'sort-active':''}" onclick="schoolSortKey='${key}'; schoolSortDir=schoolSortKey==='${key}'&&schoolSortDir==='desc'?'asc':'desc'; renderSchool(document.getElementById('main-content'))">${label}<span class="sort-arrow">${arrow}</span></th>`;
+      return `<th class="px-3 py-2 text-${align} text-xs text-gray-500 sortable ${active?'sort-active':''}" onclick="setSchoolSort('${escapeAttr(key)}')">${label}<span class="sort-arrow">${arrow}</span></th>`;
     };
 
     detailHtml = `
       <div class="card p-5 space-y-4">
         <div class="flex items-center justify-between">
-          <h3 class="text-lg font-bold text-gray-900">${selectedSchool}</h3>
+          <h3 class="text-lg font-bold text-gray-900">${escapeHtml(selectedSchool)}</h3>
           <button onclick="selectedSchool=''; selectedSchoolType=''; renderSchool(document.getElementById('main-content'))" class="text-sm text-gray-500 hover:text-gray-700">목록으로</button>
         </div>
         ${types.length > 1 ? `
         <div class="flex items-center gap-2 flex-wrap">
           <span class="text-sm text-gray-600 font-medium">전형구분:</span>
           <button onclick="selectedSchoolType=''; renderSchool(document.getElementById('main-content'))" class="px-3 py-1 rounded-lg text-sm ${!selectedSchoolType ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'} transition">전체</button>
-          ${types.map(t => `<button onclick="selectedSchoolType='${t.replace(/'/g,"\\'")}'; renderSchool(document.getElementById('main-content'))" class="px-3 py-1 rounded-lg text-sm ${selectedSchoolType===t ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'} transition">${t}</button>`).join('')}
+          ${types.map(t => `<button onclick="selectedSchoolType='${escapeAttr(t)}'; renderSchool(document.getElementById('main-content'))" class="px-3 py-1 rounded-lg text-sm ${selectedSchoolType===t ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'} transition">${escapeHtml(t)}</button>`).join('')}
         </div>` : ''}
         <div class="grid grid-cols-5 gap-3">
           <div class="bg-gray-50 rounded-xl p-3 text-center"><div class="text-xs text-gray-500">지원</div><div class="text-xl font-bold">${students.length}명</div></div>
@@ -2007,25 +2181,24 @@ function renderSchool(el) {
           <div class="bg-red-50 rounded-xl p-3"><span class="font-medium text-red-800">불합격자 평균 — </span>1단계: ${fmt(avg(fail,'1단계 최종점수'))}, 면접: ${fmt(avg(fail,'면접점수'))}, 최종: ${fmt(avg(fail,'최종점수'))}</div>
         </div>
         <div class="bg-gray-50 rounded-xl p-4">
-          <h4 class="font-semibold text-gray-800 mb-2">컷트라인 분석${selectedSchoolType ? ` (${selectedSchoolType})` : ''}</h4>
+          <h4 class="font-semibold text-gray-800 mb-2">커트라인 분석${selectedSchoolType ? ` (${escapeHtml(selectedSchoolType)})` : ''}</h4>
           <table class="w-full text-sm">
-            <thead><tr class="border-b"><th class="py-1.5 text-left text-xs text-gray-500">항목</th><th class="py-1.5 text-center text-xs text-gray-500">N</th><th class="py-1.5 text-center text-xs text-gray-500">최고점</th><th class="py-1.5 text-center text-xs text-gray-500">상위 50%</th><th class="py-1.5 text-center text-xs text-gray-500">상위 70%</th><th class="py-1.5 text-center text-xs text-gray-500">컷트라인</th></tr></thead>
+            <thead><tr class="border-b"><th class="py-1.5 text-left text-xs text-gray-500">항목</th><th class="py-1.5 text-center text-xs text-gray-500">N</th><th class="py-1.5 text-center text-xs text-gray-500">최고점</th><th class="py-1.5 text-center text-xs text-gray-500">상위 50%</th><th class="py-1.5 text-center text-xs text-gray-500">상위 70%</th><th class="py-1.5 text-center text-xs text-gray-500">커트라인</th></tr></thead>
             <tbody>
               ${metrics.map(m => { const c = schoolCutline(students, m.key); return `<tr class="border-b border-gray-200/50"><td class="py-1.5 font-medium">${m.label}</td><td class="py-1.5 text-center">${c.n}</td><td class="py-1.5 text-center font-mono text-green-600 font-semibold">${c.top}</td><td class="py-1.5 text-center font-mono text-blue-600 font-semibold">${c.at50}</td><td class="py-1.5 text-center font-mono text-orange-600 font-semibold">${c.at70}</td><td class="py-1.5 text-center font-mono text-red-600 font-semibold">${c.at100}</td></tr>`; }).join('')}
             </tbody>
           </table>
         </div>
         ${(() => {
-          // 이 학교 출신 학생들이 실제로 가진 모의고사 회차 목록
-          const studentNames = new Set(students.map(s => s['성명']));
-          const relMocks = allMockExams.filter(m => studentNames.has(m.이름));
+          // 이 학교 출신 학생들이 실제로 가진 모의고사 회차 목록 (기수=입학 학년도 일치만 — 동명이인 오귀속 방지)
+          const relMocks = allMockExams.filter(m => students.some(s => mockMatchesApplicant(m, s)));
           const sessions = [...new Set(relMocks.map(m => `${m.기수}|${m.실시년월}|${m.응시학년}`))].sort();
           if (!sessions.length) return '';
           return `<div class="flex items-center gap-2 flex-wrap text-sm">
             <span class="font-semibold text-gray-700">모의고사 회차:</span>
             <select onchange="schoolMockSession=this.value; renderSchool(document.getElementById('main-content'))">
               <option value="">-- 최근 회차 자동 --</option>
-              ${sessions.map(s => { const [c, m, g] = s.split('|'); return `<option value="${s}" ${schoolMockSession===s?'selected':''}>${c}학년도 / ${m} / ${g}학년</option>`; }).join('')}
+              ${sessions.map(s => { const [c, m, g] = s.split('|'); return `<option value="${escapeHtml(s)}" ${schoolMockSession===s?'selected':''}>${escapeHtml(c)}학년도 / ${escapeHtml(m)} / ${escapeHtml(g)}학년</option>`; }).join('')}
             </select>
             <span class="text-xs text-gray-400">(학생 리스트 끝에 표시)</span>
           </div>`;
@@ -2054,13 +2227,13 @@ function renderSchool(el) {
             </tr></thead>
             <tbody>
               ${sorted.map(r => {
-                // 모의고사 찾기
-                let mockCandidates = allMockExams.filter(m => m.이름 === r['성명']);
+                // 모의고사 찾기 — 이름 + 기수(입학 학년도) 일치. 동명이인·타 기수 성적 오귀속 방지
+                let mockCandidates = allMockExams.filter(m => mockMatchesApplicant(m, r));
                 if (schoolMockSession) {
                   const [c, mm, g] = schoolMockSession.split('|');
                   mockCandidates = mockCandidates.filter(m => String(m.기수)===c && m.실시년월===mm && String(m.응시학년)===g);
                 } else {
-                  mockCandidates.sort((a, b) => (b.실시년월||'').localeCompare(a.실시년월||''));
+                  mockCandidates.sort((a, b) => String(b.실시년월||'').localeCompare(String(a.실시년월||'')));
                   mockCandidates = mockCandidates.slice(0, 1);
                 }
                 const mock = mockCandidates[0];
@@ -2068,14 +2241,14 @@ function renderSchool(el) {
                 const mc = mock ? mockCalcFields(mock) : null;
                 return `
                 <tr class="border-b border-gray-50 hover:bg-blue-50/30 cursor-pointer" onclick="showDetail(${r.id})">
-                  <td class="px-3 py-2 font-mono text-gray-600">${r['수험번호']||'-'}</td>
-                  <td class="px-3 py-2 font-semibold">${r['성명']}</td>
-                  <td class="px-3 py-2 text-gray-600">${r['전형구분']||'-'}</td>
+                  <td class="px-3 py-2 font-mono text-gray-600">${escapeHtml(r['수험번호']||'-')}</td>
+                  <td class="px-3 py-2 font-semibold">${escapeHtml(r['성명'])}</td>
+                  <td class="px-3 py-2 text-gray-600">${escapeHtml(r['전형구분']||'-')}</td>
                   <td class="px-3 py-2 text-center font-mono">${fmt(r['교과성적'])}</td>
                   <td class="px-3 py-2 text-center font-mono font-semibold text-blue-600">${fmt(r['1단계 최종점수'])}</td>
                   <td class="px-3 py-2 text-center font-mono">${fmt(r['면접점수'])}</td>
                   <td class="px-3 py-2 text-center font-mono font-bold text-purple-700">${fmt(r['최종점수'])}</td>
-                  <td class="px-3 py-2 text-center"><span class="badge ${r['합불여부']==='합격'?'badge-pass':'badge-fail'}">${r['합불여부']||'-'}</span></td>
+                  <td class="px-3 py-2 text-center"><span class="badge ${r['합불여부']==='합격'?'badge-pass':'badge-fail'}">${escapeHtml(r['합불여부']||'-')}</span></td>
                   <td class="px-2 py-2 text-center font-mono text-xs border-l border-gray-100">${mock ? (mock.국어_등급 ?? '-') : '-'}</td>
                   <td class="px-2 py-2 text-center font-mono text-xs">${mock ? (mock.수학_등급 ?? '-') : '-'}</td>
                   <td class="px-2 py-2 text-center font-mono text-xs">${mock ? (mock.영어_등급 ?? '-') : '-'}</td>
@@ -2113,11 +2286,11 @@ function renderSchool(el) {
           <tbody id="school-tbody">
             ${schools.map(([name, info]) => {
               const studs = data.filter(r => r['출신중'] === name);
-              const avgFinal = studs.length ? studs.reduce((s,r)=>s+num(r['최종점수']),0)/studs.length : 0;
+              const avgFinal = avgOf(studs, '최종점수');
               const rate = info.total > 0 ? (info.pass/info.total*100).toFixed(1) : '0.0';
               return `
-              <tr class="border-b border-gray-50 hover:bg-blue-50/30 cursor-pointer school-row" data-name="${name}" onclick="selectedSchool='${name.replace(/'/g,"\\'")}'; renderSchool(document.getElementById('main-content'))">
-                <td class="px-4 py-2.5 font-semibold text-gray-900">${name}</td>
+              <tr class="border-b border-gray-50 hover:bg-blue-50/30 cursor-pointer school-row" data-name="${escapeHtml(name)}" onclick="selectedSchool='${escapeAttr(name)}'; renderSchool(document.getElementById('main-content'))">
+                <td class="px-4 py-2.5 font-semibold text-gray-900">${escapeHtml(name)}</td>
                 <td class="px-4 py-2.5 text-center">${info.total}</td>
                 <td class="px-4 py-2.5 text-center text-green-700 font-medium">${info.pass}</td>
                 <td class="px-4 py-2.5 text-center text-red-600">${info.fail}</td>
@@ -2136,6 +2309,53 @@ function filterSchoolList() {
   document.querySelectorAll('.school-row').forEach(row => {
     row.style.display = row.dataset.name.toLowerCase().includes(q) ? '' : 'none';
   });
+}
+
+function setSchoolSort(key) {
+  if (schoolSortKey === key) schoolSortDir = schoolSortDir === 'desc' ? 'asc' : 'desc';
+  else { schoolSortKey = key; schoolSortDir = 'desc'; }
+  renderSchool(document.getElementById('main-content'));
+}
+
+// 모의고사 레코드 ↔ 지원자 매칭: 이름 + 기수(입학 학년도) 동시 일치.
+// 지원자 학년도가 '미지정'이면 이름만으로 폴백 (기존 데이터 호환)
+function mockMatchesApplicant(mock, applicant) {
+  if (mock.이름 !== applicant['성명']) return false;
+  const year = applicant['_학년도'];
+  if (!year || year === '미지정') return true;
+  return String(mock.기수) === String(year);
+}
+
+// 같은 기수 안에 동명이인이 있으면 이름 기반 모의고사 매칭이 모호해짐 →
+// 조용히 중복 합산하지 않고 화면에 경고로 드러낸다.
+function findAmbiguousMockNames() {
+  const byYearName = {};
+  allData.forEach(r => {
+    const key = `${r['_학년도'] || '미지정'}|${r['성명']}`;
+    (byYearName[key] = byYearName[key] || []).push(r);
+  });
+  const mockNames = new Set(allMockExams.map(m => m.이름));
+  return Object.entries(byYearName)
+    .filter(([key, rows]) => rows.length > 1 && mockNames.has(key.split('|')[1]))
+    .map(([key, rows]) => ({
+      year: key.split('|')[0],
+      name: key.split('|')[1],
+      schools: [...new Set(rows.map(r => r['출신중'] || '미지정'))],
+      count: rows.length,
+    }));
+}
+
+function ambiguousMockWarningHtml() {
+  const dups = findAmbiguousMockNames();
+  if (!dups.length) return '';
+  return `<div class="card p-3 border-amber-300 bg-amber-50 text-xs text-amber-800 space-y-1">
+    <div class="font-semibold flex items-center gap-1.5">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+      같은 기수에 동명이인이 있어 모의고사 성적 매칭이 모호합니다 (${dups.length}건)
+    </div>
+    <div>${dups.map(d => `${escapeHtml(d.year)}학년도 <b>${escapeHtml(d.name)}</b> ${d.count}명 (${d.schools.map(escapeHtml).join(', ')})`).join(' · ')}</div>
+    <div class="text-amber-700">→ 아래 통계에서 이 학생들의 성적은 양쪽 모두에 집계될 수 있습니다. 정확한 구분이 필요하면 개인별 분석을 이용하세요.</div>
+  </div>`;
 }
 
 // ══════════════════════════════════════════════
@@ -2189,18 +2409,15 @@ function renderPivot(el) {
     if (!arr || !arr.length) return null;
     const pass = arr.filter(r => r['합불여부'] === '합격').length;
     const fail = arr.filter(r => r['합불여부'] === '불합격').length;
-    const avgOf = key => {
-      const vs = arr.map(r => num(r[key])).filter(v => v > 0);
-      return vs.length ? vs.reduce((s,v)=>s+v,0)/vs.length : null;
-    };
+    const cellAvg = key => avgOf(arr, key);
     switch (pivotMetric) {
       case 'rate': return arr.length ? (pass / arr.length) * 100 : null;
       case 'count': return arr.length;
       case 'pass': return pass;
       case 'fail': return fail;
-      case 'avgFinal': return avgOf('최종점수');
-      case 'avg1st': return avgOf('1단계 최종점수');
-      case 'avgInterview': return avgOf('면접점수');
+      case 'avgFinal': return cellAvg('최종점수');
+      case 'avg1st': return cellAvg('1단계 최종점수');
+      case 'avgInterview': return cellAvg('면접점수');
     }
     return null;
   };
@@ -2307,6 +2524,23 @@ function exportPivotCsv() {
 // ══════════════════════════════════════════════
 // PAGE: REPORT (editable + chart insertion)
 // ══════════════════════════════════════════════
+// ── 보고서 편집 내용 영구 저장 (contenteditable → localStorage) ──
+function getReportEdits() { try { return JSON.parse(localStorage.getItem('reportEdits') || '{}'); } catch { return {}; } }
+function saveReportEdit(key, html) {
+  const e = getReportEdits();
+  e[key] = html;
+  try { localStorage.setItem('reportEdits', JSON.stringify(e)); } catch {}
+}
+function clearReportEdits() {
+  if (!confirm('보고서에서 직접 편집한 제목·메모와 삽입한 그래프를 모두 초기화할까요?\n(지원자 데이터는 영향받지 않습니다)')) return;
+  localStorage.removeItem('reportEdits');
+  localStorage.removeItem('reportCharts');
+  toast('보고서 편집 내용을 초기화했습니다', 'info');
+  renderReport(document.getElementById('main-content'));
+}
+function getReportCharts() { try { return JSON.parse(localStorage.getItem('reportCharts') || '[]'); } catch { return []; } }
+function setReportCharts(list) { try { localStorage.setItem('reportCharts', JSON.stringify(list)); } catch {} }
+
 function renderReport(el) {
   const data = getFilteredData();
   if (!data.length) { el.innerHTML = '<div class="p-8 text-gray-400 text-center">데이터를 먼저 업로드하세요.</div>'; return; }
@@ -2317,18 +2551,19 @@ function renderReport(el) {
   const types = {};
   data.forEach(r => { const t = r['전형구분']||'미지정'; types[t] = (types[t]||0)+1; });
   const schools = getSchoolList(data);
-  const avg = (arr, key) => arr.length ? (arr.reduce((s,r)=>s+num(r[key]),0)/arr.length).toFixed(2) : '-';
+  // 결측 점수를 0으로 섞지 않는 평균 — 분석 페이지·차트와 동일 기준 (공식 보고서 수치 왜곡 방지)
+  const avg = (arr, key) => { const v = avgOf(arr, key); return v == null ? '-' : v.toFixed(2); };
   const regions = {};
   data.forEach(r => { const reg = r['지역'] || '미지정'; regions[reg] = (regions[reg]||0)+1; });
   const yearLabel = yearFilter ? `${yearFilter}학년도 ` : '';
 
-  // 컷트라인 for report
+  // 커트라인 for report
   const cutMetrics = ['교과성적', '1단계 최종점수', '면접점수', '최종점수'];
   function reportCutline(key) {
-    const vals = data.map(r => num(r[key])).filter(v => v > 0).sort((a,b) => b - a);
+    const vals = valsOf(data, key).sort((a,b) => b - a);
     const n = vals.length;
     if (!n) return { n: 0, top: '-', at50: '-', at70: '-', at100: '-' };
-    return { n, top: fmt(vals[0]), at50: fmt(vals[Math.min(Math.floor(n*0.5),n-1)]), at70: fmt(vals[Math.min(Math.floor(n*0.7),n-1)]), at100: fmt(vals[n-1]) };
+    return { n, top: fmt(vals[0]), at50: fmt(vals[cutIdx(n,0.5)]), at70: fmt(vals[cutIdx(n,0.7)]), at100: fmt(vals[n-1]) };
   }
 
   el.innerHTML = `
@@ -2345,20 +2580,21 @@ function renderReport(el) {
           <button onclick="printReport()" class="px-4 py-2 bg-blue-600 text-white rounded-xl text-sm font-medium hover:bg-blue-700 transition flex items-center gap-2">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9V2h12v7M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2M6 14h12v8H6z"/></svg>
             인쇄</button>
+          <button onclick="clearReportEdits()" class="px-3 py-2 bg-white border border-gray-200 text-gray-500 rounded-xl text-sm hover:bg-gray-50 transition" title="편집한 제목·메모·삽입 그래프 초기화">편집 초기화</button>
         </div>
       </div>
       ${yearFilterHtml()}
-      <p class="text-xs text-gray-500">제목을 클릭해 직접 편집할 수 있고, 각 섹션의 <span class="pagebreak-toggle off" style="display:inline-block; pointer-events:none;">📄 페이지 나눔</span> 버튼을 켜면 인쇄·PDF에서 그 섹션 뒤에 페이지가 넘어갑니다. <strong>PPTX는 편집한 제목과 표가 그대로 슬라이드로 변환됩니다.</strong></p>
+      <p class="text-xs text-gray-500">제목·메모를 클릭해 직접 편집할 수 있으며 <strong>편집 내용과 삽입한 그래프는 자동 저장되어 화면을 이동해도 유지됩니다.</strong> 각 섹션의 <span class="pagebreak-toggle off" style="display:inline-block; pointer-events:none;">📄 페이지 나눔</span> 버튼을 켜면 인쇄·PDF에서 그 섹션 뒤에 페이지가 넘어가고, PPTX는 편집한 제목과 표가 그대로 슬라이드로 변환됩니다.</p>
 
       <div id="report-content" class="space-y-6">
         <div class="card p-6 space-y-4">
           <section class="report-section" data-sec="title">
-            <h2 class="text-xl font-bold text-center text-gray-900 pb-4 border-b report-editable" contenteditable="true">${yearLabel}입학전형 결과 보고서</h2>
+            <h2 class="text-xl font-bold text-center text-gray-900 pb-4 border-b report-editable" contenteditable="true" data-edit="title">${yearLabel}입학전형 결과 보고서</h2>
           </section>
 
           <section class="report-section" data-sec="overview">
             <div class="flex items-center justify-between mt-4 report-section-toolbar">
-              <h3 class="font-semibold text-gray-800 report-editable" contenteditable="true">1. 지원 현황</h3>
+              <h3 class="font-semibold text-gray-800 report-editable" contenteditable="true" data-edit="h3-overview">1. 지원 현황</h3>
               <span class="pagebreak-toggle off" data-break-btn="overview" onclick="togglePageBreak('overview')" title="이 섹션 후 페이지 나눔">📄 페이지 나눔</span>
             </div>
             <table class="w-full text-sm border-collapse">
@@ -2372,14 +2608,14 @@ function renderReport(el) {
 
           <section class="report-section" data-sec="types">
             <div class="flex items-center justify-between mt-4 report-section-toolbar">
-              <h3 class="font-semibold text-gray-800 report-editable" contenteditable="true">2. 전형구분별 현황</h3>
+              <h3 class="font-semibold text-gray-800 report-editable" contenteditable="true" data-edit="h3-types">2. 전형구분별 현황</h3>
               <span class="pagebreak-toggle off" data-break-btn="types" onclick="togglePageBreak('types')" title="이 섹션 후 페이지 나눔">📄 페이지 나눔</span>
             </div>
             <table class="w-full text-sm border-collapse">
               <thead><tr class="border-b"><th class="py-2 text-left text-gray-500">전형구분</th><th class="py-2 text-right text-gray-500">인원</th><th class="py-2 text-right text-gray-500">비율</th><th class="py-2 text-right text-gray-500">합격</th><th class="py-2 text-right text-gray-500">합격률</th></tr></thead>
               <tbody>${Object.entries(types).map(([t,c]) => {
                 const typePass = data.filter(r => (r['전형구분']||'미지정')===t && r['합불여부']==='합격').length;
-                return `<tr class="border-b border-gray-50"><td class="py-2">${t}</td><td class="py-2 text-right font-mono">${c}명</td><td class="py-2 text-right font-mono">${(c/total*100).toFixed(1)}%</td><td class="py-2 text-right font-mono text-green-700">${typePass}명</td><td class="py-2 text-right font-mono">${c ? (typePass/c*100).toFixed(1) : 0}%</td></tr>`;
+                return `<tr class="border-b border-gray-50"><td class="py-2">${escapeHtml(t)}</td><td class="py-2 text-right font-mono">${c}명</td><td class="py-2 text-right font-mono">${(c/total*100).toFixed(1)}%</td><td class="py-2 text-right font-mono text-green-700">${typePass}명</td><td class="py-2 text-right font-mono">${c ? (typePass/c*100).toFixed(1) : 0}%</td></tr>`;
               }).join('')}</tbody>
             </table>
           </section>
@@ -2387,18 +2623,18 @@ function renderReport(el) {
           ${Object.keys(regions).length > 1 ? `
           <section class="report-section" data-sec="regions">
             <div class="flex items-center justify-between mt-4 report-section-toolbar">
-              <h3 class="font-semibold text-gray-800 report-editable" contenteditable="true">3. 지역별 현황</h3>
+              <h3 class="font-semibold text-gray-800 report-editable" contenteditable="true" data-edit="h3-regions">3. 지역별 현황</h3>
               <span class="pagebreak-toggle off" data-break-btn="regions" onclick="togglePageBreak('regions')" title="이 섹션 후 페이지 나눔">📄 페이지 나눔</span>
             </div>
             <table class="w-full text-sm border-collapse">
               <thead><tr class="border-b"><th class="py-2 text-left text-gray-500">지역</th><th class="py-2 text-right text-gray-500">인원</th><th class="py-2 text-right text-gray-500">비율</th></tr></thead>
-              <tbody>${Object.entries(regions).sort((a,b)=>b[1]-a[1]).map(([r,c]) => `<tr class="border-b border-gray-50"><td class="py-2">${r}</td><td class="py-2 text-right font-mono">${c}명</td><td class="py-2 text-right font-mono">${(c/total*100).toFixed(1)}%</td></tr>`).join('')}</tbody>
+              <tbody>${Object.entries(regions).sort((a,b)=>b[1]-a[1]).map(([r,c]) => `<tr class="border-b border-gray-50"><td class="py-2">${escapeHtml(r)}</td><td class="py-2 text-right font-mono">${c}명</td><td class="py-2 text-right font-mono">${(c/total*100).toFixed(1)}%</td></tr>`).join('')}</tbody>
             </table>
           </section>` : ''}
 
           <section class="report-section" data-sec="grades">
             <div class="flex items-center justify-between mt-4 report-section-toolbar">
-              <h3 class="font-semibold text-gray-800 report-editable" contenteditable="true">${Object.keys(regions).length > 1 ? '4' : '3'}. 성적 분석</h3>
+              <h3 class="font-semibold text-gray-800 report-editable" contenteditable="true" data-edit="h3-grades">${Object.keys(regions).length > 1 ? '4' : '3'}. 성적 분석</h3>
               <span class="pagebreak-toggle off" data-break-btn="grades" onclick="togglePageBreak('grades')" title="이 섹션 후 페이지 나눔">📄 페이지 나눔</span>
             </div>
             <table class="w-full text-sm border-collapse">
@@ -2411,25 +2647,26 @@ function renderReport(el) {
 
           <section class="report-section" data-sec="cutline">
             <div class="flex items-center justify-between mt-4 report-section-toolbar">
-              <h3 class="font-semibold text-gray-800 report-editable" contenteditable="true">${Object.keys(regions).length > 1 ? '5' : '4'}. 컷트라인 분석</h3>
+              <h3 class="font-semibold text-gray-800 report-editable" contenteditable="true" data-edit="h3-cutline">${Object.keys(regions).length > 1 ? '5' : '4'}. 커트라인 분석</h3>
               <span class="pagebreak-toggle off" data-break-btn="cutline" onclick="togglePageBreak('cutline')" title="이 섹션 후 페이지 나눔">📄 페이지 나눔</span>
             </div>
             <table class="w-full text-sm border-collapse">
-              <thead><tr class="border-b"><th class="py-2 text-left text-gray-500">항목</th><th class="py-2 text-center text-gray-500">최고점</th><th class="py-2 text-center text-gray-500">상위50%</th><th class="py-2 text-center text-gray-500">상위70%</th><th class="py-2 text-center text-gray-500">컷트라인</th></tr></thead>
+              <thead><tr class="border-b"><th class="py-2 text-left text-gray-500">항목</th><th class="py-2 text-center text-gray-500">최고점</th><th class="py-2 text-center text-gray-500">상위50%</th><th class="py-2 text-center text-gray-500">상위70%</th><th class="py-2 text-center text-gray-500">커트라인</th></tr></thead>
               <tbody>
                 ${cutMetrics.map(key => { const c = reportCutline(key); return `<tr class="border-b border-gray-50"><td class="py-2">${key}</td><td class="py-2 text-center font-mono text-green-600">${c.top}</td><td class="py-2 text-center font-mono text-blue-600">${c.at50}</td><td class="py-2 text-center font-mono text-orange-600">${c.at70}</td><td class="py-2 text-center font-mono text-red-600">${c.at100}</td></tr>`; }).join('')}
               </tbody>
             </table>
+            <p class="text-[11px] text-gray-400 mt-1">※ 커트라인(100%)은 합격선이 아니라 불합격자를 포함한 전체 지원자 최저점입니다.</p>
           </section>
 
           <section class="report-section" data-sec="schools">
             <div class="flex items-center justify-between mt-4 report-section-toolbar">
-              <h3 class="font-semibold text-gray-800 report-editable" contenteditable="true">${Object.keys(regions).length > 1 ? '6' : '5'}. 출신중학교 TOP 10</h3>
+              <h3 class="font-semibold text-gray-800 report-editable" contenteditable="true" data-edit="h3-schools">${Object.keys(regions).length > 1 ? '6' : '5'}. 출신중학교 TOP 10</h3>
               <span class="pagebreak-toggle off" data-break-btn="schools" onclick="togglePageBreak('schools')" title="이 섹션 후 페이지 나눔">📄 페이지 나눔</span>
             </div>
             <table class="w-full text-sm border-collapse">
               <thead><tr class="border-b"><th class="py-2 text-left text-gray-500">중학교</th><th class="py-2 text-center text-gray-500">지원</th><th class="py-2 text-center text-gray-500">합격</th><th class="py-2 text-center text-gray-500">합격률</th></tr></thead>
-              <tbody>${schools.slice(0,10).map(([name,info]) => `<tr class="border-b border-gray-50"><td class="py-2">${name}</td><td class="py-2 text-center">${info.total}명</td><td class="py-2 text-center text-green-700">${info.pass}명</td><td class="py-2 text-center font-mono">${(info.pass/info.total*100).toFixed(1)}%</td></tr>`).join('')}</tbody>
+              <tbody>${schools.slice(0,10).map(([name,info]) => `<tr class="border-b border-gray-50"><td class="py-2">${escapeHtml(name)}</td><td class="py-2 text-center">${info.total}명</td><td class="py-2 text-center text-green-700">${info.pass}명</td><td class="py-2 text-center font-mono">${(info.pass/info.total*100).toFixed(1)}%</td></tr>`).join('')}</tbody>
             </table>
           </section>
 
@@ -2438,13 +2675,22 @@ function renderReport(el) {
           </section>
 
           <section class="report-section" data-sec="memo">
-            <div class="mt-6 pt-4 border-t report-editable" contenteditable="true">
+            <div class="mt-6 pt-4 border-t report-editable" contenteditable="true" data-edit="memo">
               <p class="text-sm text-gray-500 text-center">※ 추가 메모를 여기에 작성할 수 있습니다.</p>
             </div>
           </section>
         </div>
       </div>
     </div>`;
+
+  // 저장된 편집 내용 복원 (제목·섹션 제목·메모)
+  const edits = getReportEdits();
+  el.querySelectorAll('[data-edit]').forEach(n => {
+    const saved = edits[n.dataset.edit];
+    if (saved != null) n.innerHTML = saved;
+  });
+  // 저장된 삽입 차트 복원
+  getReportCharts().forEach(entry => mountReportChart(entry));
   // Apply persisted page-break state to toggle buttons
   setTimeout(syncPageBreakUi, 0);
 }
@@ -2452,28 +2698,56 @@ function renderReport(el) {
 function insertReportChart() {
   const data = getFilteredData();
   if (!data.length) return;
+  const entry = { id: 'report-chart-' + Date.now() + '-' + Math.floor(Math.random() * 10000), type: 'type-bar' };
+  const list = getReportCharts();
+  list.push(entry);
+  setReportCharts(list);
+  mountReportChart(entry);
+}
 
+// 저장된 항목(또는 새 항목)으로 차트 래퍼 DOM 생성 — 재렌더 시 복원에도 사용
+function mountReportChart(entry) {
   const chartArea = document.getElementById('report-charts');
-  if (!chartArea) return;
-
-  const chartId = 'report-chart-' + Date.now();
+  if (!chartArea || document.getElementById(entry.id)) return;
   const wrapper = document.createElement('div');
+  wrapper.id = entry.id + '-wrap';
   wrapper.className = 'border border-gray-200 rounded-xl p-4 space-y-2';
+  const opts = [
+    ['type-bar', '전형구분별 인원'],
+    ['result-pie', '합격/불합격 비율'],
+    ['score-bar', '평균 점수 비교'],
+    ['school-bar', '학교별 합격 TOP10'],
+  ];
   wrapper.innerHTML = `
     <div class="flex items-center justify-between">
-      <select id="${chartId}-type" class="text-sm" onchange="drawReportChart('${chartId}')">
-        <option value="type-bar">전형구분별 인원</option>
-        <option value="result-pie">합격/불합격 비율</option>
-        <option value="score-bar">평균 점수 비교</option>
-        <option value="school-bar">학교별 합격 TOP10</option>
+      <select id="${entry.id}-type" class="text-sm" onchange="onReportChartType('${entry.id}')">
+        ${opts.map(([v, l]) => `<option value="${v}" ${entry.type === v ? 'selected' : ''}>${l}</option>`).join('')}
       </select>
-      <button onclick="this.closest('.border').remove()" class="text-xs text-red-500 hover:text-red-700">삭제</button>
+      <button onclick="removeReportChart('${entry.id}')" class="text-xs text-red-500 hover:text-red-700">삭제</button>
     </div>
-    <div style="height:250px"><canvas id="${chartId}"></canvas></div>
+    <div style="height:250px"><canvas id="${entry.id}"></canvas></div>
   `;
   chartArea.appendChild(wrapper);
+  setTimeout(() => drawReportChart(entry.id), 50);
+}
 
-  setTimeout(() => drawReportChart(chartId), 50);
+function onReportChartType(id) {
+  const sel = document.getElementById(id + '-type');
+  const list = getReportCharts();
+  const it = list.find(x => x.id === id);
+  if (it && sel) { it.type = sel.value; setReportCharts(list); }
+  drawReportChart(id);
+}
+
+function removeReportChart(id) {
+  const canvas = document.getElementById(id);
+  if (canvas && typeof Chart !== 'undefined') {
+    const ch = Chart.getChart(canvas);
+    if (ch) ch.destroy();   // 인스턴스 누수 방지
+  }
+  const wrap = document.getElementById(id + '-wrap');
+  if (wrap) wrap.remove();
+  setReportCharts(getReportCharts().filter(x => x.id !== id));
 }
 
 function drawReportChart(chartId) {
@@ -2497,8 +2771,8 @@ function drawReportChart(chartId) {
     new Chart(canvas, { type: 'doughnut', data: { labels: ['합격','불합격','기타'], datasets: [{ data: [p, f, data.length-p-f], backgroundColor: ['#22c55e','#ef4444','#94a3b8'] }] }, options: { responsive: true, maintainAspectRatio: false } });
   } else if (type === 'score-bar') {
     const keys = ['교과성적','1단계 최종점수','면접점수','최종점수'];
-    const passAvg = keys.map(k => { const v = data.filter(r=>r['합불여부']==='합격').map(r=>num(r[k])).filter(v=>v>0); return v.length?v.reduce((s,x)=>s+x,0)/v.length:0; });
-    const failAvg = keys.map(k => { const v = data.filter(r=>r['합불여부']==='불합격').map(r=>num(r[k])).filter(v=>v>0); return v.length?v.reduce((s,x)=>s+x,0)/v.length:0; });
+    const passAvg = keys.map(k => avgOf(data.filter(r=>r['합불여부']==='합격'), k) ?? 0);
+    const failAvg = keys.map(k => avgOf(data.filter(r=>r['합불여부']==='불합격'), k) ?? 0);
     new Chart(canvas, { type: 'bar', data: { labels: keys, datasets: [{ label: '합격', data: passAvg, backgroundColor: '#22c55e' }, { label: '불합격', data: failAvg, backgroundColor: '#ef4444' }] }, options: { responsive: true, maintainAspectRatio: false } });
   } else if (type === 'school-bar') {
     const schools = getSchoolList(data).slice(0, 10);
@@ -2507,13 +2781,15 @@ function drawReportChart(chartId) {
 }
 
 // ── Page-break toggle (per-section, persisted in localStorage) ──
+const REPORT_SECTION_LABELS = { title: '제목', overview: '지원 현황', types: '전형구분별 현황', regions: '지역별 현황', grades: '성적 분석', cutline: '커트라인 분석', schools: '출신중학교 TOP 10', charts: '삽입 차트', memo: '메모' };
 function getPageBreaks() { try { return JSON.parse(localStorage.getItem('reportPageBreaks') || '{}'); } catch { return {}; } }
 function togglePageBreak(sec) {
   const breaks = getPageBreaks();
   breaks[sec] = !breaks[sec];
   localStorage.setItem('reportPageBreaks', JSON.stringify(breaks));
   syncPageBreakUi();
-  toast(breaks[sec] ? `'${sec}' 섹션 뒤 페이지 나눔 활성화` : `'${sec}' 페이지 나눔 해제`, 'info', 1500);
+  const label = REPORT_SECTION_LABELS[sec] || sec;
+  toast(breaks[sec] ? `'${label}' 섹션 뒤 페이지 나눔 활성화` : `'${label}' 페이지 나눔 해제`, 'info', 1500);
 }
 function syncPageBreakUi() {
   const breaks = getPageBreaks();
@@ -2529,10 +2805,11 @@ function syncPageBreakUi() {
 // ── DOM-driven PPTX export ──
 function _extractTableForPptx(table) {
   const rows = [];
-  table.querySelectorAll('tr').forEach((tr, idx) => {
+  let headerRow = null;
+  table.querySelectorAll('tr').forEach(tr => {
     const cells = tr.querySelectorAll('th, td');
     const isHeader = tr.querySelector('th') !== null;
-    rows.push([...cells].map(c => {
+    const row = [...cells].map(c => {
       const cls = c.className || '';
       let color = '1E293B';
       if (/text-green-(?:600|700)/.test(cls)) color = '15803D';
@@ -2549,15 +2826,17 @@ function _extractTableForPptx(table) {
           color, align,
         }
       };
-    }));
+    });
+    if (isHeader && !headerRow) headerRow = row;
+    else rows.push(row);
   });
-  return rows;
+  return { headerRow, dataRows: rows };
 }
 
 async function exportReportPptx() {
-  if (typeof PptxGenJS === 'undefined') { alert('PPTX 라이브러리 로드 실패. 인터넷 연결을 확인하세요.'); return; }
+  if (typeof PptxGenJS === 'undefined') { toast('PPTX 라이브러리를 불러오지 못했습니다. lib 폴더가 index.html과 함께 있는지 또는 인터넷 연결을 확인하세요.', 'error', 7000); return; }
   const data = getFilteredData();
-  if (!data.length) { alert('데이터가 없습니다.'); return; }
+  if (!data.length) { toast('내보낼 데이터가 없습니다', 'warn'); return; }
   toast('PPTX 생성 중...', 'info', 2000);
 
   const pptx = new PptxGenJS();
@@ -2603,37 +2882,49 @@ async function exportReportPptx() {
     }
 
     if (id === 'memo') {
-      const memoText = (sec.innerText || '').trim();
-      // Skip default placeholder
-      if (!memoText || memoText.startsWith('※ 추가 메모를 여기에')) continue;
+      // 안내 문구 줄만 정확히 제거하고 남은 실제 메모를 판별 (문구를 남기고 이어 쓴 경우도 누락 없이 수록)
+      const MEMO_PLACEHOLDER = '※ 추가 메모를 여기에 작성할 수 있습니다.';
+      const memoText = (sec.innerText || '').split('\n').map(s => s.trim()).filter(l => l && l !== MEMO_PLACEHOLDER).join('\n');
+      if (!memoText) continue;
       const slide = pptx.addSlide({ masterName: 'MASTER' });
       slide.addText('메모', { x: 0.5, y: 0.3, w: 12.3, h: 0.6, fontSize: 28, bold: true, color: '1E293B' });
       slide.addText(memoText, { x: 0.7, y: 1.2, w: 11.9, h: 5.5, fontSize: 16, color: '334155', valign: 'top' });
       continue;
     }
 
-    // Standard section: h3 title + tables
+    // Standard section: h3 title + tables (큰 표는 슬라이드 단위로 분할)
     const h3 = sec.querySelector('h3');
-    const slide = pptx.addSlide({ masterName: 'MASTER' });
-    if (h3) {
-      slide.addText(h3.innerText.trim(), { x: 0.5, y: 0.3, w: 12.3, h: 0.6, fontSize: 28, bold: true, color: '1E293B' });
-    }
+    const secTitle = h3 ? h3.innerText.trim() : '';
+    let slide = pptx.addSlide({ masterName: 'MASTER' });
+    if (secTitle) slide.addText(secTitle, { x: 0.5, y: 0.3, w: 12.3, h: 0.6, fontSize: 28, bold: true, color: '1E293B' });
 
-    let yCursor = 1.2;
+    const BODY_TOP = 1.2, BODY_BOTTOM = 6.9;
+    const MAX_DATA_ROWS = 14;  // 헤더 제외 슬라이드당 최대 데이터 행
+    let yCursor = BODY_TOP;
     const tables = sec.querySelectorAll('table');
     for (const t of tables) {
-      const rows = _extractTableForPptx(t);
-      if (!rows.length) continue;
-      const rowH = Math.max(0.32, Math.min(0.5, 5.5 / rows.length));
-      slide.addTable(rows, {
-        x: 0.5, y: yCursor, w: 12.3,
-        fontSize: rows.length > 12 ? 11 : 13,
-        rowH,
-        border: { type: 'solid', pt: 0.5, color: 'CBD5E1' },
-        valign: 'middle',
-      });
-      yCursor += rows.length * rowH + 0.4;
-      if (yCursor > 6.7) break; // out of room — overflow ignored
+      const { headerRow, dataRows } = _extractTableForPptx(t);
+      if (!dataRows.length && !headerRow) continue;
+      for (let i = 0; i < Math.max(dataRows.length, 1); i += MAX_DATA_ROWS) {
+        const chunk = (headerRow ? [headerRow] : []).concat(dataRows.slice(i, i + MAX_DATA_ROWS));
+        if (!chunk.length) break;
+        const rowH = Math.max(0.34, Math.min(0.5, 5.3 / chunk.length));
+        const height = chunk.length * rowH + 0.4;
+        // 사전(pre-add) 오버플로 검사: 안 들어가면 연속 슬라이드 생성
+        if (yCursor + height > BODY_BOTTOM && yCursor > BODY_TOP) {
+          slide = pptx.addSlide({ masterName: 'MASTER' });
+          if (secTitle) slide.addText(secTitle + ' (계속)', { x: 0.5, y: 0.3, w: 12.3, h: 0.6, fontSize: 28, bold: true, color: '1E293B' });
+          yCursor = BODY_TOP;
+        }
+        slide.addTable(chunk, {
+          x: 0.5, y: yCursor, w: 12.3,
+          fontSize: chunk.length > 12 ? 11 : 13,
+          rowH,
+          border: { type: 'solid', pt: 0.5, color: 'CBD5E1' },
+          valign: 'middle',
+        });
+        yCursor += height;
+      }
     }
   }
 
@@ -2647,6 +2938,13 @@ function printReport() {
   const content = document.getElementById('report-content');
   if (!content) return;
 
+  // 팝업 차단 검사 — 사용자 제스처 안에서 먼저 연다
+  const w = window.open('', '_blank');
+  if (!w) {
+    toast('팝업이 차단되어 인쇄 창을 열 수 없습니다. 주소창의 팝업 차단 아이콘에서 허용 후 다시 시도하세요.', 'error', 6000);
+    return;
+  }
+
   // Apply page-break class to flagged sections
   const breaks = getPageBreaks();
   const flagged = [];
@@ -2657,41 +2955,53 @@ function printReport() {
     }
   });
 
-  // Convert canvases to images for print
+  // Convert canvases to images for print (예외가 나도 DOM 복원이 보장되도록 try/finally)
   const canvases = content.querySelectorAll('canvas');
   const images = [];
-  canvases.forEach(c => {
-    const img = document.createElement('img');
-    img.src = c.toDataURL('image/png');
-    img.style.width = '100%';
-    c.parentNode.insertBefore(img, c);
-    c.style.display = 'none';
-    images.push({ img, canvas: c });
-  });
+  let html;
+  try {
+    canvases.forEach(c => {
+      let src = '';
+      try { src = c.toDataURL('image/png'); } catch (e) { console.warn('canvas capture failed', e); }
+      if (!src) return;
+      const img = document.createElement('img');
+      img.src = src;
+      img.style.width = '100%';
+      c.parentNode.insertBefore(img, c);
+      c.style.display = 'none';
+      images.push({ img, canvas: c });
+    });
+    html = content.innerHTML;
+  } finally {
+    images.forEach(({ img, canvas }) => { img.remove(); canvas.style.display = ''; });
+    flagged.forEach(sec => sec.classList.remove('print-break'));
+  }
 
-  const html = content.innerHTML;
+  // 인쇄물에서는 편집 불가 + 차트 드롭다운/삭제 버튼 미출력
+  html = html.replace(/contenteditable="true"/g, '');
 
-  // Restore DOM
-  images.forEach(({ img, canvas }) => { img.remove(); canvas.style.display = ''; });
-  flagged.forEach(sec => sec.classList.remove('print-break'));
-
-  const w = window.open('', '_blank');
   w.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>입학전형 결과 보고서</title>
-    <script src="https://cdn.tailwindcss.com"><\/script>
+    <script src="lib/tailwind.js"><\/script>
+    <script>if (!window.tailwind) { var s = document.createElement('script'); s.src = 'https://cdn.tailwindcss.com'; document.head.appendChild(s); }<\/script>
     <style>
+      select, button, .pagebreak-toggle { display: none !important; }
       @media print {
         body { font-size: 12px; }
         .card { border: 1px solid #ddd; box-shadow: none; }
-        .pagebreak-toggle, .report-section-toolbar > .pagebreak-toggle { display: none !important; }
         .print-break { page-break-after: always; }
         .report-section { page-break-inside: avoid; }
       }
       [contenteditable] { outline: none; }
-      .pagebreak-toggle { display: none; }
     </style>
-  </head><body class="p-6 max-w-4xl mx-auto" style="font-family: 'Malgun Gothic', sans-serif">${html}</body></html>`);
+  </head><body class="p-6 max-w-4xl mx-auto" style="font-family: 'Malgun Gothic', sans-serif">${html}
+  <script>
+    // Tailwind 로드 완료(load 이벤트) 후 인쇄 — 느린 망에서 무스타일 인쇄 방지. 3초 폴백.
+    var __printed = false;
+    function __doPrint() { if (__printed) return; __printed = true; setTimeout(function () { window.print(); }, 150); }
+    window.addEventListener('load', __doPrint);
+    setTimeout(__doPrint, 3000);
+  <\/script></body></html>`);
   w.document.close();
-  setTimeout(() => w.print(), 500);
 }
 
 // ══════════════════════════════════════════════
@@ -2738,13 +3048,13 @@ function mockFilterBar() {
   return `<div class="card p-3 flex flex-wrap gap-2 items-center text-sm">
     <span class="text-gray-500 text-xs font-semibold">필터:</span>
     <select onchange="mockFilterCohort=this.value; renderMock(document.getElementById('main-content'))">
-      <option value="">기수 전체</option>${cohorts.map(c => `<option ${mockFilterCohort===c?'selected':''} value="${c}">${c}학년도</option>`).join('')}
+      <option value="">기수 전체</option>${cohorts.map(c => `<option ${mockFilterCohort===c?'selected':''} value="${escapeHtml(c)}">${escapeHtml(c)}학년도</option>`).join('')}
     </select>
     <select onchange="mockFilterMonth=this.value; renderMock(document.getElementById('main-content'))">
-      <option value="">실시월 전체</option>${months.map(m => `<option ${mockFilterMonth===m?'selected':''} value="${m}">${m}</option>`).join('')}
+      <option value="">실시월 전체</option>${months.map(m => `<option ${mockFilterMonth===m?'selected':''} value="${escapeHtml(m)}">${escapeHtml(m)}</option>`).join('')}
     </select>
     <select onchange="mockFilterGrade=this.value; renderMock(document.getElementById('main-content'))">
-      <option value="">응시학년 전체</option>${grades.map(g => `<option ${String(mockFilterGrade)===String(g)?'selected':''} value="${g}">${g}학년</option>`).join('')}
+      <option value="">응시학년 전체</option>${grades.map(g => `<option ${String(mockFilterGrade)===String(g)?'selected':''} value="${escapeHtml(g)}">${escapeHtml(g)}학년</option>`).join('')}
     </select>
     <div class="flex-1"></div>
     <div class="text-xs text-gray-500">총 ${allMockExams.length}건</div>
@@ -2775,7 +3085,7 @@ function renderMockList(body) {
   const sortTh = (key, label) => {
     const active = mockListSortKey === key;
     const arrow = active ? (mockListSortDir === 'asc' ? '▲' : '▼') : '⇅';
-    return `<th class="px-2 py-2 text-xs text-gray-500 sortable ${active?'sort-active':''}" onclick="mockListSortKey='${key}'; mockListSortDir=mockListSortKey==='${key}'&&mockListSortDir==='desc'?'asc':'desc'; renderMock(document.getElementById('main-content'))">${label}<span class="sort-arrow">${arrow}</span></th>`;
+    return `<th class="px-2 py-2 text-xs text-gray-500 sortable ${active?'sort-active':''}" onclick="setMockSort('${escapeAttr(key)}')">${label}<span class="sort-arrow">${arrow}</span></th>`;
   };
   const gd = v => v == null ? '-' : Number(v).toFixed(v % 1 ? 1 : 0);
   body.innerHTML = `
@@ -2797,12 +3107,12 @@ function renderMockList(body) {
           ${sorted.slice(0, 500).map(r => {
             const c = mockCalcFields(r);
             return `<tr class="border-b border-gray-50 hover:bg-blue-50/30">
-              <td class="px-2 py-1.5 text-center">${r.기수||'-'}</td>
-              <td class="px-2 py-1.5 text-center">${r.실시년월||'-'}</td>
-              <td class="px-2 py-1.5 text-center">${r.응시학년||'-'}</td>
-              <td class="px-2 py-1.5 text-center">${r.반||'-'}</td>
-              <td class="px-2 py-1.5 text-center">${r.번호||'-'}</td>
-              <td class="px-2 py-1.5 font-semibold">${r.이름}</td>
+              <td class="px-2 py-1.5 text-center">${escapeHtml(r.기수||'-')}</td>
+              <td class="px-2 py-1.5 text-center">${escapeHtml(r.실시년월||'-')}</td>
+              <td class="px-2 py-1.5 text-center">${escapeHtml(r.응시학년||'-')}</td>
+              <td class="px-2 py-1.5 text-center">${escapeHtml(r.반||'-')}</td>
+              <td class="px-2 py-1.5 text-center">${escapeHtml(r.번호||'-')}</td>
+              <td class="px-2 py-1.5 font-semibold">${escapeHtml(r.이름||'-')}</td>
               <td class="px-2 py-1.5 text-center font-mono">${r.국어_등급 ?? '-'}</td>
               <td class="px-2 py-1.5 text-center font-mono">${r.수학_등급 ?? '-'}</td>
               <td class="px-2 py-1.5 text-center font-mono">${r.영어_등급 ?? '-'}</td>
@@ -2824,10 +3134,17 @@ function renderMockList(body) {
     </div>`;
 }
 
+function setMockSort(key) {
+  if (mockListSortKey === key) mockListSortDir = mockListSortDir === 'desc' ? 'asc' : 'desc';
+  else { mockListSortKey = key; mockListSortDir = 'desc'; }
+  renderMock(document.getElementById('main-content'));
+}
+
 async function removeMockRecord(id) {
   if (!confirm('이 성적 기록을 삭제하시겠습니까?')) return;
   await deleteMockExam(id);
   allMockExams = await getAllMockExams();
+  toast('성적 기록 삭제 완료', 'success');
   renderMock(document.getElementById('main-content'));
 }
 function editMockRecord(id) {
@@ -2839,10 +3156,32 @@ function editMockRecord(id) {
 }
 
 // ─── UPLOAD ───
+let mockUploadError = null;   // {fileName, sheets} — 양식 인식 실패 시 화면에 안내 카드로 표시
+
 function renderMockUpload(body) {
   if (pendingMockExam) { renderMockUploadPreview(body); return; }
+  const errHtml = mockUploadError ? `
+    <div class="card p-5 border-red-200 bg-red-50 space-y-3">
+      <div class="flex items-start justify-between gap-3">
+        <div class="flex items-center gap-2 text-red-800 font-semibold text-sm">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+          '${escapeHtml(mockUploadError.fileName)}' 에서 모의고사 데이터를 인식하지 못했습니다
+        </div>
+        <button onclick="mockUploadError=null; renderMock(document.getElementById('main-content'))" class="text-xs text-red-400 hover:text-red-600 shrink-0">닫기</button>
+      </div>
+      <div class="text-xs text-red-700 space-y-2">
+        <div>파일에서 찾은 시트: ${mockUploadError.sheets.map(s => `<code class="bg-white/70 px-1 rounded">${escapeHtml(s)}</code>`).join(', ') || '없음'}</div>
+        <div class="bg-white/70 rounded-lg p-3 space-y-1.5 text-gray-700">
+          <div class="font-semibold text-gray-800">지원하는 양식</div>
+          <div><b>양식 A (통합양식)</b> · 2줄 병합 헤더 — 1행에 <code>학년도 / 이름 / 국어 / 수학 / 영어 / 한국사 / 탐구영역1 / 탐구영역2</code>, 2행에 <code>원점수 / 등급</code></div>
+          <div><b>양식 B (가채점 RAW)</b> · 1줄 헤더 — <code>학년 / 반 / 번호 / 이름 / 국어과목 / 원점수 / 등급 / 수학과목 / …</code> 순</div>
+          <div class="pt-1 text-gray-600">· 헤더 행은 파일 상단 5행 안에 있어야 인식됩니다.<br>· 첫 시트가 안내·표지 시트라면 데이터 시트를 첫 번째로 옮기거나 별도 파일로 저장해 보세요.</div>
+        </div>
+      </div>
+    </div>` : '';
   body.innerHTML = `
-    <div class="card p-6 space-y-4">
+    ${errHtml}
+    <div class="card p-6 space-y-4 ${errHtml ? 'mt-3' : ''}">
       <div class="space-y-2">
         <label class="block text-sm font-semibold text-gray-700">1. 엑셀 파일 선택 (양식 A/B 자동 감지)</label>
         <input type="file" accept=".xlsx,.xls,.csv" onchange="handleMockFileSelect(event)" class="block text-sm">
@@ -2857,9 +3196,12 @@ async function handleMockFileSelect(e) {
     const wb = await readFileAsWorkbook(file);
     const parsed = parseMockExamWorkbook(wb);
     if (!parsed || !parsed.records.length) {
-      alert('파일에서 모의고사 데이터를 인식할 수 없습니다. 양식을 확인하세요.');
+      mockUploadError = { fileName: file.name, sheets: wb.SheetNames };
+      toast('모의고사 양식을 인식하지 못했습니다', 'error');
+      renderMock(document.getElementById('main-content'));
       return;
     }
+    mockUploadError = null;
     // Default meta from first record
     const first = parsed.records[0];
     const rawYear = String(first.학년도_raw || '').match(/\d{4}/)?.[0] || '';
@@ -2881,7 +3223,7 @@ async function handleMockFileSelect(e) {
     };
     renderMock(document.getElementById('main-content'));
   } catch (err) {
-    alert('파일 읽기 실패: ' + err.message);
+    toast('파일 읽기 실패: ' + err.message, 'error', 6000);
   }
 }
 function renderMockUploadPreview(body) {
@@ -2897,18 +3239,18 @@ function renderMockUploadPreview(body) {
       <div class="flex items-center justify-between">
         <div>
           <h3 class="font-bold text-gray-900">업로드 미리보기</h3>
-          <p class="text-xs text-gray-500">파일: ${p.fileName} / 시트: ${p.sheetName} / 양식: ${p.format} / 인식된 레코드: ${p.records.length}건</p>
+          <p class="text-xs text-gray-500">파일: ${escapeHtml(p.fileName)} / 시트: ${escapeHtml(p.sheetName)} / 양식: ${escapeHtml(p.format)} / 인식된 레코드: ${p.records.length}건</p>
         </div>
         <button onclick="pendingMockExam=null; renderMock(document.getElementById('main-content'))" class="text-sm text-gray-500 hover:text-gray-700">취소</button>
       </div>
       <div class="grid grid-cols-3 gap-3">
         <div>
           <label class="block text-xs font-semibold text-gray-600 mb-1">기수 (학년도)</label>
-          <input type="text" value="${p.meta.기수}" oninput="pendingMockExam.meta.기수=this.value" placeholder="2026">
+          <input type="text" value="${escapeHtml(p.meta.기수)}" oninput="pendingMockExam.meta.기수=this.value" placeholder="2026">
         </div>
         <div>
           <label class="block text-xs font-semibold text-gray-600 mb-1">실시년월 (YYYY-MM)</label>
-          <input type="text" value="${p.meta.실시년월}" oninput="pendingMockExam.meta.실시년월=this.value" placeholder="2026-03">
+          <input type="text" value="${escapeHtml(p.meta.실시년월)}" oninput="pendingMockExam.meta.실시년월=this.value" placeholder="2026-03">
         </div>
         <div>
           <label class="block text-xs font-semibold text-gray-600 mb-1">응시학년</label>
@@ -2921,7 +3263,7 @@ function renderMockUploadPreview(body) {
       </div>
       ${Object.keys(subjectSummary).length ? `<div class="bg-blue-50/50 rounded-xl p-3 text-xs">
         <div class="font-semibold text-blue-800 mb-1">인식된 탐구 과목</div>
-        <div class="text-gray-700">${Object.entries(subjectSummary).map(([s,n]) => `${s} (${n})`).join(' / ')}</div>
+        <div class="text-gray-700">${Object.entries(subjectSummary).map(([s,n]) => `${escapeHtml(s)} (${n})`).join(' / ')}</div>
         <div class="text-[10px] text-gray-500 mt-1">→ 자동으로 "사회탐구" / "과학탐구"로 정규화됩니다.</div>
       </div>` : ''}
       <div class="overflow-x-auto border border-gray-200 rounded-xl">
@@ -2934,14 +3276,14 @@ function renderMockUploadPreview(body) {
           </tr></thead>
           <tbody>
             ${sample.map(r => { const c = mockCalcFields(r); const gd = v => v == null ? '-' : Number(v).toFixed(v%1?1:0); return `<tr class="border-t border-gray-100">
-              <td class="px-2 py-1 text-center">${r.반||'-'}</td>
-              <td class="px-2 py-1 text-center">${r.번호||'-'}</td>
-              <td class="px-2 py-1">${r.이름}</td>
+              <td class="px-2 py-1 text-center">${escapeHtml(r.반||'-')}</td>
+              <td class="px-2 py-1 text-center">${escapeHtml(r.번호||'-')}</td>
+              <td class="px-2 py-1">${escapeHtml(r.이름||'-')}</td>
               <td class="px-2 py-1 text-center">${r.국어_등급 ?? '-'}</td>
               <td class="px-2 py-1 text-center">${r.수학_등급 ?? '-'}</td>
               <td class="px-2 py-1 text-center">${r.영어_등급 ?? '-'}</td>
-              <td class="px-2 py-1 text-center">${r.탐1_등급 ?? '-'}${r.탐1_과목?` <span class="text-[10px] text-gray-400">${r.탐1_과목_원본||r.탐1_과목}</span>`:''}</td>
-              <td class="px-2 py-1 text-center">${r.탐2_등급 ?? '-'}${r.탐2_과목?` <span class="text-[10px] text-gray-400">${r.탐2_과목_원본||r.탐2_과목}</span>`:''}</td>
+              <td class="px-2 py-1 text-center">${r.탐1_등급 ?? '-'}${r.탐1_과목?` <span class="text-[10px] text-gray-400">${escapeHtml(r.탐1_과목_원본||r.탐1_과목)}</span>`:''}</td>
+              <td class="px-2 py-1 text-center">${r.탐2_등급 ?? '-'}${r.탐2_과목?` <span class="text-[10px] text-gray-400">${escapeHtml(r.탐2_과목_원본||r.탐2_과목)}</span>`:''}</td>
               <td class="px-2 py-1 text-center">${r.한국사_등급 ?? '-'}</td>
               <td class="px-2 py-1 text-center font-mono">${gd(c.합2)}</td>
               <td class="px-2 py-1 text-center font-mono">${gd(c.합3)}</td>
@@ -2963,7 +3305,7 @@ async function saveMockExamUpload() {
   const p = pendingMockExam;
   if (!p) return;
   if (!p.meta.기수 || !p.meta.실시년월 || !p.meta.응시학년) {
-    alert('기수, 실시년월, 응시학년을 모두 입력하세요.');
+    toast('기수, 실시년월, 응시학년을 모두 입력하세요.', 'warn', 4000);
     return;
   }
   const records = p.records.map(r => ({
@@ -2983,7 +3325,7 @@ async function saveMockExamUpload() {
   const res = await addMockExams(records);
   allMockExams = await getAllMockExams();
   pendingMockExam = null;
-  alert(`저장 완료: 새로 추가 ${res.added}건, 기존 갱신 ${res.updated}건`);
+  toast(`저장 완료: 새로 추가 ${res.added}건, 기존 갱신 ${res.updated}건`, 'success', 4000);
   mockTab = 'list';
   renderMock(document.getElementById('main-content'));
 }
@@ -3004,10 +3346,10 @@ function renderMockManual(body) {
         ${isEdit ? `<button onclick="pendingMockManualEdit=null; renderMock(document.getElementById('main-content'))" class="text-sm text-gray-500">취소</button>` : ''}
       </div>
       <div class="grid grid-cols-4 gap-3">
-        <div><label class="block text-xs font-semibold text-gray-600 mb-1">기수</label><input type="text" id="mm-기수" value="${r.기수||''}" placeholder="2026"></div>
-        <div><label class="block text-xs font-semibold text-gray-600 mb-1">실시년월</label><input type="text" id="mm-실시년월" value="${r.실시년월||''}" placeholder="2026-03"></div>
+        <div><label class="block text-xs font-semibold text-gray-600 mb-1">기수</label><input type="text" id="mm-기수" value="${escapeHtml(r.기수||'')}" placeholder="2026"></div>
+        <div><label class="block text-xs font-semibold text-gray-600 mb-1">실시년월</label><input type="text" id="mm-실시년월" value="${escapeHtml(r.실시년월||'')}" placeholder="2026-03"></div>
         <div><label class="block text-xs font-semibold text-gray-600 mb-1">응시학년</label><select id="mm-응시학년"><option value="1" ${r.응시학년==1?'selected':''}>1학년</option><option value="2" ${r.응시학년==2?'selected':''}>2학년</option><option value="3" ${r.응시학년==3?'selected':''}>3학년</option></select></div>
-        <div><label class="block text-xs font-semibold text-gray-600 mb-1">이름</label><input type="text" id="mm-이름" value="${r.이름||''}"></div>
+        <div><label class="block text-xs font-semibold text-gray-600 mb-1">이름</label><input type="text" id="mm-이름" value="${escapeHtml(r.이름||'')}"></div>
         <div><label class="block text-xs font-semibold text-gray-600 mb-1">반</label><input type="number" id="mm-반" value="${r.반||''}"></div>
         <div><label class="block text-xs font-semibold text-gray-600 mb-1">번호</label><input type="number" id="mm-번호" value="${r.번호||''}"></div>
       </div>
@@ -3016,9 +3358,9 @@ function renderMockManual(body) {
         <div><label class="block text-xs font-semibold text-gray-600 mb-1">수학 등급</label><input type="number" min="1" max="9" id="mm-수학_등급" value="${r.수학_등급??''}"></div>
         <div><label class="block text-xs font-semibold text-gray-600 mb-1">영어 등급</label><input type="number" min="1" max="9" id="mm-영어_등급" value="${r.영어_등급??''}"></div>
         <div><label class="block text-xs font-semibold text-gray-600 mb-1">한국사 등급</label><input type="number" min="1" max="9" id="mm-한국사_등급" value="${r.한국사_등급??''}"></div>
-        <div><label class="block text-xs font-semibold text-gray-600 mb-1">탐1 과목</label><input type="text" id="mm-탐1_과목" value="${r.탐1_과목||''}" placeholder="사회/과학/통합사회 등"></div>
+        <div><label class="block text-xs font-semibold text-gray-600 mb-1">탐1 과목</label><input type="text" id="mm-탐1_과목" value="${escapeHtml(r.탐1_과목||'')}" placeholder="사회/과학/통합사회 등"></div>
         <div><label class="block text-xs font-semibold text-gray-600 mb-1">탐1 등급</label><input type="number" min="1" max="9" id="mm-탐1_등급" value="${r.탐1_등급??''}"></div>
-        <div><label class="block text-xs font-semibold text-gray-600 mb-1">탐2 과목</label><input type="text" id="mm-탐2_과목" value="${r.탐2_과목||''}"></div>
+        <div><label class="block text-xs font-semibold text-gray-600 mb-1">탐2 과목</label><input type="text" id="mm-탐2_과목" value="${escapeHtml(r.탐2_과목||'')}"></div>
         <div><label class="block text-xs font-semibold text-gray-600 mb-1">탐2 등급</label><input type="number" min="1" max="9" id="mm-탐2_등급" value="${r.탐2_등급??''}"></div>
       </div>
       <div class="flex justify-end gap-2">
@@ -3032,7 +3374,7 @@ async function saveMockManual(editId) {
   const 기수 = g('기수').trim();
   const 실시년월 = g('실시년월').trim();
   const 응시학년 = parseInt(g('응시학년'));
-  if (!이름 || !기수 || !실시년월) { alert('기수, 실시년월, 이름은 필수입니다.'); return; }
+  if (!이름 || !기수 || !실시년월) { toast('기수, 실시년월, 이름은 필수입니다.', 'warn', 4000); return; }
   const rec = {
     기수, 실시년월, 응시학년,
     반: parseScoreNum(g('반')), 번호: parseScoreNum(g('번호')), 이름,
@@ -3089,21 +3431,22 @@ function renderMockAnalyze(body) {
           <label class="block text-xs font-semibold text-gray-600 mb-1">학생 선택</label>
           <select onchange="mockAnalyzeTarget=this.value; renderMock(document.getElementById('main-content'))">
             <option value="">-- 학생 --</option>
-            ${names.map(n => `<option value="${n}" ${mockAnalyzeTarget===n?'selected':''}>${n}</option>`).join('')}
+            ${names.map(n => `<option value="${escapeHtml(n)}" ${mockAnalyzeTarget===n?'selected':''}>${escapeHtml(n)}</option>`).join('')}
           </select>` : ''}
         ${mockAnalyzeMode==='school' ? `
           <label class="block text-xs font-semibold text-gray-600 mb-1">출신 중학교 선택</label>
           <select onchange="mockAnalyzeTarget=this.value; renderMock(document.getElementById('main-content'))">
             <option value="">-- 전체 보기 --</option>
-            ${schools.map(s => `<option value="${s}" ${mockAnalyzeTarget===s?'selected':''}>${s}</option>`).join('')}
+            ${schools.map(s => `<option value="${escapeHtml(s)}" ${mockAnalyzeTarget===s?'selected':''}>${escapeHtml(s)}</option>`).join('')}
           </select>` : ''}
         ${mockAnalyzeMode==='type' ? `
           <label class="block text-xs font-semibold text-gray-600 mb-1">전형구분 선택</label>
           <select onchange="mockAnalyzeTarget=this.value; renderMock(document.getElementById('main-content'))">
             <option value="">-- 전체 보기 --</option>
-            ${types.map(t => `<option value="${t}" ${mockAnalyzeTarget===t?'selected':''}>${t}</option>`).join('')}
+            ${types.map(t => `<option value="${escapeHtml(t)}" ${mockAnalyzeTarget===t?'selected':''}>${escapeHtml(t)}</option>`).join('')}
           </select>` : ''}
       </div>
+      ${mockAnalyzeMode !== 'individual' ? ambiguousMockWarningHtml() : ''}
       <div id="mock-analyze-result"></div>
     </div>`;
 
@@ -3121,16 +3464,13 @@ function mockRecordsForName(name) {
   return allMockExams.filter(r => r.이름 === name);
 }
 function mockRecordsForSchool(school) {
-  const names = new Set(getAdmittedStudents().filter(r => r['출신중'] === school).map(r => ({ name: r['성명'], year: r['_학년도'] })).map(o => o.name));
-  // 기수 매칭도 필요하지만 일단 이름으로
-  const admittedByName = {};
-  getAdmittedStudents().filter(r => r['출신중'] === school).forEach(r => { admittedByName[r['성명']] = r['_학년도']; });
-  return allMockExams.filter(r => admittedByName[r.이름] != null);
+  // 이름 + 기수(입학 학년도) 동시 일치 — 동명이인·타 기수 성적 오귀속 방지
+  const admitted = getAdmittedStudents().filter(r => r['출신중'] === school);
+  return allMockExams.filter(m => admitted.some(a => mockMatchesApplicant(m, a)));
 }
 function mockRecordsForType(type) {
-  const admittedByName = {};
-  getAdmittedStudents().filter(r => r['전형구분'] === type).forEach(r => { admittedByName[r['성명']] = r['_학년도']; });
-  return allMockExams.filter(r => admittedByName[r.이름] != null);
+  const admitted = getAdmittedStudents().filter(r => r['전형구분'] === type);
+  return allMockExams.filter(m => admitted.some(a => mockMatchesApplicant(m, a)));
 }
 
 function aggregateStats(records) {
@@ -3165,9 +3505,9 @@ function renderMockIndividualAnalysis(el) {
     const cohort = allMockExams.filter(x => x.기수 === r.기수 && x.실시년월 === r.실시년월 && x.응시학년 === r.응시학년);
     const cs = aggregateStats(cohort);
     return `<tr class="border-b">
-      <td class="px-2 py-1.5">${r.기수}</td>
-      <td class="px-2 py-1.5">${r.실시년월}</td>
-      <td class="px-2 py-1.5">${r.응시학년}</td>
+      <td class="px-2 py-1.5">${escapeHtml(r.기수||'-')}</td>
+      <td class="px-2 py-1.5">${escapeHtml(r.실시년월||'-')}</td>
+      <td class="px-2 py-1.5">${escapeHtml(r.응시학년||'-')}</td>
       <td class="px-2 py-1.5 text-center font-mono">${r.국어_등급 ?? '-'}</td>
       <td class="px-2 py-1.5 text-center font-mono">${r.수학_등급 ?? '-'}</td>
       <td class="px-2 py-1.5 text-center font-mono">${r.영어_등급 ?? '-'}</td>
@@ -3202,7 +3542,7 @@ function renderMockIndividualAnalysis(el) {
     });
     const cohortStats = Object.entries(cohortByYear).map(([y, arr]) => ({ year: y, s: aggregateStats(arr) })).sort((a,b) => a.year.localeCompare(b.year));
     compareHtml += `<div class="bg-blue-50/50 rounded-xl p-3">
-      <div class="font-semibold text-blue-800 text-sm mb-2">${parseInt(month)}월 기수별 평균 비교 (응시 ${rs[0].응시학년}학년)</div>
+      <div class="font-semibold text-blue-800 text-sm mb-2">${parseInt(month)}월 기수별 평균 비교 (응시 ${escapeHtml(rs[0].응시학년)}학년)</div>
       <table class="w-full text-xs"><thead><tr class="border-b border-blue-200"><th class="text-left py-1">기수</th><th>국</th><th>수</th><th>영</th><th>탐평균</th><th>한</th><th>2합</th><th>3합</th><th>4합</th><th>5합</th><th>평균</th></tr></thead><tbody>
       ${cohortStats.map(cs => `<tr class="border-b border-blue-100 ${cs.year===rs[0].기수?'bg-blue-100/50 font-semibold':''}"><td class="py-1">${cs.year}${cs.year===rs[0].기수?' (본인)':''}</td><td class="text-center font-mono">${gd(cs.s.국어_등급)}</td><td class="text-center font-mono">${gd(cs.s.수학_등급)}</td><td class="text-center font-mono">${gd(cs.s.영어_등급)}</td><td class="text-center font-mono">${gd(cs.s.탐평균)}</td><td class="text-center font-mono">${gd(cs.s.한국사_등급)}</td><td class="text-center font-mono">${gd(cs.s.합2)}</td><td class="text-center font-mono">${gd(cs.s.합3)}</td><td class="text-center font-mono">${gd(cs.s.합4)}</td><td class="text-center font-mono">${gd(cs.s.합5)}</td><td class="text-center font-mono font-semibold">${gd(cs.s.등급평균)}</td></tr>`).join('')}
       </tbody></table>
@@ -3212,8 +3552,8 @@ function renderMockIndividualAnalysis(el) {
   el.innerHTML = `
     <div class="space-y-4">
       <div class="bg-gray-50 rounded-xl p-3 text-sm">
-        <span class="font-semibold">${mockAnalyzeTarget}</span>
-        <span class="text-gray-500 ml-2">출신중: ${중} / 전형: ${전형}</span>
+        <span class="font-semibold">${escapeHtml(mockAnalyzeTarget)}</span>
+        <span class="text-gray-500 ml-2">출신중: ${escapeHtml(중)} / 전형: ${escapeHtml(전형)}</span>
       </div>
       <div class="overflow-x-auto">
         <table class="w-full text-xs">
@@ -3240,8 +3580,8 @@ function renderMockSchoolAnalysis(el) {
       <div class="overflow-x-auto">
         <table class="w-full text-xs">
           <thead class="bg-gray-50"><tr><th class="px-2 py-1.5 text-left">중학교</th><th>N</th><th>국</th><th>수</th><th>영</th><th>탐평균</th><th>한</th><th>2합</th><th>3합</th><th>4합</th><th>5합</th><th>평균</th></tr></thead>
-          <tbody>${rows.map(({s, stats}) => `<tr class="border-b hover:bg-blue-50/30 cursor-pointer" onclick="mockAnalyzeTarget='${s.replace(/'/g,"\\'")}'; renderMock(document.getElementById('main-content'))">
-            <td class="px-2 py-1.5 font-semibold">${s}</td><td class="text-center">${stats.n}</td>
+          <tbody>${rows.map(({s, stats}) => `<tr class="border-b hover:bg-blue-50/30 cursor-pointer" onclick="mockAnalyzeTarget='${escapeAttr(s)}'; renderMock(document.getElementById('main-content'))">
+            <td class="px-2 py-1.5 font-semibold">${escapeHtml(s)}</td><td class="text-center">${stats.n}</td>
             <td class="text-center font-mono">${gd(stats.국어_등급)}</td>
             <td class="text-center font-mono">${gd(stats.수학_등급)}</td>
             <td class="text-center font-mono">${gd(stats.영어_등급)}</td>
@@ -3279,14 +3619,14 @@ function renderMockSchoolAnalysis(el) {
   });
   const compareHtml = Object.entries(byMonth).map(([m, gs]) => `
     <div class="bg-blue-50/50 rounded-xl p-3">
-      <div class="font-semibold text-blue-800 text-sm mb-2">${parseInt(m)}월 기수별 비교 (${mockAnalyzeTarget} 출신)</div>
+      <div class="font-semibold text-blue-800 text-sm mb-2">${parseInt(m)}월 기수별 비교 (${escapeHtml(mockAnalyzeTarget)} 출신)</div>
       <table class="w-full text-xs"><thead><tr class="border-b border-blue-200"><th class="text-left py-1">기수</th><th>학년</th><th>N</th><th>국</th><th>수</th><th>영</th><th>탐평균</th><th>한</th><th>2합</th><th>3합</th><th>4합</th><th>5합</th><th>평균</th></tr></thead><tbody>
-      ${gs.sort((a,b) => a.기수.localeCompare(b.기수)).map(g => `<tr class="border-b border-blue-100"><td class="py-1">${g.기수}</td><td class="text-center">${g.응시학년}</td><td class="text-center">${g.stats.n}</td><td class="text-center font-mono">${gd(g.stats.국어_등급)}</td><td class="text-center font-mono">${gd(g.stats.수학_등급)}</td><td class="text-center font-mono">${gd(g.stats.영어_등급)}</td><td class="text-center font-mono">${gd(g.stats.탐평균)}</td><td class="text-center font-mono">${gd(g.stats.한국사_등급)}</td><td class="text-center font-mono">${gd(g.stats.합2)}</td><td class="text-center font-mono">${gd(g.stats.합3)}</td><td class="text-center font-mono">${gd(g.stats.합4)}</td><td class="text-center font-mono">${gd(g.stats.합5)}</td><td class="text-center font-mono font-semibold">${gd(g.stats.등급평균)}</td></tr>`).join('')}
+      ${gs.sort((a,b) => String(a.기수??'').localeCompare(String(b.기수??''))).map(g => `<tr class="border-b border-blue-100"><td class="py-1">${escapeHtml(g.기수||'-')}</td><td class="text-center">${escapeHtml(g.응시학년||'-')}</td><td class="text-center">${g.stats.n}</td><td class="text-center font-mono">${gd(g.stats.국어_등급)}</td><td class="text-center font-mono">${gd(g.stats.수학_등급)}</td><td class="text-center font-mono">${gd(g.stats.영어_등급)}</td><td class="text-center font-mono">${gd(g.stats.탐평균)}</td><td class="text-center font-mono">${gd(g.stats.한국사_등급)}</td><td class="text-center font-mono">${gd(g.stats.합2)}</td><td class="text-center font-mono">${gd(g.stats.합3)}</td><td class="text-center font-mono">${gd(g.stats.합4)}</td><td class="text-center font-mono">${gd(g.stats.합5)}</td><td class="text-center font-mono font-semibold">${gd(g.stats.등급평균)}</td></tr>`).join('')}
       </tbody></table>
     </div>`).join('');
   el.innerHTML = `
     <div class="space-y-4">
-      <div class="bg-gray-50 rounded-xl p-3 text-sm font-semibold">${mockAnalyzeTarget}</div>
+      <div class="bg-gray-50 rounded-xl p-3 text-sm font-semibold">${escapeHtml(mockAnalyzeTarget)}</div>
       ${compareHtml}
     </div>`;
 }
@@ -3304,8 +3644,8 @@ function renderMockTypeAnalysis(el) {
       <div class="overflow-x-auto">
         <table class="w-full text-xs">
           <thead class="bg-gray-50"><tr><th class="px-2 py-1.5 text-left">전형구분</th><th>N</th><th>국</th><th>수</th><th>영</th><th>탐평균</th><th>한</th><th>2합</th><th>3합</th><th>4합</th><th>5합</th><th>평균</th></tr></thead>
-          <tbody>${rows.map(({t, stats}) => `<tr class="border-b hover:bg-blue-50/30 cursor-pointer" onclick="mockAnalyzeTarget='${t.replace(/'/g,"\\'")}'; renderMock(document.getElementById('main-content'))">
-            <td class="px-2 py-1.5 font-semibold">${t}</td><td class="text-center">${stats.n}</td>
+          <tbody>${rows.map(({t, stats}) => `<tr class="border-b hover:bg-blue-50/30 cursor-pointer" onclick="mockAnalyzeTarget='${escapeAttr(t)}'; renderMock(document.getElementById('main-content'))">
+            <td class="px-2 py-1.5 font-semibold">${escapeHtml(t)}</td><td class="text-center">${stats.n}</td>
             <td class="text-center font-mono">${gd(stats.국어_등급)}</td>
             <td class="text-center font-mono">${gd(stats.수학_등급)}</td>
             <td class="text-center font-mono">${gd(stats.영어_등급)}</td>
@@ -3334,12 +3674,12 @@ function renderMockTypeAnalysis(el) {
   const gd = v => v == null ? '-' : Number(v).toFixed(2);
   const compareHtml = Object.entries(byMonth).map(([m, arr]) => `
     <div class="bg-blue-50/50 rounded-xl p-3">
-      <div class="font-semibold text-blue-800 text-sm mb-2">${parseInt(m)}월 기수별 비교 (전형: ${mockAnalyzeTarget})</div>
+      <div class="font-semibold text-blue-800 text-sm mb-2">${parseInt(m)}월 기수별 비교 (전형: ${escapeHtml(mockAnalyzeTarget)})</div>
       <table class="w-full text-xs"><thead><tr class="border-b border-blue-200"><th class="text-left py-1">기수</th><th>학년</th><th>N</th><th>국</th><th>수</th><th>영</th><th>탐평균</th><th>한</th><th>2합</th><th>3합</th><th>4합</th><th>5합</th><th>평균</th></tr></thead><tbody>
-      ${arr.sort((a,b) => a.기수.localeCompare(b.기수)).map(g => `<tr class="border-b border-blue-100"><td class="py-1">${g.기수}</td><td class="text-center">${g.응시학년}</td><td class="text-center">${g.stats.n}</td><td class="text-center font-mono">${gd(g.stats.국어_등급)}</td><td class="text-center font-mono">${gd(g.stats.수학_등급)}</td><td class="text-center font-mono">${gd(g.stats.영어_등급)}</td><td class="text-center font-mono">${gd(g.stats.탐평균)}</td><td class="text-center font-mono">${gd(g.stats.한국사_등급)}</td><td class="text-center font-mono">${gd(g.stats.합2)}</td><td class="text-center font-mono">${gd(g.stats.합3)}</td><td class="text-center font-mono">${gd(g.stats.합4)}</td><td class="text-center font-mono">${gd(g.stats.합5)}</td><td class="text-center font-mono font-semibold">${gd(g.stats.등급평균)}</td></tr>`).join('')}
+      ${arr.sort((a,b) => String(a.기수??'').localeCompare(String(b.기수??''))).map(g => `<tr class="border-b border-blue-100"><td class="py-1">${escapeHtml(g.기수||'-')}</td><td class="text-center">${escapeHtml(g.응시학년||'-')}</td><td class="text-center">${g.stats.n}</td><td class="text-center font-mono">${gd(g.stats.국어_등급)}</td><td class="text-center font-mono">${gd(g.stats.수학_등급)}</td><td class="text-center font-mono">${gd(g.stats.영어_등급)}</td><td class="text-center font-mono">${gd(g.stats.탐평균)}</td><td class="text-center font-mono">${gd(g.stats.한국사_등급)}</td><td class="text-center font-mono">${gd(g.stats.합2)}</td><td class="text-center font-mono">${gd(g.stats.합3)}</td><td class="text-center font-mono">${gd(g.stats.합4)}</td><td class="text-center font-mono">${gd(g.stats.합5)}</td><td class="text-center font-mono font-semibold">${gd(g.stats.등급평균)}</td></tr>`).join('')}
       </tbody></table>
     </div>`).join('');
-  el.innerHTML = `<div class="space-y-4"><div class="bg-gray-50 rounded-xl p-3 text-sm font-semibold">${mockAnalyzeTarget}</div>${compareHtml}</div>`;
+  el.innerHTML = `<div class="space-y-4"><div class="bg-gray-50 rounded-xl p-3 text-sm font-semibold">${escapeHtml(mockAnalyzeTarget)}</div>${compareHtml}</div>`;
 }
 
 // ══════════════════════════════════════════════
@@ -3395,6 +3735,8 @@ function handleKeydown(e) {
   if (!inInput && e.key === '?') { showShortcutsHelp(); e.preventDefault(); return; }
 
   if (meta) {
+    // 입력창·contenteditable 편집 중에는 브라우저 기본 동작(텍스트 undo 등)에 맡김 — 전역 데이터 undo가 편집 내용을 날리는 사고 방지
+    if (inInput) return;
     if (k === 'z' && !e.shiftKey) { undoOnce(); e.preventDefault(); return; }
     if (k === 'y' || (k === 'z' && e.shiftKey)) { redoOnce(); e.preventDefault(); return; }
     if (k === '.') { toggleDark(); e.preventDefault(); return; }
@@ -3422,7 +3764,19 @@ function handleKeydown(e) {
 // ══════════════════════════════════════════════
 (async () => {
   applySavedTheme();
+  applyChartTheme();
   document.addEventListener('keydown', handleKeydown);
+  // 보고서 contenteditable 편집을 자동 저장 (input 이벤트 위임)
+  document.addEventListener('input', e => {
+    const t = e.target && e.target.closest ? e.target.closest('[data-edit]') : null;
+    if (t) saveReportEdit(t.dataset.edit, t.innerHTML);
+  });
+  // 라이브러리 로드 확인 — lib 폴더 없이 오프라인이면 안내
+  const missingLibs = [];
+  if (typeof XLSX === 'undefined') missingLibs.push('엑셀(XLSX)');
+  if (typeof Chart === 'undefined') missingLibs.push('차트(Chart.js)');
+  if (typeof PptxGenJS === 'undefined') missingLibs.push('PPTX(PptxGenJS)');
+  if (missingLibs.length) toast(`라이브러리 로드 실패: ${missingLibs.join(', ')} — lib 폴더가 index.html과 함께 있는지, 또는 인터넷 연결을 확인하세요.`, 'error', 10000);
   try {
     await openDB();
     allData = await getAllApplicants();
