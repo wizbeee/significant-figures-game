@@ -575,7 +575,51 @@ function handleCheckConfig(req, res) {
   const hasApiKey = !!getAnthropicKey();
   const smtp = getSmtpConfig();
   const hasSmtp = !!(smtp.user && smtp.pass);
-  return jsonResponse(res, 200, { hasApiKey, hasSmtp });
+  // 클라우드 모드면 .env 쓰기 불가하므로 setup wizard 표시 X
+  return jsonResponse(res, 200, { hasApiKey, hasSmtp, canSaveKey: !IS_CLOUD });
+}
+
+// POST /api/save-key — Claude API 키를 .env에 저장 (로컬 모드 전용)
+async function handleSaveKey(req, res) {
+  // 클라우드 모드에서는 환경변수로만 설정 가능 (보안 + 파일시스템 제약)
+  if (IS_CLOUD) {
+    return jsonResponse(res, 403, {
+      error: '클라우드 모드에서는 플랫폼 환경변수로 ANTHROPIC_API_KEY를 설정해 주세요.'
+    });
+  }
+
+  let body;
+  try { body = await parseJsonBody(req); }
+  catch (e) { return jsonResponse(res, 400, { error: '잘못된 요청입니다.' }); }
+
+  const key = (body.key || '').trim();
+  if (!key.startsWith('sk-ant-')) {
+    return jsonResponse(res, 400, {
+      error: 'API 키 형식이 올바르지 않습니다. sk-ant- 로 시작해야 합니다.'
+    });
+  }
+  if (key.length < 30 || key.length > 500) {
+    return jsonResponse(res, 400, { error: 'API 키 길이가 비정상입니다.' });
+  }
+
+  try {
+    const envPath = path.join(DIR, '.env');
+    let lines = [];
+    if (fs.existsSync(envPath)) {
+      lines = fs.readFileSync(envPath, 'utf-8').split('\n');
+    }
+    // 기존 ANTHROPIC_API_KEY 라인 제거 후 새 키 추가
+    lines = lines.filter(l => !l.match(/^ANTHROPIC_API_KEY\s*=/));
+    lines.push(`ANTHROPIC_API_KEY=${key}`);
+    const content = lines.filter(l => l.trim().length > 0).join('\n') + '\n';
+    fs.writeFileSync(envPath, content, { mode: 0o600 });
+
+    console.log('[Config] Anthropic API 키가 .env에 저장되었습니다');
+    return jsonResponse(res, 200, { success: true });
+  } catch (err) {
+    console.error('[Config] .env 저장 실패:', err.message);
+    return jsonResponse(res, 500, { error: '.env 파일 저장 실패: ' + err.message });
+  }
 }
 
 function handleRequest(req, res) {
@@ -602,6 +646,9 @@ function handleRequest(req, res) {
   }
   if (req.method === 'GET' && urlPath === '/api/check-config') {
     return handleCheckConfig(req, res);
+  }
+  if (req.method === 'POST' && urlPath === '/api/save-key') {
+    return handleSaveKey(req, res);
   }
 
   // 정적 파일 서빙

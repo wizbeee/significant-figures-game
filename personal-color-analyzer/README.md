@@ -2,7 +2,27 @@
 
 AI 기반 이미지 컨설팅 시스템 — 얼굴형 / 퍼스널 컬러 / 체형 분석
 
-## 🚀 1분 만에 배포하기 (Render.com 무료)
+## ⚡ 가장 쉬운 실행 방법 — 더블클릭 한 번
+
+| OS | 실행 방법 |
+|---|---|
+| **Windows** | `start.bat` 더블클릭 |
+| **macOS** | `start.command` 더블클릭 (최초 1회: 우클릭 → 열기) |
+| **Linux** | 터미널에서 `./start.sh` |
+
+런처가 자동으로 처리하는 것:
+1. ✅ Node.js 설치 여부 확인 (없으면 설치 페이지로 안내)
+2. ✅ 의존성 설치 (`npm install`)
+3. ✅ 서버 시작
+4. ✅ 브라우저 자동 열기 → `http://localhost:5000/laptop.html`
+5. ✅ **최초 실행 시 브라우저에서 Claude API 키 입력 모달 자동 표시** (메모장 편집 불필요)
+
+**전제조건**: Node.js 18+ 한 번 설치 (https://nodejs.org)
+
+> Windows 자동 설치: `cmd` 열고 `winget install OpenJS.NodeJS.LTS`  
+> Mac 자동 설치: `brew install node`
+
+## 🚀 클라우드 배포 (Render.com 무료, 폰 페어링 사용 시 권장)
 
 [![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/wizbeee/significant-figures-game/tree/feat/science-lab-admin-v3.2)
 
