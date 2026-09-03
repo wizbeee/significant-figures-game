@@ -711,6 +711,7 @@ async function refresh(ov) {
             <b>${typeEmo[r.type]||''} ${escapeHtml(r.label || '방 #' + r.code)}</b>
             <span class="badge pri">${r.code}</span>
             ${!r.approved ? '<span class="badge acc">⏳ 승인대기</span>' : ''}
+            ${r.reviseMode ? '<span class="badge acc">📕 오답 복습</span>' : ''}
             ${r.phase !== 'lobby' ? `<span class="badge ok">${phaseLabel[r.phase]||r.phase}</span>` : ''}
             ${waitBadge}
           </div>

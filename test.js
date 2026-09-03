@@ -5,6 +5,7 @@
 
 const {
   normName, makeQuestion, viewQuestion, judge, buildHint, HINT_MAX,
+  qKey, rehydrateQuestion,
 } = require('./server.js');
 
 let passed = 0, failed = 0;
@@ -152,6 +153,115 @@ test('단계 범위를 벗어난 값도 안전하게 처리한다', () => {
   assert(buildHint(q, 0).length > 0, '0단계');
   assert(buildHint(q, 99).length > 0, '99단계');
   eq(buildHint(null, 1), '');
+});
+
+// ==================== rehydrateQuestion → judge 왕복 ====================
+// wrongBank 에 저장되는 것은 "뷰"라서 그대로 재출제하면 채점이 깨진다 (특히 gm4 는 value 가 없다).
+console.log('\n[rehydrateQuestion] 뷰 → 내부 문제 객체 복원 후 채점');
+
+// 모드별 정답/오답 입력 생성
+function rightAnswer(q) {
+  if (q.gameMode === 1) return { count: q.count };
+  if (q.gameMode === 2) return { selected: q.digs.map((d, i) => (!d.pt && d.sig) ? i : -1).filter(i => i >= 0) };
+  if (q.gameMode === 3) return { meas: q.meas.dv, sf: String(q.meas.sf) };
+  return { result: q.answer };
+}
+function wrongAnswer(q) {
+  if (q.gameMode === 1) return { count: q.count + 1 };
+  if (q.gameMode === 2) return { selected: [] };
+  if (q.gameMode === 3) return { meas: String(q.meas.val + 100), sf: String(q.meas.sf + 5) };
+  return { result: q.answer + '9' };   // 값·자릿수 둘 다 어긋나거나 파싱 실패
+}
+
+function roundTrip(gm, diff, n, addSubMode) {
+  const recent = new Set();
+  let checked = 0;
+  for (let i = 0; i < n; i++) {
+    const orig = makeQuestion(gm, diff, recent, addSubMode || 'mixed');
+    const view = viewQuestion(orig, false);        // wrongBank 에 저장되는 형태 그대로
+    const back = rehydrateQuestion(JSON.parse(JSON.stringify(view)));  // JSON 왕복까지 재현
+    assert(back, `gm${gm} 복원 실패: ${JSON.stringify(view)}`);
+    assert(judge(back, rightAnswer(orig)) === true, `gm${gm} 복원 후 정답이 오답 처리됨: ${JSON.stringify(view)}`);
+    assert(judge(back, wrongAnswer(orig)) === false, `gm${gm} 복원 후 오답이 정답 처리됨: ${JSON.stringify(view)}`);
+    checked++;
+  }
+  return checked;
+}
+
+test('gm1 — 복원 후 원래 정답이 그대로 통과한다', () => {
+  let n = 0;
+  for (const d of ['easy', 'medium', 'hard']) n += roundTrip(1, d, 40);
+  assert(n >= 100, '표본 부족');
+});
+test('gm1 과학적 표기 — digs 가 없어도 복원된다', () => {
+  const recent = new Set();
+  let found = 0;
+  for (let i = 0; i < 1500 && found < 20; i++) {
+    const q = makeQuestion(1, 'hard', recent);
+    if (!q.scientific) continue;
+    found++;
+    const back = rehydrateQuestion(viewQuestion(q, false));
+    assert(back && back.scientific === true, '과학적 표기 복원 실패');
+    assert(judge(back, { count: q.count }) === true, '과학적 표기 정답이 오답 처리됨');
+    assert(judge(back, { count: q.count + 1 }) === false, '과학적 표기 오답이 정답 처리됨');
+  }
+  assert(found >= 5, `과학적 표기 표본을 찾지 못함 (${found}개)`);
+});
+test('gm2 — digs(sig 포함)가 그대로 살아난다', () => {
+  let n = 0;
+  for (const d of ['easy', 'medium', 'hard']) n += roundTrip(2, d, 40);
+  assert(n >= 100, '표본 부족');
+});
+test('gm3 — 측정값이 그대로 살아난다', () => {
+  let n = 0;
+  for (const d of ['easy', 'medium', 'hard']) n += roundTrip(3, d, 40);
+  assert(n >= 100, '표본 부족');
+});
+test('gm4 — 뷰에 없는 value 를 정답 문자열에서 복원한다 (가장 깨지기 쉬움)', () => {
+  let n = 0;
+  for (const mode of ['plainOnly', 'sciOnly', 'mixed']) {
+    for (const d of ['easy', 'medium', 'hard']) n += roundTrip(4, d, 40, mode);
+  }
+  assert(n >= 300, '표본 부족');
+});
+test('hide 뷰(정답 없음)는 복원을 거부한다', () => {
+  for (const gm of [1, 2, 4]) {
+    const q = makeQuestion(gm, 'medium', new Set());
+    eq(rehydrateQuestion(viewQuestion(q, true)), null, `gm${gm} hide 뷰가 복원됨`);
+  }
+});
+test('깨진 입력은 null 을 반환한다', () => {
+  eq(rehydrateQuestion(null), null);
+  eq(rehydrateQuestion({}), null);
+  eq(rehydrateQuestion({ gameMode: 1, num: '12' }), null);            // count 없음
+  eq(rehydrateQuestion({ gameMode: 1, num: '12', count: '2' }), null); // count 가 문자열
+  eq(rehydrateQuestion({ gameMode: 4, display: '1 + 1', kind: 'plain', answer: '???', dpResult: 0 }), null);
+  eq(rehydrateQuestion({ gameMode: 9, num: '12' }), null);
+});
+
+// ==================== qKey — 오답은행 중복 제거 ====================
+console.log('\n[qKey] 문제 식별 키');
+
+test('같은 문제의 서로 다른 두 뷰가 같은 키를 낸다', () => {
+  for (const gm of [1, 2, 3, 4]) {
+    const q = makeQuestion(gm, 'medium', new Set());
+    const k1 = qKey(viewQuestion(q, false));
+    const k2 = qKey(viewQuestion(q, true));
+    assert(k1 && k1 === k2, `gm${gm} 뷰에 따라 키가 달라짐: ${k1} / ${k2}`);
+  }
+});
+test('다른 문제는 다른 키를 낸다', () => {
+  eq(qKey({ gameMode: 1, num: '0.0340' }) === qKey({ gameMode: 1, num: '0.034' }), false);
+  eq(qKey({ gameMode: 4, display: '1.2 + 3.4' }) === qKey({ gameMode: 4, display: '1.2 + 3.5' }), false);
+  eq(qKey({ gameMode: 3, meas: { type: 'ruler', dv: '3.47' } }) === qKey({ gameMode: 3, meas: { type: 'ruler', dv: '3.48' } }), false);
+  eq(qKey({ gameMode: 3, meas: { type: 'ruler', dv: '3.47' } }) === qKey({ gameMode: 3, meas: { type: 'cylinder', dv: '3.47' } }), false);
+  // gm1/gm2 는 같은 숫자면 같은 문제로 본다 (오답은행 중복 제거 목적)
+  eq(qKey({ gameMode: 1, num: '1200' }), qKey({ gameMode: 2, num: '1200' }));
+});
+test('식별할 수 없는 입력은 빈 키를 낸다', () => {
+  eq(qKey(null), '');
+  eq(qKey({}), '');
+  eq(qKey({ gameMode: 3 }), '');
 });
 
 console.log(`\n총 ${passed + failed}개 · 통과 ${passed} · 실패 ${failed}\n`);

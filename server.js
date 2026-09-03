@@ -1011,6 +1011,65 @@ function viewQuestion(q, hide) {
   return { gameMode: 3, meas: q.meas };
 }
 
+// ==================== 오답 복습 — 문제 뷰 ↔ 내부 문제 객체 ====================
+// wrongBank 에 저장된 것은 viewQuestion(q,false) 가 만든 "뷰"라서 그대로 재출제하면 채점이 깨진다.
+//   · gm4 뷰에는 value 가 없어 judgeAddSub 이 전부 오답 처리한다
+//   · gm1 과학적 표기 뷰에는 digs 가 없다
+// 그래서 재출제 전에 반드시 내부 객체로 복원한다.
+function qKey(view) {
+  if (!view || typeof view !== 'object') return '';
+  const gm = view.gameMode;
+  if (gm === 1 || gm === 2) return 'n:' + view.num;
+  if (gm === 4) return 'a:' + view.display;
+  if (gm === 3 && view.meas) return 'm:' + view.meas.type + ':' + view.meas.dv;
+  return '';
+}
+function rehydrateQuestion(view) {
+  if (!view || typeof view !== 'object') return null;
+  const gm = view.gameMode;
+  if (gm === 1) {
+    if (typeof view.num !== 'string' || !view.num) return null;
+    if (!Number.isInteger(view.count)) return null;
+    const sci = !!view.scientific;
+    return { gameMode: 1, num: view.num, count: view.count, scientific: sci, digs: sci ? [] : analyze(view.num).digs };
+  }
+  if (gm === 2) {
+    if (typeof view.num !== 'string' || !view.num) return null;
+    if (!Array.isArray(view.digs) || view.digs.length === 0) return null;
+    if (!Number.isInteger(view.count)) return null;
+    // sig 플래그가 있어야 채점이 된다 (hide 뷰에는 없음)
+    if (!view.digs.some(d => d && d.sig === true)) return null;
+    return { gameMode: 2, num: view.num, digs: view.digs, count: view.count };
+  }
+  if (gm === 3) {
+    const m = view.meas;
+    if (!m || typeof m.type !== 'string' || typeof m.val !== 'number') return null;
+    if (typeof m.dv !== 'string' || typeof m.unit !== 'string' || !Number.isInteger(m.sf)) return null;
+    return { gameMode: 3, meas: { type: m.type, val: m.val, dv: m.dv, unit: m.unit, sf: m.sf } };
+  }
+  if (gm === 4) {
+    if (typeof view.display !== 'string' || typeof view.answer !== 'string') return null;
+    // 뷰에 value 가 없으므로 정답 문자열에서 되살린다 (위첨자 ×10³ 형식도 처리됨)
+    const p = parseUserNum(view.answer);
+    if (!p) return null;
+    const kind = view.kind === 'sci' ? 'sci' : 'plain';
+    const q = {
+      gameMode: 4, kind,
+      display: view.display, op: view.op === '-' ? '-' : '+',
+      answer: view.answer, value: p.value,
+    };
+    if (kind === 'plain') {
+      if (!Number.isInteger(view.dpResult)) return null;
+      q.dpResult = view.dpResult;
+    } else {
+      if (!Number.isInteger(view.mantDP) || !Number.isInteger(view.targetExp)) return null;
+      q.mantDP = view.mantDP; q.targetExp = view.targetExp;
+    }
+    return q;
+  }
+  return null;
+}
+
 function pushLB(classroomCode, type, entry) {
   const list = leaderboards[type] || (leaderboards[type] = []);
   list.push({ ...entry, classroomCode, at: Date.now() });
@@ -1151,6 +1210,10 @@ function createRoom(classroomCode, type, config, owner, autoApprove = false) {
       capacity,
       label: String(config.label || '').slice(0, 30),
     },
+    // reviseMode 는 config 가 아니라 room 루트 필드다 — 교사 "복제" 가 config 를 통째로
+    // 재전송하므로 config 에 두면 복제한 방까지 복습 방이 되어버린다. 호출자만 세팅한다.
+    reviseMode: false,
+    presetQuestions: null,
     ownerId: owner ? owner.studentId : null,
     players: {},
     questions: [],
@@ -1229,6 +1292,7 @@ function roomView(room, forTeacher, viewerStudentId) {
   const view = {
     code: room.code, type: room.type, phase: room.phase,
     approved: room.approved,
+    reviseMode: !!room.reviseMode,
     config: room.config, ownerId: room.ownerId,
     qIndex: room.qIndex, total: room.questions.length,
     currentQStart: room.currentQStart,
@@ -1331,7 +1395,10 @@ function startRoom(room) {
   const isTimed = room.type === 'single' && room.config.singleMode === 'timed';
   // 시간제한 모드: 예상 문제 수를 넉넉히 생성 (추가 필요 시 확장)
   const qc = isTimed ? Math.max(300, Math.ceil(room.config.timeLimit / 3)) : room.config.questionCount;
-  room.questions = generateQuestions(room.config.gameMode, room.config.difficulty, qc, room.config.addSubMode);
+  // 오답 복습 방 등 미리 정해진 문제 묶음이 있으면 그것을 쓴다 (없으면 기존 경로 그대로)
+  room.questions = (Array.isArray(room.presetQuestions) && room.presetQuestions.length)
+    ? room.presetQuestions.slice()
+    : generateQuestions(room.config.gameMode, room.config.difficulty, qc, room.config.addSubMode);
   room.qIndex = 0;
   room.phase = 'question';
   room.currentQStart = Date.now();
@@ -1503,7 +1570,8 @@ function finalizeRoom(room) {
   const players = Object.values(room.players);
   const perPlayerTotal = (p) => type === 'multi' ? (p.correct + p.wrong) : room.questions.length;
   if (type === 'single') {
-    players.forEach(p => pushLB(cCode, 'single', {
+    // 오답 복습은 이미 본 문제라 점수판에 올리지 않는다 (submittedToLB 는 위에서 이미 세워 중복 처리를 막는다)
+    if (!room.reviseMode) players.forEach(p => pushLB(cCode, 'single', {
       studentId: p.studentId, name: p.name, score: p.score,
       correct: p.correct, total: room.questions.length, maxStreak: p.maxStreak,
       gameMode: room.config.gameMode, difficulty: room.config.difficulty,
@@ -1531,6 +1599,27 @@ function finalizeRoom(room) {
     players.forEach(p => accumulateStats(cCode, p.studentId, p, 'battle', p.id === winnerId ? 'win' : 'lose'));
   } else {
     players.forEach(p => accumulateStats(cCode, p.studentId, p, type));
+  }
+  // 오답 복습 — 이번 판에서 맞힌 문제는 오답은행에서 뺀다
+  // (accumulateStats 가 이번 판 오답을 다시 적립한 뒤에 걸러야 순서가 맞는다)
+  if (room.reviseMode) {
+    // 실제로 출제된 데까지만 본다 — 교사가 중간에 강제 종료하면 남은 문제는 손대지 않는다
+    const played = (room.qIndex >= room.questions.length - 1)
+      ? room.questions.length
+      : Math.max(0, room.qIndex);
+    const askedKeys = room.questions.slice(0, played).map(q => qKey(viewQuestion(q, false)));
+    let changed = false;
+    players.forEach(p => {
+      const wrongKeys = new Set((p.wrongHistory || []).map(w => qKey(w.q)));
+      const solved = new Set(askedKeys.filter(k => k && !wrongKeys.has(k)));
+      if (solved.size === 0) return;
+      const rec = clsStudents(cCode)[p.studentId];
+      if (!rec || !rec.profile || !Array.isArray(rec.profile.wrongBank)) return;
+      const before = rec.profile.wrongBank.length;
+      rec.profile.wrongBank = rec.profile.wrongBank.filter(w => !solved.has(qKey(w.q)));
+      if (rec.profile.wrongBank.length !== before) changed = true;
+    });
+    if (changed) saveStudentsDb();
   }
   // 구글 시트 동기화 (교실별 설정 있을 때)
   maybePushSheets(cCode, 'game', { type, classroomCode: cCode, players: players.map(p => ({
@@ -1743,6 +1832,7 @@ async function handleApi(req, res, pathname, query) {
       .map(r => ({
         code: r.code, type: r.type, phase: r.phase,
         approved: r.approved,
+        reviseMode: !!r.reviseMode,
         label: r.config.label, gameMode: r.config.gameMode,
         difficulty: r.config.difficulty, questionCount: r.config.questionCount,
         capacity: r.config.capacity,
@@ -1775,6 +1865,54 @@ async function handleApi(req, res, pathname, query) {
     // 승인 완료된 single 방은 즉시 시작 (참여자 있을 때만)
     if (room.approved && type === 'single' && Object.keys(room.players).length > 0) startRoom(room);
     return sendJSON(res, { code: room.code, type: room.type, approved: room.approved });
+  }
+
+  // ---------- 오답 복습 방 만들기 ----------
+  // wrongBank 의 뷰를 내부 문제 객체로 복원해 싱글 방의 문제 묶음으로 사용한다.
+  if (method === 'POST' && pathname === '/api/room/revise') {
+    const s = authStudent(req);
+    if (!s) return sendJSON(res, { error: '로그인 필요' }, 401);
+    const cCfg = clsCfg(s.classroomCode) || {};
+    if (cCfg.locked) return sendJSON(res, { error: '🔒 교실 잠김 — 새 방을 만들 수 없습니다.' }, 403);
+    const body = await readBody(req);
+    const want = [5, 10, 20].includes(parseInt(body.count)) ? parseInt(body.count) : 10;
+    const rec = clsStudents(s.classroomCode)[s.studentId];
+    if (!rec) return sendJSON(res, { error: '학생 레코드 없음' }, 404);
+    rec.profile = ensureProfileShape(rec.profile);
+    const bank = Array.isArray(rec.profile.wrongBank) ? rec.profile.wrongBank : [];
+    const seen = new Set();
+    const cands = [];
+    let skipped = 0;
+    for (let i = bank.length - 1; i >= 0; i--) {   // 최신순
+      const w = bank[i];
+      const k = qKey(w && w.q);
+      if (!k || seen.has(k)) continue;
+      seen.add(k);
+      const q = rehydrateQuestion(w.q);
+      if (!q) { skipped++; continue; }
+      cands.push(q);
+    }
+    if (cands.length === 0) return sendJSON(res, { error: '복습할 오답이 없어요', skipped }, 400);
+    for (let i = cands.length - 1; i > 0; i--) {   // 셔플
+      const j = Math.floor(Math.random() * (i + 1));
+      const t2 = cands[i]; cands[i] = cands[j]; cands[j] = t2;
+    }
+    const qs = cands.slice(0, want);
+    // 한 방에 여러 모드가 섞일 수 있다 — 표시용 대표 모드는 최빈값
+    const cnt = {};
+    qs.forEach(q => { cnt[q.gameMode] = (cnt[q.gameMode] || 0) + 1; });
+    const topGm = parseInt(Object.keys(cnt).sort((a, b) => cnt[b] - cnt[a])[0]) || 1;
+    const autoApprove = !!cCfg.autoApproveRooms;
+    const room = createRoom(s.classroomCode, 'single', {
+      gameMode: topGm, difficulty: 'mixed', questionCount: qs.length,
+      questionTime: 30, revealTime: 5, singleMode: 'count', label: '오답 복습',
+    }, s, autoApprove);
+    room.reviseMode = true;
+    room.presetQuestions = qs;
+    if (!room.approved) pendingSince.set(room.code, Date.now());
+    try { joinRoom(room, s); } catch (e) { /* 정원 1 — 실패할 일이 없다 */ }
+    if (room.approved && Object.keys(room.players).length > 0) startRoom(room);
+    return sendJSON(res, { code: room.code, approved: room.approved, count: qs.length, skipped, available: cands.length });
   }
 
   // ---------- 방 입장 ----------
@@ -2360,10 +2498,12 @@ async function handleApi(req, res, pathname, query) {
       // 설정 요약 문자열 (A2) — 대기 카드에서 한눈에 보이도록
       const gmMap = { 1:'개수', 2:'찾기', 3:'측정', 4:'덧뺄' };
       const diffMap = { easy:'쉬움', medium:'보통', hard:'어려움', mixed:'혼합' };
-      const configSummary = `${gmMap[r.config.gameMode]||'게임'} · ${diffMap[r.config.difficulty]||''} · ${r.config.questionCount}문제 · ${r.config.questionTime}초/문`;
+      const configSummary = `${gmMap[r.config.gameMode]||'게임'} · ${diffMap[r.config.difficulty]||''} · ${r.config.questionCount}문제 · ${r.config.questionTime}초/문`
+        + (r.reviseMode ? ' · 오답 복습' : '');
       return {
         code: r.code, type: r.type, phase: r.phase,
         approved: r.approved,
+        reviseMode: !!r.reviseMode,
         label: r.config.label, gameMode: r.config.gameMode,
         difficulty: r.config.difficulty, questionCount: r.config.questionCount,
         questionTime: r.config.questionTime, revealTime: r.config.revealTime,
@@ -2802,5 +2942,6 @@ if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
     scheduleSave, flushAllSync, normName, normCode,
     analyze, makeQuestion, viewQuestion, judge, buildHint, HINT_MAX,
+    qKey, rehydrateQuestion,
   };
 }

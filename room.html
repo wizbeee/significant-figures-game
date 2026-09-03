@@ -201,7 +201,7 @@ function renderHeader() {
   return `<div class="game-hdr">
     <div class="info">
       <span class="badge big">${typeEmo} ${typeLbl}</span>
-      <span class="badge">${gmLabel}</span>
+      ${s.reviseMode ? '<span class="badge acc">📕 오답 복습</span>' : `<span class="badge">${gmLabel}</span>`}
       <span class="badge">방 ${s.code}</span>
       ${s.phase !== 'lobby' && s.phase !== 'results' && s.config.singleMode !== 'timed' ? `<span class="badge acc">문제 ${s.qIndex+1}/${s.total}</span>` : ''}
       ${s.config.singleMode === 'timed' && s.phase !== 'lobby' && s.phase !== 'results' ? `<span class="badge acc">✅ ${p?.correct||0}개 정답</span>` : ''}
@@ -306,8 +306,9 @@ function renderLobby(phaseChanged) {
         ${Array.from({length: s.config.capacity - s.players.length}).map(() => '<div class="player-tile" style="opacity:.3"><div class="emo">⌛</div><div class="nm">대기</div></div>').join('')}
       </div>
       <div style="margin-top:20px;color:var(--txt2);font-size:.9rem">
-        ${s.config.gameMode===1?'🔢 개수 세기':s.config.gameMode===2?'🎯 유효숫자 찾기':'📏 측정값 읽기'}
-        · ${({easy:'쉬움',medium:'보통',hard:'어려움',mixed:'혼합'})[s.config.difficulty]}
+        ${s.reviseMode ? '📕 오답 복습 (여러 모드가 섞여 나올 수 있어요)'
+          : (s.config.gameMode===1?'🔢 개수 세기':s.config.gameMode===2?'🎯 유효숫자 찾기':s.config.gameMode===4?'➕ 덧셈/뺄셈':'📏 측정값 읽기')
+            + ' · ' + ({easy:'쉬움',medium:'보통',hard:'어려움',mixed:'혼합'})[s.config.difficulty]}
         · ${s.config.questionCount}문제 · ${s.config.questionTime}초/문제
       </div>
       ${s.type === 'single' ? `<p style="color:var(--txt2);margin-top:14px">승인되면 자동으로 시작됩니다.</p>` : ''}

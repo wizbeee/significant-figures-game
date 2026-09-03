@@ -461,6 +461,11 @@ async function logout() {
   location.reload();
 }
 
+// 오답 목록에는 학생이 직접 입력한 답이 섞이므로 이스케이프한다
+function escHtml(v) {
+  return String(v == null ? '' : v).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+}
+
 // Phase C + D: 프로필 모달 (레벨/칭호/아바타/연속출석/퀘스트/오답은행)
 async function openProfileModal() {
   const m = document.getElementById('profile-modal');
@@ -483,7 +488,30 @@ async function openProfileModal() {
       <div style="font-size:.76rem;color:var(--txt2);margin-top:2px">보상: +${q.reward.exp} EXP${q.reward.badge?' · 🏅 ' + q.reward.badge:''}</div>
     </div>`;
   }).join('') || '<div class="empty">진행 중인 퀘스트 없음</div>';
-  const wrongCount = (p.wrongBank || []).length;
+  const bank = p.wrongBank || [];
+  const wrongCount = bank.length;
+  // 최근 오답 10개 — 문제 / 내 답 / 정답
+  const wrongList = bank.slice(-10).reverse().map(w => {
+    const q = w.q || {};
+    let qTxt = '?', correct = '-';
+    if (q.gameMode === 1) { qTxt = q.num; correct = (q.count !== undefined ? q.count + '개' : '-'); }
+    else if (q.gameMode === 2) { qTxt = q.num; correct = (q.count !== undefined ? q.count + '개' : '-'); }
+    else if (q.gameMode === 3 && q.meas) { qTxt = `측정값 읽기 (${q.meas.unit})`; correct = `${q.meas.dv} ${q.meas.unit} · ${q.meas.sf}개`; }
+    else if (q.gameMode === 4) { qTxt = q.display; correct = q.answer || '-'; }
+    let mine = '—';
+    if (w.timeout) mine = '⏰ 시간 초과';
+    else if (w.submitted) {
+      const sb = w.submitted;
+      if (sb.count !== undefined) mine = sb.count + '개';
+      else if (sb.result !== undefined) mine = sb.result || '—';
+      else if (sb.meas !== undefined) mine = `${sb.meas||'—'} · ${sb.sf||'—'}개`;
+      else if (Array.isArray(sb.selected)) mine = `${sb.selected.length}개 선택`;
+    }
+    return `<div style="display:flex;gap:8px;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--bg3);font-size:.84rem">
+      <span style="font-weight:700">${escHtml(String(qTxt))}</span>
+      <span style="color:var(--txt2)">내 답 ${escHtml(String(mine))} · 정답 <b style="color:var(--sec)">${escHtml(String(correct))}</b></span>
+    </div>`;
+  }).join('');
   const achBadges = (p.achievements || []).map(a => `<span class="badge acc">🏅 ${a}</span>`).join(' ') || '<span style="color:var(--txt2)">아직 없음</span>';
 
   document.getElementById('profile-body').innerHTML = `
@@ -499,8 +527,17 @@ async function openProfileModal() {
       <div><label style="font-size:.82rem;color:var(--txt2)">🏷 칭호 선택</label>
         <select id="profile-title" onchange="saveProfileField('title', this.value)" style="width:100%;margin-top:4px">${titleOpts}</select></div>
       <div><label style="font-size:.82rem;color:var(--txt2)">오답 은행</label>
-        <div style="margin-top:4px;padding:9px 14px;background:var(--bg);border-radius:var(--r);border:1px solid var(--bg3)">📝 ${wrongCount}문제 <button class="btn btn-acc btn-sm" style="margin-left:8px" onclick="startRevise()" ${wrongCount<1?'disabled':''}>실수 챌린지 →</button></div></div>
+        <div style="margin-top:4px;padding:9px 14px;background:var(--bg);border-radius:var(--r);border:1px solid var(--bg3);display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+          <span>📝 ${wrongCount}문제</span>
+          <select id="revise-count" style="padding:5px 8px;font-size:.85rem" ${wrongCount<1?'disabled':''}>
+            <option value="5">5문제</option>
+            <option value="10" selected>10문제</option>
+            <option value="20">20문제</option>
+          </select>
+          <button class="btn btn-acc btn-sm" onclick="startRevise()" ${wrongCount<1?'disabled':''}>실수 챌린지 →</button>
+        </div></div>
     </div>
+    ${wrongCount ? `<h4 style="margin:12px 0 6px">📝 최근 오답 (최대 10개)</h4><div style="background:var(--bg);border-radius:var(--r);padding:6px 14px">${wrongList}</div>` : ''}
     <h4 style="margin:12px 0 6px">🎭 아바타 (클릭해서 선택)</h4>
     <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px">${avatarChips}</div>
     <h4 style="margin:12px 0 6px;color:var(--txt2)">🔒 해금 가능</h4>
@@ -536,12 +573,16 @@ async function loadMyLabel() {
   if (btn) btn.innerHTML = `${p.avatar || '🙂'} Lv.${p.level}`;
   document.getElementById('me-label').textContent = `${p.avatar||'🙂'} ${name} (${sid}) · Lv.${p.level}`;
 }
+// 실수 챌린지 — 내가 틀렸던 문제로만 구성된 싱글 방을 만들어 바로 입장
 async function startRevise() {
-  // Phase F: 실수 챌린지 — wrongBank에서 5문제 뽑아 싱글 방 즉시 생성
-  const p = await api('/api/student/profile');
-  if (p.error || !p.wrongBank || !p.wrongBank.length) { alert('복습할 오답이 없어요'); return; }
-  // 간단 구현: 싱글 방을 만들고 서버에 revise 플래그 전달 — 서버가 오답 문제를 재구성하도록 후속 확장
-  alert('📝 오답 모음:\n\n' + p.wrongBank.slice(-10).map(w => `• ${(w.q && (w.q.num || w.q.display || JSON.stringify(w.q.meas || w.q).slice(0,30))) || '?'}`).join('\n') + '\n\n(자동 풀이 모드는 개발 중 — 일단 오답 목록 확인 가능)');
+  const count = parseInt(document.getElementById('revise-count')?.value) || 10;
+  const r = await api('/api/room/revise', { method: 'POST', body: { count } });
+  if (r.error) {
+    alert(r.error + (r.skipped ? `\n(오래된 형식이라 다시 낼 수 없는 오답 ${r.skipped}개는 제외됐어요)` : ''));
+    return;
+  }
+  if (r.skipped) alert(`📝 ${r.count}문제로 복습을 시작해요.\n(오래된 형식이라 다시 낼 수 없는 오답 ${r.skipped}개는 제외됐어요)`);
+  location.href = '/room.html?code=' + r.code;
 }
 
 async function refresh() {
