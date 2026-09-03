@@ -24,12 +24,99 @@ if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 // 비밀번호 해싱 (단방향 — sha256)
 function hashPw(pw) { return crypto.createHash('sha256').update(String(pw||'')).digest('hex'); }
 
+// ==================== 저장 스케줄러 (디바운스 + 원자적 교체) ====================
+// 호출할 때마다 전체 JSON을 동기 기록하면 30명이 한꺼번에 게임을 끝낼 때 이벤트 루프가 멈춘다.
+// 파일별로 "첫 변경 이후 최대 SAVE_DELAY_MS 안에 반드시 1회 기록"을 보장한다.
+//   → 타이머를 연장(trailing debounce)하지 않는다. 연장하면 수업 내내 저장이 미뤄질 수 있다.
+// 기록은 tmp 파일에 쓴 뒤 rename 으로 교체 — 도중에 죽어도 원본이 깨지지 않는다.
+const SAVE_DELAY_MS = 1500;
+const saveStates = new Map(); // 파일 경로 → { file, getData, timer, dirty, writing }
+
+function saveStateFor(file, getData) {
+  let st = saveStates.get(file);
+  if (!st) { st = { file, getData, timer: null, dirty: false, writing: false }; saveStates.set(file, st); }
+  st.getData = getData;   // getter 는 항상 클로저 — 값(재대입되는 변수)을 캡처하면 안 됨
+  return st;
+}
+
+function armSaveTimer(st) {
+  if (st.timer || st.writing) return;
+  st.timer = setTimeout(() => { st.timer = null; writeSaveState(st); }, SAVE_DELAY_MS);
+  if (typeof st.timer.unref === 'function') st.timer.unref();  // 종료 시 flush 가 있으므로 프로세스를 붙잡지 않음
+}
+
+function writeSaveState(st) {
+  if (st.writing || !st.dirty) return;
+  let json;
+  try {
+    json = JSON.stringify(st.getData(), null, 2);
+  } catch (e) {
+    st.dirty = false;   // 직렬화 자체가 실패하면 재시도해도 같은 결과 — 무한 루프 방지
+    console.error('[저장] 직렬화 실패:', st.file, e.message);
+    return;
+  }
+  st.dirty = false;
+  st.writing = true;
+  const tmp = st.file + '.tmp';
+  fs.writeFile(tmp, json, 'utf8', (err) => {
+    if (err) {
+      st.writing = false; st.dirty = true;
+      console.error('[저장] 임시파일 기록 실패:', tmp, err.message);
+      armSaveTimer(st);
+      return;
+    }
+    fs.rename(tmp, st.file, (err2) => {
+      st.writing = false;
+      if (err2) {
+        st.dirty = true;
+        console.error('[저장] 교체 실패:', st.file, err2.message);
+      }
+      if (st.dirty) armSaveTimer(st);   // 쓰는 중에 또 변경됐으면 재예약
+    });
+  });
+}
+
+// 저장 예약 — 기존 saveXxx() 들이 이 함수를 통해 동작한다 (호출부 시그니처는 그대로)
+function scheduleSave(file, getData) {
+  const st = saveStateFor(file, getData);
+  st.dirty = true;
+  armSaveTimer(st);
+}
+
+// 종료 시 남은 변경을 동기 기록 — 'exit' 핸들러에서는 동기 I/O 만 가능하다
+function flushAllSync() {
+  for (const st of saveStates.values()) {
+    if (st.timer) { clearTimeout(st.timer); st.timer = null; }
+    // writing=true 면 비동기 rename 이 아직 안 끝났을 수 있으므로 함께 동기 기록한다
+    if (!st.dirty && !st.writing) continue;
+    try {
+      fs.writeFileSync(st.file, JSON.stringify(st.getData(), null, 2));
+      st.dirty = false; st.writing = false;
+    } catch (e) {
+      console.error('[저장] 종료 시 기록 실패:', st.file, e.message);
+    }
+  }
+}
+
+let shuttingDown = false;
+function shutdownAndExit(sig) {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  try { flushAllSync(); } catch (e) { /* ignore */ }
+  console.log(`\n[종료] ${sig} — 저장 완료 후 종료합니다.`);
+  process.exit(0);
+}
+process.on('exit', flushAllSync);
+// SIGTERM 은 기본 동작이 즉시 종료라 핸들러가 없으면 'exit' 조차 돌지 않는다 (Render 재배포 시 SIGTERM)
+process.on('SIGINT', () => shutdownAndExit('SIGINT'));
+process.on('SIGTERM', () => shutdownAndExit('SIGTERM'));
+
 // 교실 정의: { [code]: { code, name, passwordHash, createdAt, config: { autoApproveRooms, sheetsUrl } } }
 let classrooms = {};
 if (fs.existsSync(CLASSROOMS_FILE)) {
   classrooms = JSON.parse(fs.readFileSync(CLASSROOMS_FILE, 'utf8'));
 }
-const saveClassrooms = () => fs.writeFileSync(CLASSROOMS_FILE, JSON.stringify(classrooms, null, 2));
+const saveClassrooms = () => scheduleSave(CLASSROOMS_FILE, () => classrooms);
 
 // 레거시 config.json → default 교실로 자동 이관 (첫 실행 시만)
 if (fs.existsSync(LEGACY_CONFIG_FILE) && !classrooms[DEFAULT_CLASSROOM]) {
@@ -127,9 +214,10 @@ function migrateClassroomShape() {
 }
 migrateClassroomShape();
 
-const saveLB = () => fs.writeFileSync(LB_FILE, JSON.stringify(leaderboards, null, 2));
-const saveStudentsDb = () => fs.writeFileSync(STUDENTS_FILE, JSON.stringify(studentsDb, null, 2));
-const saveAttendance = () => fs.writeFileSync(ATTEND_FILE, JSON.stringify(attendance, null, 2));
+// 저장은 전부 디바운스 — 이름/시그니처는 그대로 두어 호출부를 건드리지 않는다
+const saveLB = () => scheduleSave(LB_FILE, () => leaderboards);
+const saveStudentsDb = () => scheduleSave(STUDENTS_FILE, () => studentsDb);
+const saveAttendance = () => scheduleSave(ATTEND_FILE, () => attendance);
 
 // 교실별 접근 헬퍼 — 없으면 자동 생성
 function clsroom(code) { return classrooms[code]; }
@@ -2515,7 +2603,8 @@ setInterval(() => {
 
 // 클라우드 배포 시 0.0.0.0 에 바인딩 — 모든 인터페이스에서 수신
 const HOST = process.env.HOST || '0.0.0.0';
-server.listen(PORT, HOST, () => {
+// require('./server.js') 로 불러올 때(테스트)는 포트를 잡지 않는다. 직접 실행하면 기존과 동일.
+if (require.main === module) server.listen(PORT, HOST, () => {
   console.log(`\n🔬 유효숫자 마스터 서버 실행 중 (port ${PORT})`);
   console.log(`  학생 입장: http://localhost:${PORT}/`);
   console.log(`  교사 카운터: http://localhost:${PORT}/teacher.html`);
@@ -2527,3 +2616,9 @@ server.listen(PORT, HOST, () => {
   const cList = Object.values(classrooms).map(c => `    - ${c.code} (${c.name})`).join('\n');
   console.log(`  등록된 교실:\n${cList || '    (아직 없음)'}\n`);
 });
+
+// ==================== 테스트용 export ====================
+// node test.js 에서 순수 함수만 가져다 쓰기 위한 통로. 직접 실행 시 동작에는 영향이 없다.
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = { scheduleSave, flushAllSync };
+}
