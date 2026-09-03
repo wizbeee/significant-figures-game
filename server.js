@@ -550,7 +550,21 @@ function clsCfg(code) {
   const c = classrooms[code];
   if (!c) return null;
   if (!c.config) c.config = { autoApproveRooms: false, sheetsUrl: '' };
+  // 하위 호환 — 예전 데이터에는 rosterOnly 가 없다
+  if (c.config.rosterOnly === undefined) c.config.rosterOnly = false;
   return c.config;
+}
+
+// 이름 비교용 정규화 — NFC + 모든 공백류(일반/NBSP/전각/제로폭) 제거 + 소문자
+function normName(s) {
+  return String(s === null || s === undefined ? '' : s)
+    .normalize('NFC')
+    .replace(/[\s\u00A0\u1680\u2000-\u200D\u202F\u205F\u2060\u3000\uFEFF]/g, '')
+    .toLowerCase();
+}
+// 명단(preregistered) 학생 수
+function preregisteredCount(code) {
+  return Object.values(clsStudents(code)).filter(r => !!r.preregistered).length;
 }
 
 // 교실 코드 정규화 (2~20자, 한글/영문/숫자/하이픈/언더스코어)
@@ -1978,16 +1992,22 @@ async function handleApi(req, res, pathname, query) {
       saveClassrooms();
     }
     const studentId = String(body.studentId || '').trim().slice(0, 10);
-    const name = String(body.name || '').trim().slice(0, 12);
+    let name = String(body.name || '').trim().slice(0, 12);
     if (!studentId || !name) return sendJSON(res, { error: '학번과 이름을 입력하세요.' }, 400);
     if (!/^[0-9A-Za-z]+$/.test(studentId)) return sendJSON(res, { error: '학번은 숫자/영문만 가능' }, 400);
     if (hasBadWord(name)) return sendJSON(res, { error: '닉네임에 부적절한 단어가 포함되어 있어요.' }, 400);
     // Rate limit (학번+IP 기준)
     const ipKeyS = (req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'unknown').toString().split(',')[0].trim();
     if (!rateLimitOK('login:' + ipKeyS + ':' + studentId, 20, 60_000)) return sendJSON(res, { error: '잠시 후 다시 시도하세요' }, 429);
-    // 차단 확인 (교실별)
     const sdb = clsStudents(classroomCode);
     const rec = sdb[studentId];
+    // 명단 등록 학생만 입장 (rosterOnly) — 꺼져 있으면 기존 동작 그대로
+    if (clsCfg(classroomCode).rosterOnly) {
+      if (!rec || !rec.preregistered) return sendJSON(res, { error: '명단에 없는 학번이에요. 선생님께 확인하세요.' }, 403);
+      if (normName(rec.name) !== normName(name)) return sendJSON(res, { error: '학번과 이름이 명단과 달라요.' }, 403);
+      name = rec.name;  // 이름은 명단 정본을 사용 (임의 덮어쓰기 방지)
+    }
+    // 차단 확인 (교실별)
     if (rec && rec.blocked) return sendJSON(res, { error: '차단된 학생입니다. 교사에게 문의하세요.' }, 403);
     // 기존 세션이 있으면 토큰 갱신 (다중 탭 방지)
     const sKey = studentSessKey(classroomCode, studentId);
@@ -2577,6 +2597,43 @@ async function handleApi(req, res, pathname, query) {
     }
     return sendJSON(res, { ok: true, enabled: c.autoApproveRooms, approvedPending: approvedCount });
   }
+  // 명단 등록 학생만 입장 토글 조회/변경
+  if (method === 'GET' && pathname === '/api/teacher/classroom/roster-only') {
+    const cls = teacherClassroom(req);
+    if (!cls) return sendJSON(res, { error: '교사 권한' }, 401);
+    return sendJSON(res, { enabled: !!clsCfg(cls).rosterOnly, preregisteredCount: preregisteredCount(cls) });
+  }
+  if (method === 'POST' && pathname === '/api/teacher/classroom/roster-only') {
+    const cls = teacherClassroom(req);
+    if (!cls) return sendJSON(res, { error: '교사 권한' }, 401);
+    const body = await readBody(req);
+    const c = clsCfg(cls);
+    c.rosterOnly = !!body.enabled;
+    saveClassrooms();
+    audit(req, c.rosterOnly ? 'roster_only_on' : 'roster_only_off', { cls });
+    return sendJSON(res, { ok: true, enabled: c.rosterOnly, preregisteredCount: preregisteredCount(cls) });
+  }
+  // 기존 학생을 명단 학생으로 표시/해제 (CSV 없이 토글을 켰을 때 전원 차단되는 사고 방지)
+  if (method === 'POST' && pathname === '/api/teacher/students/preregister') {
+    const cls = teacherClassroom(req);
+    if (!cls) return sendJSON(res, { error: '교사 권한' }, 401);
+    const body = await readBody(req);
+    const value = !!body.value;
+    const sdb = clsStudents(cls);
+    let targets;
+    if (body.all === true) targets = Object.keys(sdb);
+    else if (Array.isArray(body.studentIds)) targets = body.studentIds.map(String);
+    else return sendJSON(res, { error: 'studentIds 또는 all 필요' }, 400);
+    let count = 0;
+    for (const sid of targets) {
+      const rec = sdb[sid];
+      if (!rec) continue;
+      rec.preregistered = value;
+      count++;
+    }
+    saveStudentsDb();
+    return sendJSON(res, { ok: true, count, preregisteredCount: preregisteredCount(cls) });
+  }
   if (method === 'GET' && pathname === '/api/teacher/overview') {
     const cls = teacherClassroom(req);
     if (!cls) return sendJSON(res, { error: '교사 권한' }, 401);
@@ -2604,6 +2661,8 @@ async function handleApi(req, res, pathname, query) {
     return sendJSON(res, {
       classroomCode: cls, classroomName: classrooms[cls].name,
       students: studentList, rooms: roomList,
+      rosterOnly: !!clsCfg(cls).rosterOnly,
+      preregisteredCount: preregisteredCount(cls),
       leaderboards: {
         single: myCount('single'),
         multi: myCount('multi'),
@@ -3024,11 +3083,12 @@ async function handleApi(req, res, pathname, query) {
       const sid = sanitizeStr(cols[sidIdx], 10);
       const name = sanitizeStr(cols[nameIdx], 12);
       if (!sid || !name || !/^[0-9A-Za-z]+$/.test(sid) || hasBadWord(name)) { skipped++; continue; }
-      if (sdb[sid]) { sdb[sid].name = name; updated++; }
-      else { sdb[sid] = { studentId: sid, name, joinedAt: Date.now(), stats: emptyStats(), blocked: false }; added++; }
+      // CSV 로 등록한 학생은 명단 학생(preregistered) 으로 표시 — 기존 학생도 갱신
+      if (sdb[sid]) { sdb[sid].name = name; sdb[sid].preregistered = true; updated++; }
+      else { sdb[sid] = { studentId: sid, name, joinedAt: Date.now(), stats: emptyStats(), blocked: false, preregistered: true }; added++; }
     }
     saveStudentsDb();
-    return sendJSON(res, { ok: true, added, updated, skipped });
+    return sendJSON(res, { ok: true, added, updated, skipped, preregisteredCount: preregisteredCount(cls) });
   }
 
   // ---------- 학생 일괄 차단/해제/삭제 ----------
