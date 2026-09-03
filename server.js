@@ -1911,6 +1911,22 @@ async function handleApi(req, res, pathname, query) {
     return sendJSON(res, view);
   }
 
+  // ---------- 종료 후 오답 해설 재열람 ----------
+  // 이번 판에서 내가 틀린 문제만 돌려준다. 문제 객체는 이미 정답이 공개된 뷰(wrongHistory)라
+  // 서버에서 추가로 계산할 것이 없다. 멀티는 본인이 done 일 때만 — 아직 안 푼 문제가 새지 않도록.
+  if (method === 'GET' && pathname === '/api/room/review') {
+    const s = authStudent(req);
+    if (!s) return sendJSON(res, { error: '로그인 필요' }, 401);
+    const room = rooms.get(String(query.code || ''));
+    if (!room) return sendJSON(res, { error: '방 없음' }, 404);
+    const p = Object.values(room.players).find(x => x.studentId === s.studentId);
+    if (!p) return sendJSON(res, { error: '참여자 아님' }, 400);
+    const done = room.phase === 'results' || (room.type === 'multi' && p.pPhase === 'done');
+    if (!done) return sendJSON(res, { error: '게임이 끝난 뒤에 볼 수 있어요.' }, 400);
+    const total = room.type === 'multi' ? (p.correct + p.wrong) : room.questions.length;
+    return sendJSON(res, { items: p.wrongHistory || [], total, correct: p.correct || 0 });
+  }
+
   // ---------- 점수판 (글로벌) ----------
   // GET: 전체 교실의 기록을 모두 보여줌 — 누구나 조회 가능. classroomCode 쿼리로 필터 가능.
   if (method === 'GET' && pathname === '/api/leaderboard') {

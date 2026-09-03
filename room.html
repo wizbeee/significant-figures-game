@@ -108,7 +108,7 @@
 
 <script src="common.js"></script>
 <script>
-const S = { code: null, state: null, pollTimer: null, submittedQIdx: -1, me: null, lastSig: null, lastPhase: null, guideSeen: false, hints: [], hintStage: 0 };
+const S = { code: null, state: null, pollTimer: null, submittedQIdx: -1, me: null, lastSig: null, lastPhase: null, guideSeen: false, hints: [], hintStage: 0, reviewHtml: '' };
 const HINT_MAX = 3;
 const params = new URLSearchParams(location.search);
 S.code = params.get('code');
@@ -642,15 +642,10 @@ function colorDigsHtml(num) {
   }).join('') + '</div>';
 }
 
-function renderReveal(phaseChanged) {
-  const s = S.state, q = s.question;
-  const me = myPlayer();
-  const myAns = me?.lastAnswer;
-  const sig = 'r:' + s.qIndex + ':' + s.players.map(p=>p.studentId+':'+p.score+':'+(p.lastAnswer?.ok?'1':'0')).join(',');
-  if (!phaseChanged && sig === S.lastSig) return;
-  S.lastSig = sig;
-
-  // 내 답 vs 정답 + 설명
+// 정답 공개 화면과 종료 후 재열람이 공유하는 해설 생성기
+//   q     : 정답이 포함된 문제 뷰 (viewQuestion(q, false))
+//   myAns : { submitted, timeout, ok } — 없으면 '—'
+function buildExplanation(q, myAns) {
   let myShown = '—', correctShown = '', explanation = '';
   if (q.gameMode === 1) {
     correctShown = `${q.num} → ${q.count}개`;
@@ -679,6 +674,19 @@ function renderReveal(phaseChanged) {
     const tolerance = m.type === 'ruler' ? '±0.03 cm' : '±0.2';
     explanation = `📏 <b>${m.dv} ${m.unit}</b>가 정답입니다 (허용 오차 ${tolerance}). 유효숫자는 적은 모든 숫자를 세요 → <b class="tag sig">${m.sf}개</b>. 최소눈금보다 한 자리 더 어림해서 읽는 것이 핵심이에요.`;
   }
+  return { myShown, correctShown, explanation };
+}
+
+function renderReveal(phaseChanged) {
+  const s = S.state, q = s.question;
+  const me = myPlayer();
+  const myAns = me?.lastAnswer;
+  const sig = 'r:' + s.qIndex + ':' + s.players.map(p=>p.studentId+':'+p.score+':'+(p.lastAnswer?.ok?'1':'0')).join(',');
+  if (!phaseChanged && sig === S.lastSig) return;
+  S.lastSig = sig;
+
+  // 내 답 vs 정답 + 설명
+  const { myShown, correctShown, explanation } = buildExplanation(q, myAns);
 
   const verdict = myAns?.ok ? `<div class="fb ok" style="max-width:640px;margin:10px auto">✅ 정답! +${myAns.points}점${myAns.classBonus?` (+학급 보너스 ${myAns.classBonus})`:''}${me?.streak>=2?` · 🔥 콤보 x${me.streak}`:''}</div>`
     : myAns?.timeout ? `<div class="fb no" style="max-width:640px;margin:10px auto">⏰ 시간 초과</div>`
@@ -747,7 +755,9 @@ function renderWaiting(phaseChanged) {
         <h2 style="color:var(--ok);margin:0 0 10px">🎉 문제 풀이 완료!</h2>
         <p style="color:var(--txt2)">내 점수: <b style="color:var(--acc);font-size:1.3rem">${me?.score||0}점</b> · 정답 ${me?.correct||0}/${qc}</p>
         <p style="color:var(--txt2);margin-top:14px">남은 ${othersDoing}명이 마치면 결과가 발표됩니다. 잠시만 기다려 주세요!</p>
+        <div style="margin-top:14px">${reviewBtnHtml(me)}</div>
       </div>
+      <div id="review-area">${S.reviewHtml || ''}</div>
       <div class="live-board">
         ${s.players.slice().sort((a,b)=>b.score-a.score).map(p => {
           const done = (p.pPhase || 'done') === 'done';
@@ -790,12 +800,60 @@ function renderResults(phaseChanged) {
       <div style="margin-top:24px">
         <button class="btn btn-pri btn-lg" onclick="location.href='/'">🏠 로비로</button>
         <button class="btn btn-sec btn-lg" onclick="showMyStatsInline()">📊 내 전적 보기</button>
+        ${reviewBtnHtml(sorted.find(p => p.studentId === S.me.studentId), 'btn-lg')}
         <a class="btn btn-ghost btn-lg" href="/leaderboard.html">🏆 점수판 보기</a>
       </div>
+      <div id="review-area">${S.reviewHtml || ''}</div>
       <div id="inline-stats" style="margin-top:20px"></div>
     </div>
   `;
   clearInterval(S.pollTimer);
+}
+
+// ===== 종료 후 오답 해설 재열람 =====
+// 결과 화면은 폴링이 꺼져 있으므로, 버튼을 누를 때 별도로 fetch 한다.
+function reviewBtnHtml(me, sizeCls) {
+  const n = me?.wrong || 0;
+  if (!n) return '';
+  return `<button class="btn btn-acc ${sizeCls||'btn-sm'}" onclick="showReview()">📕 틀린 문제 다시 보기 (${n})</button>`;
+}
+async function showReview() {
+  const el = document.getElementById('review-area');
+  if (!el) return;
+  S.reviewHtml = '<div class="empty">불러오는 중...</div>';
+  el.innerHTML = S.reviewHtml;
+  const r = await api('/api/room/review?code=' + encodeURIComponent(S.code));
+  if (r.error) { S.reviewHtml = `<div class="empty">${r.error}</div>`; el.innerHTML = S.reviewHtml; return; }
+  const items = r.items || [];
+  if (!items.length) {
+    S.reviewHtml = '<div class="empty">🎉 틀린 문제가 없어요!</div>';
+    el.innerHTML = S.reviewHtml;
+    return;
+  }
+  const cards = items.map(item => {
+    const q = item.q;
+    const { myShown, correctShown, explanation } = buildExplanation(q, { submitted: item.submitted, timeout: item.timeout, ok: false });
+    const mine = item.timeout ? '⏰ 시간 초과' : myShown;
+    return `<div class="reveal-box" style="margin-top:12px;text-align:left">
+      <div style="color:var(--txt2);margin-bottom:8px;font-size:.9rem">${(item.qIndex ?? 0) + 1}번 문제</div>
+      <div class="reveal-grid">
+        <div class="cell no"><div class="lab">내 답</div><div class="val">${mine}</div></div>
+        <div class="cell ok"><div class="lab">정답</div><div class="val">${correctShown}</div></div>
+      </div>
+      <div class="explain-box">${explanation}</div>
+    </div>`;
+  }).join('');
+  S.reviewHtml = `<div style="max-width:720px;margin:18px auto 0;text-align:left">
+    <h3 style="text-align:center">📕 틀린 문제 다시 보기 (${items.length}/${r.total})</h3>
+    ${cards}
+    <div style="text-align:center;margin-top:14px"><button class="btn btn-ghost btn-sm" onclick="hideReview()">닫기</button></div>
+  </div>`;
+  el.innerHTML = S.reviewHtml;
+}
+function hideReview() {
+  S.reviewHtml = '';
+  const el = document.getElementById('review-area');
+  if (el) el.innerHTML = '';
 }
 
 async function showMyStatsInline() {
