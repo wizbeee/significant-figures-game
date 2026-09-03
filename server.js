@@ -889,6 +889,95 @@ function generateQuestions(gm, diff, n, addSubMode) {
   return qs;
 }
 
+// ==================== 단계형 힌트 (F9) ====================
+// 1단계 규칙 → 2단계 이 문제에 맞는 부분 단서 → 3단계 정답. 단계마다 HINT_COST 차감.
+const HINT_COST = 20;
+const HINT_MAX = 3;
+const HINT_RULE = '0이 아닌 숫자는 항상 유효해요. 앞쪽 0은 무효, 뒤쪽 0은 소수점이 있을 때만 유효합니다.';
+
+// 이 수에만 해당하는 단서를 조합한다 (정답 개수는 말하지 않는다)
+function numberClue(num) {
+  const s = String(num);
+  const a = analyze(s);
+  const nd = a.digs.filter(d => !d.pt);
+  const hasDot = s.includes('.');
+  let fNZ = -1, lNZ = -1;
+  for (let i = 0; i < nd.length; i++) if (nd[i].c !== '0') { if (fNZ < 0) fNZ = i; lNZ = i; }
+  const parts = [];
+  if (fNZ < 0) return '0만 있는 수예요. 자리를 나타내는 0은 유효숫자로 세지 않아요.';
+  if (fNZ > 0) parts.push(`앞의 0 ${fNZ}개는 세지 않아요`);
+  let mid = 0;
+  for (let i = fNZ + 1; i < lNZ; i++) if (nd[i].c === '0') mid++;
+  if (mid > 0) parts.push('숫자 사이의 0은 유효해요');
+  const trailing = nd.length - 1 - lNZ;
+  if (trailing > 0) {
+    parts.push(hasDot ? `소수점이 있으니 뒤의 0 ${trailing}개도 세요` : `소수점이 없으니 뒤의 0 ${trailing}개는 빼세요`);
+  }
+  if (parts.length === 0) return '0이 하나도 없으니 보이는 숫자를 그대로 세면 돼요.';
+  return parts.join(' · ') + '.';
+}
+// gm2 — 유효숫자가 몇 번째 자리부터 몇 번째 자리까지인지 (소수점은 세지 않고 왼쪽부터)
+function sigRangeClue(q) {
+  const digs = Array.isArray(q.digs) && q.digs.length ? q.digs : analyze(q.num).digs;
+  const nd = digs.filter(d => !d.pt);
+  let first = -1, last = -1;
+  for (let i = 0; i < nd.length; i++) if (nd[i].sig) { if (first < 0) first = i; last = i; }
+  if (first < 0) return '유효숫자로 셀 자리가 없어요.';
+  return `처음 유효숫자는 ${first + 1}번째 자리부터, 마지막은 ${last + 1}번째 자리까지예요. (소수점은 빼고 왼쪽부터 셉니다)`;
+}
+// gm3 — 최소눈금 단위로 내림·올림한 구간
+function measRangeClue(m) {
+  const step = m.type === 'ruler' ? 0.1 : 1;
+  const dp = m.type === 'ruler' ? 1 : 0;
+  const lo = (Math.floor(m.val / step) * step).toFixed(dp);
+  const hi = (Math.ceil(m.val / step) * step).toFixed(dp);
+  const scale = m.type === 'ruler' ? '최소눈금 0.1cm' : m.type === 'cylinder' ? '최소눈금 1mL' : '최소눈금 1°C';
+  const span = lo === hi ? `측정값은 눈금 ${lo} ${m.unit}에 거의 정확히 맞아요` : `측정값은 ${lo} ~ ${hi} ${m.unit} 사이예요`;
+  return `${scale} 기준으로 ${span}. 그 사이를 눈으로 어림해 한 자리를 더 적고, 적은 숫자를 모두 세면 유효숫자 개수예요.`;
+}
+// 모드별 3단계 힌트 — 정답은 3단계에서만 나온다
+function buildHint(q, stage) {
+  if (!q) return '';
+  const st = Math.max(1, Math.min(HINT_MAX, parseInt(stage) || 1));
+  if (q.gameMode === 1) {
+    if (q.scientific) {
+      if (st === 1) return '과학적 표기법이에요. ×10ⁿ 앞의 가수(앞부분)만 세면 돼요.';
+      if (st === 2) return '가수의 숫자 자릿수를 세어 보세요. 10의 거듭제곱은 크기만 나타내므로 세지 않아요.';
+      return `유효숫자 ${q.count}개예요.`;
+    }
+    if (st === 1) return HINT_RULE;
+    if (st === 2) return numberClue(q.num);
+    return `유효숫자 ${q.count}개예요.`;
+  }
+  if (q.gameMode === 2) {
+    if (st === 1) return HINT_RULE;
+    if (st === 2) return `유효숫자는 총 ${q.count}개예요.`;
+    return sigRangeClue(q);
+  }
+  if (q.gameMode === 3) {
+    if (st === 1) return '측정값은 최소눈금까지 정확히 읽고, 그 아래로 한 자리를 더 어림해서 읽어요.';
+    if (st === 2) return measRangeClue(q.meas);
+    return `측정값 ${q.meas.dv} ${q.meas.unit}, 유효숫자 ${q.meas.sf}개예요.`;
+  }
+  if (q.gameMode === 4) {
+    if (q.kind === 'plain') {
+      if (st === 1) return '덧셈·뺄셈의 결과는 소수점 아래 자릿수가 가장 적은 수에 맞춰 반올림해요.';
+      if (st === 2) {
+        // dpA/dpB 는 원본 문제에만 있다 (오답 복습으로 복원된 문제에는 없을 수 있음)
+        if (typeof q.dpA === 'number' && typeof q.dpB === 'number') {
+          return `앞의 수는 소수 ${q.dpA}자리, 뒤의 수는 소수 ${q.dpB}자리예요 → 답은 소수 ${q.dpResult}자리로 반올림합니다.`;
+        }
+        return `두 수의 소수 자릿수를 비교해 보세요 → 답은 소수 ${q.dpResult}자리로 반올림합니다.`;
+      }
+      return `정답은 ${q.answer}예요.`;
+    }
+    if (st === 1) return '과학적 표기법의 덧셈·뺄셈은 두 수의 지수를 먼저 같게 맞춘 뒤 가수끼리 계산해요.';
+    if (st === 2) return `두 수의 지수를 10^${q.targetExp} 에 맞춘 뒤, 가수는 소수 ${q.mantDP}자리까지 남기면 돼요.`;
+    return `정답은 ${q.answer}예요.`;
+  }
+  return '';
+}
+
 function judge(q, answer) {
   if (q.gameMode === 1) return parseInt(answer && answer.count) === q.count;
   if (q.gameMode === 2) {
@@ -1095,6 +1184,7 @@ function resetPlayersForRound(room) {
     p.score = 0; p.streak = 0; p.maxStreak = 0;
     p.correct = 0; p.wrong = 0;
     p.answered = false; p.lastAnswer = null;
+    p.hint = null;        // 단계형 힌트 상태 { qIdx, stage }
     p.hp = startHP; p.eliminated = false;
     p.wrongHistory = [];  // 오답 노트용
     p.badges = [];
@@ -1209,7 +1299,7 @@ function joinRoom(room, student) {
     score: 0, streak: 0, maxStreak: 0, correct: 0, wrong: 0,
     hp: useHP ? (room.config.hpStart || 3) : 0, eliminated: false,
     team: 0, wrongHistory: [], badges: [],
-    answered: false, lastAnswer: null, joinedAt: Date.now(),
+    answered: false, lastAnswer: null, hint: null, joinedAt: Date.now(),
   };
   room.players[id] = p;
   if (!room.ownerId) room.ownerId = student.studentId;
@@ -2167,7 +2257,7 @@ async function handleApi(req, res, pathname, query) {
     saveStudentsDb();
     return sendJSON(res, { ok: true, added, total: Object.keys(sdb).length });
   }
-  // 힌트 요청 (F9) — 점수 -20 차감, 간단한 힌트 문자열 반환
+  // 힌트 요청 (F9) — 단계형(규칙 → 부분 단서 → 정답). 단계마다 점수 -20 차감, 문제당 최대 3단계.
   if (method === 'POST' && pathname === '/api/hint') {
     const s = authStudent(req);
     if (!s) return sendJSON(res, { error: '로그인 필요' }, 401);
@@ -2180,7 +2270,16 @@ async function handleApi(req, res, pathname, query) {
     const isMulti = room.type === 'multi';
     const q = isMulti ? p.pQuestions[p.pIdx] : room.questions[room.qIndex];
     if (!q) return sendJSON(res, { error: '문제 없음' }, 400);
-    p.score = Math.max(0, p.score - 20);
+    // 멀티는 플레이어별 스트림 — 내 차례가 문제 풀이 중일 때만
+    if (isMulti && p.pPhase !== 'question') return sendJSON(res, { error: '지금은 힌트를 볼 수 없어요.' }, 400);
+    // 제출 후에는 차감되지 않도록 (비멀티)
+    if (!isMulti && p.answered) return sendJSON(res, { error: '이미 제출했어요.' }, 400);
+    // 문제가 바뀌면 단계 리셋 — 멀티는 개인 인덱스 기준
+    const curIdx = isMulti ? p.pIdx : room.qIndex;
+    if (!p.hint || p.hint.qIdx !== curIdx) p.hint = { qIdx: curIdx, stage: 0 };
+    if (p.hint.stage >= HINT_MAX) return sendJSON(res, { error: '이 문제의 힌트는 모두 봤어요.' }, 400);
+    p.hint.stage += 1;
+    p.score = Math.max(0, p.score - HINT_COST);
     // 누적 힌트 사용 기록
     const sdb = clsStudents(s.classroomCode);
     if (sdb[s.studentId]) {
@@ -2188,12 +2287,8 @@ async function handleApi(req, res, pathname, query) {
       sdb[s.studentId].profile.hintsUsed = (sdb[s.studentId].profile.hintsUsed || 0) + 1;
       saveStudentsDb();
     }
-    let hint = '';
-    if (q.gameMode === 1) hint = `유효숫자 개수는 ${q.count}개`;
-    else if (q.gameMode === 2) hint = `총 ${q.count}개 디지트가 유효숫자`;
-    else if (q.gameMode === 3) hint = `측정값 유효숫자: ${q.meas.sf}개`;
-    else if (q.gameMode === 4) hint = q.kind === 'plain' ? `답의 소수점 이하 자릿수: ${q.dpResult}` : `답의 지수: 10^${q.targetExp}, 가수 자릿수: ${q.mantDP}`;
-    return sendJSON(res, { ok: true, hint, newScore: p.score });
+    const hint = buildHint(q, p.hint.stage);
+    return sendJSON(res, { ok: true, hint, stage: p.hint.stage, maxStage: HINT_MAX, newScore: p.score });
   }
 
   // 교사 공지 브로드캐스트 — 전체 교실 또는 특정 방에 토스트 전달 (TTL 기반 메모리 저장)
@@ -2688,5 +2783,8 @@ if (require.main === module) server.listen(PORT, HOST, () => {
 // ==================== 테스트용 export ====================
 // node test.js 에서 순수 함수만 가져다 쓰기 위한 통로. 직접 실행 시 동작에는 영향이 없다.
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { scheduleSave, flushAllSync, normName, normCode };
+  module.exports = {
+    scheduleSave, flushAllSync, normName, normCode,
+    analyze, makeQuestion, viewQuestion, judge, buildHint, HINT_MAX,
+  };
 }
