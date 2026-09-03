@@ -1,7 +1,22 @@
 :root{
   --pri:#6366f1;--pri2:#4f46e5;--sec:#10b981;--acc:#f59e0b;--err:#ef4444;
   --bg:#0f172a;--bg2:#1e293b;--bg3:#334155;--txt:#f1f5f9;--txt2:#94a3b8;--r:12px;
+  --scale:1;
 }
+/* 라이트 테마 */
+body.theme-light{
+  --bg:#f8fafc;--bg2:#ffffff;--bg3:#e2e8f0;--txt:#0f172a;--txt2:#64748b;
+}
+/* 글꼴 크기 */
+body.font-sm{--scale:.92} body.font-md{--scale:1} body.font-lg{--scale:1.12}
+body{font-size:calc(16px * var(--scale))}
+/* 색약 모드 — 정답/오답 아이콘 보강 */
+body.cb-mode .fb.ok::before{content:'✔ '}
+body.cb-mode .fb.no::before{content:'✘ '}
+body.cb-mode .badge.ok::before{content:'✓ '}
+body.cb-mode .badge.no::before{content:'✗ '}
+body.cb-mode .dg.ok::after{content:' ✓'}
+body.cb-mode .dg.no::after{content:' ✗'}
 *{margin:0;padding:0;box-sizing:border-box}
 body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--txt);min-height:100vh}
 a{color:var(--pri);text-decoration:none}
@@ -72,3 +87,14 @@ tr:hover td{background:rgba(99,102,241,.05)}
 @keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-6px)}75%{transform:translateX(6px)}}
 @keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
 .fade-in{animation:fadeIn .25s}
+
+/* 공통 공지 토스트 (학생) */
+.notice-stack{position:fixed;top:70px;left:50%;transform:translateX(-50%);display:flex;flex-direction:column;gap:8px;z-index:9999;pointer-events:none;max-width:90vw;width:520px}
+.notice-toast{background:linear-gradient(135deg,#1e293b,#334155);border:2px solid var(--acc);border-radius:var(--r);padding:14px 18px;box-shadow:0 10px 40px rgba(0,0,0,.5);pointer-events:auto;animation:noticeIn .3s ease-out;font-size:1rem;color:var(--txt);display:flex;align-items:flex-start;gap:10px}
+.notice-toast .icon{font-size:1.3rem;flex-shrink:0}
+.notice-toast .body{flex:1;line-height:1.5}
+.notice-toast .body b{color:var(--acc);display:block;font-size:.78rem;margin-bottom:2px}
+.notice-toast .close{background:transparent;border:none;color:var(--txt2);cursor:pointer;padding:2px 8px;font-size:1.1rem}
+.notice-toast .close:hover{color:var(--txt)}
+@keyframes noticeIn{from{opacity:0;transform:translateY(-20px) scale(.95)}to{opacity:1;transform:translateY(0) scale(1)}}
+@keyframes noticeOut{to{opacity:0;transform:translateY(-10px) scale(.95)}}

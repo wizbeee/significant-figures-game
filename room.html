@@ -135,6 +135,8 @@ async function poll() {
     document.getElementById('app').innerHTML = `<div class="lobby-view"><h1>❌ ${r.error}</h1><button class="btn btn-pri" onclick="location.href='/'">로비로</button></div>`;
     return;
   }
+  // 교사 공지 토스트 처리
+  if (r.notices && typeof processNotices === 'function') processNotices(r.notices);
   const prevPhase = S.state?.phase, prevQ = S.state?.qIndex;
   S.state = r;
   if ((prevPhase === 'reveal' && r.phase === 'question') || (prevQ !== undefined && r.qIndex !== prevQ)) {
@@ -229,6 +231,39 @@ async function leaveRoom() {
   if (!confirm('방에서 나가시겠습니까?')) return;
   await api('/api/room/leave', { method: 'POST' });
   location.href = '/';
+}
+
+// Phase E — 키보드 1~9로 gameMode 1 답안 즉시 입력
+document.addEventListener('keydown', e => {
+  if (document.activeElement && ['INPUT','TEXTAREA','SELECT'].includes(document.activeElement.tagName)) {
+    if (document.activeElement.id === 'ans-count' && e.key >= '0' && e.key <= '9') return;
+    return;
+  }
+  const q = S.state?.question;
+  if (!q || S.state.phase !== 'question') return;
+  if (q.gameMode === 1 && /^[1-9]$/.test(e.key)) {
+    const inp = document.getElementById('ans-count');
+    if (inp && !inp.disabled) { inp.value = e.key; submitAns(); }
+  } else if (e.key === 'h' || e.key === 'H') {
+    if (!myPlayer()?.answered) requestHint();
+  } else if (e.key === 't' || e.key === 'T') {
+    speakQuestion();
+  }
+});
+// Phase F — TTS (U13) 문제 읽어주기
+function speakQuestion() {
+  if (!('speechSynthesis' in window)) return;
+  const q = S.state?.question;
+  if (!q) return;
+  let text = '';
+  if (q.gameMode === 1) text = `숫자 ${q.num}의 유효숫자 개수는?`;
+  else if (q.gameMode === 2) text = `숫자 ${q.num}에서 유효숫자를 모두 고르세요`;
+  else if (q.gameMode === 3) text = `측정값을 읽고 유효숫자 개수를 입력하세요`;
+  else if (q.gameMode === 4) text = `${q.display}를 계산하세요`;
+  const u = new SpeechSynthesisUtterance(text);
+  u.lang = 'ko-KR'; u.rate = 0.95;
+  speechSynthesis.cancel();
+  speechSynthesis.speak(u);
 }
 
 function renderLobby(phaseChanged) {
@@ -352,7 +387,9 @@ function renderQuestion(phaseChanged) {
       <div class="ans-row" style="justify-content:center">
         <input type="number" class="ans-inp" id="ans-count" min="1" max="20" placeholder="?" ${already?'disabled':'autofocus'}>
         <button class="btn btn-pri" onclick="submitAns()" ${already?'disabled':''}>제출</button>
+        <button class="btn btn-ghost btn-sm" onclick="requestHint()" ${already?'disabled':''} title="점수 -20">💡 힌트</button>
       </div>
+      <div id="hint-area" style="text-align:center;margin-top:8px;color:var(--acc);font-weight:700"></div>
     `;
   } else if (q.gameMode === 4) {
     const opLabel = q.op === '+' ? '덧셈' : '뺄셈';
@@ -448,10 +485,54 @@ function renderQuestion(phaseChanged) {
     }
     const sfInp = document.getElementById('ans-sf');
     if (sfInp) sfInp.onkeydown = e => { if (e.key === 'Enter') submitAns(); };
+    // 자동 저장된 답안 (U4) — 문제 번호 기준으로 저장·복원
+    const saveKey = `sigfig-ans/${S.code}/${s.qIndex}`;
+    try {
+      const saved = JSON.parse(sessionStorage.getItem(saveKey) || 'null');
+      if (saved) {
+        if (saved.count !== undefined && document.getElementById('ans-count')) document.getElementById('ans-count').value = saved.count;
+        if (saved.addsub !== undefined && document.getElementById('ans-addsub')) document.getElementById('ans-addsub').value = saved.addsub;
+        if (saved.meas !== undefined && document.getElementById('ans-meas')) document.getElementById('ans-meas').value = saved.meas;
+        if (saved.sf !== undefined && document.getElementById('ans-sf')) document.getElementById('ans-sf').value = saved.sf;
+        if (Array.isArray(saved.selected)) saved.selected.forEach(i => { const el = document.querySelector(`.dg[data-i="${i}"]`); if (el) el.classList.add('sel'); });
+      }
+    } catch (e) {}
+    const persist = () => {
+      const obj = {};
+      const c = document.getElementById('ans-count'); if (c) obj.count = c.value;
+      const a = document.getElementById('ans-addsub'); if (a) obj.addsub = a.value;
+      const m = document.getElementById('ans-meas'); if (m) obj.meas = m.value;
+      const sf = document.getElementById('ans-sf'); if (sf) obj.sf = sf.value;
+      const selected = Array.from(document.querySelectorAll('.dg.sel')).map(el => parseInt(el.dataset.i));
+      if (selected.length) obj.selected = selected;
+      try { sessionStorage.setItem(saveKey, JSON.stringify(obj)); } catch (e) {}
+    };
+    document.querySelectorAll('.ans-inp').forEach(el => el.addEventListener('input', persist));
+    document.querySelectorAll('.dg').forEach(el => el.addEventListener('click', persist));
   }
 }
 
 function togDig(el) { el.classList.toggle('sel'); }
+
+// Phase E — 힌트 요청 (F9)
+async function requestHint() {
+  if (S.submittedQIdx === S.state?.qIndex) return;
+  if (!confirm('💡 힌트를 보시겠습니까? 점수 -20점이 차감됩니다.')) return;
+  const r = await api('/api/hint', { method: 'POST', body: { code: S.code } });
+  if (r.error) { alert(r.error); return; }
+  const el = document.getElementById('hint-area');
+  if (el) el.textContent = '💡 ' + r.hint;
+  if (typeof gameBeep === 'function') gameBeep('hint');
+}
+
+// Phase E — 스포트라이트 모먼트 (F15): 10연속 / 1초 이내
+function showSpotlight(text, color) {
+  const el = document.createElement('div');
+  el.style.cssText = `position:fixed;top:40%;left:50%;transform:translate(-50%,-50%);background:linear-gradient(135deg,${color||'#f59e0b'},#ef4444);color:#fff;padding:24px 48px;font-size:2.4rem;font-weight:900;border-radius:var(--r);box-shadow:0 20px 60px rgba(0,0,0,.5);z-index:9999;animation:pulse .8s ease-in-out 2;pointer-events:none`;
+  el.textContent = text;
+  document.body.appendChild(el);
+  setTimeout(() => { el.style.transition = 'opacity .3s'; el.style.opacity = '0'; setTimeout(() => el.remove(), 300); }, 1700);
+}
 
 async function submitAns() {
   const s = S.state, q = s.question;
@@ -463,6 +544,15 @@ async function submitAns() {
   else if (q.gameMode === 4) answer.result = document.getElementById('ans-addsub').value;
   else { answer.meas = document.getElementById('ans-meas').value; answer.sf = document.getElementById('ans-sf').value; }
   const r = await api('/api/answer', { method: 'POST', body: { code: S.code, answer } });
+  // 효과음 + 스포트라이트 모먼트 (Phase E)
+  if (r && r.ok !== undefined) {
+    if (typeof gameBeep === 'function') gameBeep(r.ok ? 'ok' : 'no');
+    const pl = myPlayer();
+    if (r.ok && pl) {
+      if (pl.streak + 1 >= 10) showSpotlight('💎 LEGEND x' + (pl.streak + 1), '#a78bfa');
+      else if (pl.streak + 1 >= 5) showSpotlight('⚡ HYPER x' + (pl.streak + 1), '#f59e0b');
+    }
+  }
   if (r && r.ok && r.points) {
     const p = myPlayer();
     showScorePop(r.points, (p?.streak || 0) + 1);

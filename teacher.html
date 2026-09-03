@@ -39,6 +39,58 @@
 .type-pick{display:flex;gap:8px;margin-bottom:14px}
 .type-pick button{flex:1;padding:14px 8px;background:var(--bg);border:2px solid var(--bg3);color:var(--txt);border-radius:var(--r);cursor:pointer;font-weight:600;font-size:.9rem}
 .type-pick button.sel{border-color:var(--pri);background:rgba(99,102,241,.15)}
+
+/* 헤더 툴바 — 잠금 토글, 알림 설정, 공지 버튼 */
+.control-bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:14px;padding:10px 14px;background:var(--bg2);border:1px solid var(--bg3);border-radius:var(--r)}
+.control-bar .sep{width:1px;height:22px;background:var(--bg3);margin:0 4px}
+.control-bar label{display:inline-flex;align-items:center;gap:6px;font-size:.85rem;font-weight:600;color:var(--txt2);cursor:pointer;margin:0}
+.control-bar input[type="checkbox"]{width:16px;height:16px;cursor:pointer}
+.lock-active{background:rgba(239,68,68,.12);border-color:var(--err)}
+.lock-active .lock-label{color:var(--err)}
+
+/* 대기 방 일괄 작업 바 */
+.bulk-bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;padding:10px 12px;background:rgba(245,158,11,.08);border:1px dashed var(--acc);border-radius:var(--r);margin-bottom:12px}
+.bulk-bar .msg{color:var(--acc);font-weight:700;margin-right:auto}
+
+/* 방 카드 확장 */
+.room-card .wait-time{color:var(--err);font-size:.8rem;font-weight:700;margin-left:6px}
+.room-card.pending-long{border-color:var(--err);background:rgba(239,68,68,.08);animation:pulse-warn 2s ease-in-out infinite}
+@keyframes pulse-warn{0%,100%{box-shadow:0 0 0 0 rgba(239,68,68,0)}50%{box-shadow:0 0 0 6px rgba(239,68,68,.15)}}
+.room-card .expand-btn{background:transparent;color:var(--txt2);border:1px solid var(--bg3);padding:4px 10px;border-radius:8px;cursor:pointer;font-size:.8rem;font-weight:600}
+.room-card .expand-btn:hover{border-color:var(--pri);color:var(--pri)}
+.room-detail{margin-top:10px;padding-top:10px;border-top:1px dashed var(--bg3)}
+.room-detail table{font-size:.82rem}
+.room-detail th,.room-detail td{padding:5px 8px}
+.room-detail tr.low-acc td{background:rgba(239,68,68,.08)}
+.room-detail tr.eliminated td{opacity:.5;text-decoration:line-through}
+.room-detail .name-col{font-weight:700}
+.room-detail .score-col{font-weight:800;color:var(--sec)}
+
+/* 학생 필터 칩 */
+.filter-chips{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
+.filter-chips button{padding:5px 12px;background:var(--bg);border:1px solid var(--bg3);color:var(--txt2);border-radius:99px;cursor:pointer;font-size:.8rem;font-weight:600}
+.filter-chips button.active{background:var(--pri);border-color:var(--pri);color:#fff}
+
+/* 출석 요약 */
+.attendance-row{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px}
+.attendance-row .box{padding:12px;background:var(--bg);border:1px solid var(--bg3);border-radius:var(--r);text-align:center}
+.attendance-row .box.present{border-color:var(--sec)}
+.attendance-row .box.late{border-color:var(--acc)}
+.attendance-row .box.absent{border-color:var(--err)}
+.attendance-row .lbl{font-size:.78rem;color:var(--txt2);text-transform:uppercase;margin-bottom:4px}
+.attendance-row .val{font-size:1.6rem;font-weight:800}
+.attendance-row .box.present .val{color:var(--sec)}
+.attendance-row .box.late .val{color:var(--acc)}
+.attendance-row .box.absent .val{color:var(--err)}
+.attend-list{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px;font-size:.76rem;color:var(--txt2)}
+.attend-list span{padding:2px 7px;background:var(--bg2);border-radius:99px;border:1px solid var(--bg3)}
+
+/* 토스트 (공통) */
+.toast-stack{position:fixed;top:64px;right:14px;display:flex;flex-direction:column;gap:8px;z-index:2000;pointer-events:none;max-width:360px}
+.toast{background:var(--bg2);border:1px solid var(--bg3);border-left:4px solid var(--pri);padding:10px 14px;border-radius:8px;box-shadow:0 6px 20px rgba(0,0,0,.35);pointer-events:auto;animation:fadeIn .2s;font-size:.9rem}
+.toast.ok{border-left-color:var(--sec)}
+.toast.err{border-left-color:var(--err)}
+.toast.acc{border-left-color:var(--acc)}
 </style>
 </head>
 <body>
@@ -92,6 +144,16 @@
     <div id="create-modal" class="modal-back">
       <div class="modal">
         <h3>🆕 방 만들기</h3>
+        <!-- 프리셋 (C2) -->
+        <div style="display:flex;gap:8px;align-items:end;margin-bottom:12px;padding:8px 10px;background:var(--bg);border:1px dashed var(--bg3);border-radius:8px">
+          <div style="flex:1;min-width:0">
+            <label style="display:block;font-size:.78rem;color:var(--txt2);margin-bottom:4px;font-weight:600">⭐ 프리셋에서 불러오기</label>
+            <select id="m-preset" onchange="loadPresetValues()" style="width:100%">
+              <option value="">— 직접 설정 —</option>
+            </select>
+          </div>
+          <button type="button" class="btn btn-ghost btn-sm" onclick="deleteCurrentPreset()" title="선택한 프리셋 삭제">🗑</button>
+        </div>
         <div class="type-pick">
           <button type="button" data-type="single" onclick="pickType('single')">🎯 싱글<br><span style="font-size:.75rem;color:var(--txt2);font-weight:400">1명</span></button>
           <button type="button" data-type="multi" onclick="pickType('multi')">👥 멀티<br><span style="font-size:.75rem;color:var(--txt2);font-weight:400">2~35명</span></button>
@@ -100,10 +162,23 @@
         <div class="grid">
           <div>
             <label>게임 종류</label>
-            <select id="m-gm">
+            <select id="m-gm" onchange="onMGmChange()">
               <option value="1">🔢 개수 세기</option>
               <option value="2">🎯 유효숫자 찾기</option>
               <option value="3">📏 측정값 읽기</option>
+              <option value="4">➕ 유효숫자 덧셈/뺄셈</option>
+            </select>
+          </div>
+          <div id="m-addsub-wrap" style="display:none">
+            <label>덧셈/뺄셈 세부</label>
+            <select id="m-addsub">
+              <option value="mixed">🎲 모두 혼합</option>
+              <option value="plainOnly">🔢 일반 표기만</option>
+              <option value="sciOnly">🔬 과학적 표기만</option>
+              <option value="sameDP">📍 소수자릿수 같음</option>
+              <option value="diffDP">📍 소수자릿수 다름</option>
+              <option value="sameExp">🔬 지수 같음</option>
+              <option value="diffExp">🔬 지수 다름</option>
             </select>
           </div>
           <div>
@@ -115,9 +190,27 @@
               <option value="mixed">혼합</option>
             </select>
           </div>
-          <div>
+          <div id="m-single-mode-wrap" style="display:none">
+            <label>싱글 모드</label>
+            <select id="m-single-mode" onchange="onMSingleModeChange()">
+              <option value="count">🎯 문제 수 기반 (빨리 끝내기)</option>
+              <option value="timed">⏱ 제한시간 내 (많이 맞히기)</option>
+            </select>
+          </div>
+          <div id="m-qc-wrap">
             <label>문제 수 <span style="color:var(--txt2);font-weight:400">(1~100)</span></label>
             <input type="number" id="m-qc" min="1" max="100" value="10">
+          </div>
+          <div id="m-timelimit-wrap" style="display:none">
+            <label>제한시간</label>
+            <select id="m-timelimit">
+              <option value="30">30초</option>
+              <option value="60" selected>1분</option>
+              <option value="120">2분</option>
+              <option value="180">3분</option>
+              <option value="300">5분</option>
+              <option value="600">10분</option>
+            </select>
           </div>
           <div>
             <label>문제당 시간 <span style="color:var(--txt2);font-weight:400">(5~300초)</span></label>
@@ -127,6 +220,43 @@
             <label>문제간 시간 <span style="color:var(--txt2);font-weight:400">(1~30초)</span></label>
             <input type="number" id="m-rt" min="1" max="30" value="3">
           </div>
+          <div id="m-multi-mode-wrap" style="display:none">
+            <label>멀티 방식</label>
+            <select id="m-multi-mode" onchange="onMMultiModeChange()">
+              <option value="class">👥 학급 협동 (전원 콤보)</option>
+              <option value="team">🛡 조별 협동</option>
+              <option value="individual">👤 개인별 경쟁</option>
+            </select>
+          </div>
+          <div id="m-team-count-wrap" style="display:none">
+            <label>조 수</label>
+            <select id="m-team-count">
+              <option value="2">2조</option>
+              <option value="3">3조</option>
+              <option value="4" selected>4조</option>
+              <option value="5">5조</option>
+              <option value="6">6조</option>
+              <option value="8">8조</option>
+            </select>
+          </div>
+          <div id="m-battle-mode-wrap" style="display:none">
+            <label>대전 방식</label>
+            <select id="m-battle-mode" onchange="onMBattleModeChange()">
+              <option value="survival">❤️ 서바이벌 (HP)</option>
+              <option value="speed">⚡ 속도전 (선착순)</option>
+            </select>
+          </div>
+          <div id="m-hp-wrap" style="display:none">
+            <label>시작 HP</label>
+            <select id="m-hp">
+              <option value="1">❤ 1개 (원샷)</option>
+              <option value="2">❤❤ 2개</option>
+              <option value="3" selected>❤❤❤ 3개</option>
+              <option value="5">❤×5</option>
+              <option value="8">❤×8</option>
+              <option value="10">❤×10</option>
+            </select>
+          </div>
           <div id="m-cap-wrap">
             <label>정원 <span id="m-cap-range" style="color:var(--txt2);font-weight:400"></span></label>
             <input type="number" id="m-cap" min="2" max="35" value="10">
@@ -134,6 +264,13 @@
           <div class="full">
             <label>방 이름 (선택)</label>
             <input type="text" id="m-label" placeholder="예: 3반 1조" maxlength="30" value="교사 방">
+          </div>
+          <div class="full" style="padding-top:8px;border-top:1px dashed var(--bg3)">
+            <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
+              <input type="checkbox" id="m-save-preset" style="width:16px;height:16px;cursor:pointer">
+              <span>⭐ 이 설정을 프리셋으로 저장</span>
+            </label>
+            <input type="text" id="m-preset-name" placeholder="프리셋 이름 (예: 3반 덧셈 10문제)" maxlength="30" style="width:100%;margin-top:6px;display:none">
           </div>
         </div>
         <div id="m-err" class="err-msg"></div>
@@ -145,17 +282,60 @@
     </div>
 
     <div id="tab-dash">
+      <!-- 제어 바 — 잠금, 자동 승인, 알림, 공지 -->
+      <div class="control-bar" id="control-bar">
+        <label>
+          <input type="checkbox" id="lock-tog" onchange="toggleLock()">
+          <span class="lock-label" id="lock-label">🔒 교실 잠금</span>
+        </label>
+        <label>
+          <input type="checkbox" id="auto-approve-tog" onchange="toggleAutoApprove()">
+          <span id="auto-approve-label" style="color:var(--txt2)">🔁 자동 승인</span>
+        </label>
+        <span class="sep"></span>
+        <label title="승인 대기가 새로 생기면 데스크톱 알림을 표시합니다">
+          <input type="checkbox" id="notif-tog" onchange="toggleNotif()">
+          <span>🔔 데스크톱 알림</span>
+        </label>
+        <label title="승인 대기가 새로 생기면 짧은 비프음을 재생합니다">
+          <input type="checkbox" id="beep-tog" onchange="toggleBeep()">
+          <span>🔊 소리</span>
+        </label>
+        <span class="sep"></span>
+        <button class="btn btn-acc btn-sm" onclick="openBroadcast()">📢 공지 보내기</button>
+        <button class="btn btn-pri btn-sm" onclick="createRoomDialog()">+ 방 만들기</button>
+      </div>
+      <div id="auto-approve-hint" style="color:var(--txt2);font-size:.82rem;margin:-4px 0 10px;display:none">
+        ✅ <b style="color:var(--sec)">자동 승인 ON</b> — 학생이 만드는 모든 방이 즉시 승인됩니다.
+      </div>
+      <div id="lock-hint" style="color:var(--err);font-size:.82rem;margin:-4px 0 10px;display:none">
+        🔒 <b>교실 잠김</b> — 현재 접속한 학생은 유지되지만, <b>새 로그인/방 생성이 차단</b>됩니다.
+      </div>
+
+      <!-- 출석 요약 (B2) -->
+      <div class="attendance-row" id="attendance-row" style="display:none">
+        <div class="box present"><div class="lbl">🟢 출석 중</div><div class="val" id="atd-present">0</div><div class="attend-list" id="atd-present-list"></div></div>
+        <div class="box late"><div class="lbl">🟡 왔다 나감</div><div class="val" id="atd-late">0</div><div class="attend-list" id="atd-late-list"></div></div>
+        <div class="box absent"><div class="lbl">🔴 오늘 미접속</div><div class="val" id="atd-absent">0</div><div class="attend-list" id="atd-absent-list"></div></div>
+      </div>
+
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px">
+        <button class="btn btn-ghost btn-sm" onclick="openQRLogin()">📱 QR 로그인 표시</button>
+        <button class="btn btn-ghost btn-sm" onclick="openImportStudents()">📋 명단 CSV 업로드</button>
+        <button class="btn btn-ghost btn-sm" onclick="openSummary()">📊 오늘 수업 요약</button>
+        <button class="btn btn-ghost btn-sm" onclick="openMonthlyMVP()">🏆 이달의 MVP</button>
+        <button class="btn btn-ghost btn-sm" onclick="checkAnomaly()">🔍 이상 패턴 감지</button>
+        <button class="btn btn-ghost btn-sm" onclick="openSettings()">⚙️ 화면 설정</button>
+      </div>
+
       <div class="dash-grid">
         <div class="panel">
-          <h3>🚪 방 관리
-            <button class="btn btn-pri btn-sm" onclick="createRoomDialog()">+ 방 직접 만들기</button>
-            <label id="auto-approve-wrap" style="display:inline-flex;align-items:center;gap:6px;margin-left:10px;font-size:.88rem;font-weight:600;cursor:pointer">
-              <input type="checkbox" id="auto-approve-tog" onchange="toggleAutoApprove()" style="width:18px;height:18px;cursor:pointer">
-              <span id="auto-approve-label" style="color:var(--txt2)">🔁 자동 승인</span>
-            </label>
-          </h3>
-          <div id="auto-approve-hint" style="color:var(--txt2);font-size:.82rem;margin-bottom:10px;display:none">
-            ✅ <b style="color:var(--sec)">자동 승인 ON</b> — 학생이 만드는 모든 방이 즉시 승인됩니다.
+          <h3>🚪 방 관리</h3>
+          <!-- A1: 일괄 승인/거부 바 -->
+          <div class="bulk-bar" id="bulk-bar" style="display:none">
+            <span class="msg" id="bulk-msg">⏳ 승인 대기 0개</span>
+            <button class="btn btn-sec btn-sm" onclick="bulkApprove('approve')">✅ 모두 승인</button>
+            <button class="btn btn-err btn-sm" onclick="bulkApprove('reject')">🚫 모두 거절</button>
           </div>
           <div id="rooms-area"></div>
         </div>
@@ -166,13 +346,74 @@
       </div>
     </div>
 
+    <!-- 공지 보내기 모달 -->
+    <div id="broadcast-modal" class="modal-back">
+      <div class="modal">
+        <h3>📢 학생에게 공지 보내기</h3>
+        <div class="grid">
+          <div class="full">
+            <label>대상</label>
+            <select id="bc-target" onchange="onBcTargetChange()">
+              <option value="classroom">📣 교실 전체</option>
+              <option value="room">🚪 특정 방</option>
+            </select>
+          </div>
+          <div class="full" id="bc-room-wrap" style="display:none">
+            <label>방 선택</label>
+            <select id="bc-room"></select>
+          </div>
+          <div class="full">
+            <label>메시지 <span style="color:var(--txt2);font-weight:400">(최대 200자)</span></label>
+            <input type="text" id="bc-text" maxlength="200" placeholder="예: 5분 남았습니다 — 제출 서두르세요">
+          </div>
+          <div>
+            <label>표시 시간 (초)</label>
+            <select id="bc-ttl">
+              <option value="5000">5초</option>
+              <option value="10000" selected>10초</option>
+              <option value="20000">20초</option>
+              <option value="60000">1분</option>
+              <option value="180000">3분</option>
+            </select>
+          </div>
+          <div>
+            <label>빠른 선택</label>
+            <select id="bc-quick" onchange="onBcQuickPick()">
+              <option value="">—</option>
+              <option>시작합니다! 화면에 집중해주세요.</option>
+              <option>5분 남았습니다 — 제출 서두르세요.</option>
+              <option>제출을 마감합니다.</option>
+              <option>잠시 멈춰주세요. 안내사항이 있습니다.</option>
+              <option>수업 끝! 수고하셨습니다.</option>
+            </select>
+          </div>
+        </div>
+        <div id="bc-err" class="err-msg"></div>
+        <div class="actions">
+          <button class="btn btn-ghost" onclick="closeBroadcast()">취소</button>
+          <button class="btn btn-acc" onclick="sendBroadcast()">📢 전송</button>
+        </div>
+      </div>
+    </div>
+    <!-- 토스트 스택 -->
+    <div id="toast-stack" class="toast-stack"></div>
+
     <div id="tab-students" style="display:none">
       <div class="panel">
         <h3>👤 학생 명단 <button class="btn btn-ghost btn-sm" onclick="loadStudentsDb()">🔄 새로고침</button></h3>
-        <div class="filter-row" style="display:flex;gap:10px;margin-bottom:12px;flex-wrap:wrap">
+        <div class="filter-row" style="display:flex;gap:10px;margin-bottom:8px;flex-wrap:wrap">
           <input type="text" id="stu-search" placeholder="학번 또는 이름 검색" style="flex:1;min-width:200px" oninput="renderStudentsDb()">
           <button class="btn btn-sec btn-sm" onclick="downloadCsv('students')">📥 학생 명단 CSV</button>
           <button class="btn btn-sec btn-sm" onclick="downloadCsv('attendance')">📅 오늘 출결 CSV</button>
+        </div>
+        <!-- B1: 학생 필터 칩 -->
+        <div class="filter-chips" id="stu-chips">
+          <button data-f="all" class="active" onclick="setStuFilter('all')">전체</button>
+          <button data-f="online" onclick="setStuFilter('online')">🟢 접속중</button>
+          <button data-f="offline" onclick="setStuFilter('offline')">오프라인</button>
+          <button data-f="today" onclick="setStuFilter('today')">📅 오늘 접속</button>
+          <button data-f="blocked" onclick="setStuFilter('blocked')">🚫 차단</button>
+          <button data-f="noplay" onclick="setStuFilter('noplay')">🎮 무플레이</button>
         </div>
         <div id="students-db-area"></div>
       </div>
@@ -231,6 +472,12 @@
 <script src="common.js"></script>
 <script>
 let pollTimer = null;
+let expandedRooms = new Set();   // A4: 펼친 방 코드 보관
+let lastPendingCodes = new Set();
+let pendingInitialized = false;  // 최초 로드 시엔 기존 대기에 대해 알림 발화 X
+let roomsCache = [];             // 공지 모달 / 복제용
+let presetsCache = [];
+const BASE_TITLE = '🔬 교사 대시보드';
 
 function show(id) {
   document.getElementById('login').style.display = 'none';
@@ -249,6 +496,41 @@ async function teacherApi(path, opts = {}) {
   return r.json();
 }
 
+// ============ 토스트 / 알림 ============
+function toast(text, type = '') {
+  const stack = document.getElementById('toast-stack');
+  if (!stack) return;
+  const el = document.createElement('div');
+  el.className = 'toast ' + type;
+  el.textContent = text;
+  stack.appendChild(el);
+  setTimeout(() => { el.style.transition = 'opacity .3s'; el.style.opacity = '0'; setTimeout(() => el.remove(), 300); }, 3500);
+}
+function beep() {
+  try {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return;
+    const ctx = new AC();
+    const o = ctx.createOscillator(), g = ctx.createGain();
+    o.connect(g); g.connect(ctx.destination);
+    o.type = 'sine'; o.frequency.value = 880;
+    g.gain.setValueAtTime(0.001, ctx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.2, ctx.currentTime + 0.01);
+    g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.25);
+    o.start(); o.stop(ctx.currentTime + 0.3);
+  } catch (e) {}
+}
+async function requestNotifyPermission() {
+  if (!('Notification' in window)) return false;
+  if (Notification.permission === 'granted') return true;
+  if (Notification.permission === 'denied') return false;
+  try { const r = await Notification.requestPermission(); return r === 'granted'; } catch (e) { return false; }
+}
+function desktopNotify(title, body) {
+  if (!('Notification' in window) || Notification.permission !== 'granted') return;
+  try { new Notification(title, { body, icon: '/favicon.ico' }); } catch (e) {}
+}
+
 async function init() {
   const t = localStorage.getItem('sigfig-teacher-token');
   if (!t) { show('login'); return; }
@@ -257,8 +539,11 @@ async function init() {
   show('counter');
   const brandCls = document.getElementById('brand-cls');
   if (brandCls && ov.classroomCode) brandCls.textContent = `🏫 ${ov.classroomName || ov.classroomCode} (${ov.classroomCode})`;
+  // 저장된 알림 설정 복원
+  document.getElementById('notif-tog').checked = localStorage.getItem('sigfig-notif') === '1';
+  document.getElementById('beep-tog').checked = localStorage.getItem('sigfig-beep') !== '0';  // 기본 ON
   refresh(ov);
-  loadAutoApprove();
+  loadPresets();
   pollTimer = setInterval(() => refresh(), 1500);
 }
 
@@ -286,81 +571,249 @@ async function logout() {
   show('login');
 }
 
+function relTime(ts) {
+  if (!ts) return '';
+  const s = Math.floor((Date.now() - ts) / 1000);
+  if (s < 60) return s + '초';
+  const m = Math.floor(s/60), r = s % 60;
+  return m + '분' + (r ? ' ' + r + '초' : '');
+}
+function escapeHtml(s) { return String(s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
 async function refresh(ov) {
   if (!ov) ov = await teacherApi('/api/teacher/overview');
   if (ov.error) return;
   const rooms = ov.rooms || [], students = ov.students || [];
-  document.getElementById('st-students').textContent = students.filter(s => s.online).length;
+  roomsCache = rooms;
+
+  // 상단 카운터
+  const onlineCount = students.filter(s => s.online).length;
+  const pendingRooms = rooms.filter(r => !r.approved);
+  const pendingCount = pendingRooms.length;
+  const activeCount = rooms.filter(r => r.phase === 'question' || r.phase === 'reveal').length;
+  document.getElementById('st-students').textContent = onlineCount;
   document.getElementById('st-rooms').textContent = rooms.length;
-  document.getElementById('st-pending').textContent = rooms.filter(r => !r.approved).length;
-  document.getElementById('st-active').textContent = rooms.filter(r => r.phase === 'question' || r.phase === 'reveal').length;
+  document.getElementById('st-pending').textContent = pendingCount;
+  document.getElementById('st-active').textContent = activeCount;
+
+  // D1: 탭 타이틀 뱃지
+  document.title = (pendingCount > 0 ? `(${pendingCount}) ` : '') + BASE_TITLE;
+
+  // D2/D3: 새 대기 방 감지 → 알림·비프 (최초 로드에는 기존 대기 무시)
+  const currentCodes = new Set(pendingRooms.map(r => r.code));
+  if (pendingInitialized) {
+    const newlyPending = pendingRooms.filter(r => !lastPendingCodes.has(r.code));
+    if (newlyPending.length > 0) {
+      const notifOn = localStorage.getItem('sigfig-notif') === '1';
+      const beepOn = localStorage.getItem('sigfig-beep') !== '0';  // 기본 ON
+      for (const nr of newlyPending) {
+        const typeLbl = { single:'싱글', multi:'멀티', battle:'대전' }[nr.type] || '';
+        toast(`📥 새 승인 대기 — ${typeLbl} 방 (${nr.ownerName||'-'} · ${nr.playerCount}명)`, 'acc');
+        if (notifOn) desktopNotify('📥 새 승인 대기', `${typeLbl} 방 · ${nr.ownerName||'-'} · ${nr.playerCount}명`);
+      }
+      if (beepOn) beep();
+    }
+  }
+  lastPendingCodes = currentCodes;
+  pendingInitialized = true;
+
+  // 교실 설정 반영
+  if (ov.classroom) {
+    applyLockUI(!!ov.classroom.locked);
+    applyAutoApproveUI(!!ov.classroom.autoApprove);
+  }
+
+  // 대기 일괄 바
+  const bulkBar = document.getElementById('bulk-bar');
+  if (pendingCount > 0) {
+    bulkBar.style.display = 'flex';
+    document.getElementById('bulk-msg').textContent = `⏳ 승인 대기 ${pendingCount}개`;
+  } else {
+    bulkBar.style.display = 'none';
+  }
+
+  // 출석 패널 (B2)
+  const atd = ov.todayAttendance || { present:[], late:[], absent:[] };
+  const atdRow = document.getElementById('attendance-row');
+  if (atdRow) {
+    const total = (atd.present.length + atd.late.length + atd.absent.length);
+    atdRow.style.display = total > 0 ? 'grid' : 'none';
+    document.getElementById('atd-present').textContent = atd.present.length;
+    document.getElementById('atd-late').textContent = atd.late.length;
+    document.getElementById('atd-absent').textContent = atd.absent.length;
+    const fmtList = arr => arr.slice(0, 30).map(x => `<span>${escapeHtml(x.name)}</span>`).join('') + (arr.length>30?`<span>+${arr.length-30}</span>`:'');
+    document.getElementById('atd-present-list').innerHTML = fmtList(atd.present);
+    document.getElementById('atd-late-list').innerHTML = fmtList(atd.late);
+    document.getElementById('atd-absent-list').innerHTML = fmtList(atd.absent);
+  }
 
   const typeEmo = { single:'🎯', multi:'👥', battle:'⚔️' };
-  const gmLabel = { 1:'개수', 2:'찾기', 3:'측정' };
+  const gmLabel = { 1:'개수', 2:'찾기', 3:'측정', 4:'덧뺄' };
   const diffLabel = { easy:'쉬움', medium:'보통', hard:'어려움', mixed:'혼합' };
-  const phaseLabel = { lobby:'대기실', question:'문제 중', reveal:'정답 공개', results:'종료' };
+  const phaseLabel = { lobby:'대기실', question:'문제 중', reveal:'정답 공개', waiting:'대기', results:'종료' };
 
   document.getElementById('rooms-area').innerHTML = rooms.length === 0
     ? '<div class="empty">활성 방이 없어요</div>'
     : rooms.map(r => {
-      const pendCls = !r.approved ? 'pending' : (r.phase === 'question' || r.phase === 'reveal' ? 'active' : '');
+      const isActive = r.phase === 'question' || r.phase === 'reveal';
+      const waitMs = r.pendingSince ? (Date.now() - r.pendingSince) : 0;
+      const longWait = !r.approved && waitMs >= 120000;  // 2분 이상 경고
+      let pendCls = !r.approved ? 'pending' : (isActive ? 'active' : '');
+      if (longWait) pendCls += ' pending-long';
+      const expanded = expandedRooms.has(r.code);
+      const progress = r.phase !== 'lobby' && r.phase !== 'results' ? ` · 진행 ${Math.min((r.qIndex||0)+1, r.total||r.questionCount)}/${r.total||r.questionCount}` : '';
+      const waitBadge = !r.approved && waitMs > 0 ? `<span class="wait-time">⏱ 대기 ${relTime(r.pendingSince)}</span>` : '';
+
+      // 인라인 플레이어 테이블 (A4)
+      let detail = '';
+      if (expanded) {
+        if (!r.players.length) {
+          detail = `<div class="room-detail"><div class="empty" style="padding:12px">아직 참여자가 없어요</div></div>`;
+        } else {
+          const sortedPlayers = r.players.slice().sort((a,b) => b.score - a.score);
+          const rows = sortedPlayers.map(p => {
+            const tot = (p.correct||0) + (p.wrong||0);
+            const acc = tot > 0 ? Math.round(p.correct/tot*100) : 0;
+            const lowAcc = tot >= 3 && acc < 50;
+            const hpTxt = r.type === 'battle' ? (p.eliminated ? '💀' : '❤️'.repeat(p.hp||0)) : '';
+            const pIdxTxt = r.type === 'multi' && p.pIdx !== undefined ? `${p.pIdx+1}/${r.questionCount}` : '';
+            const cls = (p.eliminated ? 'eliminated' : '') + (lowAcc ? ' low-acc' : '');
+            return `<tr class="${cls}">
+              <td class="name-col">${escapeHtml(p.name)} <span style="color:var(--txt2);font-size:.75rem">${p.studentId}</span></td>
+              <td class="score-col">${p.score}</td>
+              <td>${p.correct||0}/${tot}${tot>0?` (${acc}%)`:''}</td>
+              <td>${p.maxStreak||0}</td>
+              ${r.type === 'battle' ? `<td>${hpTxt}</td>` : ''}
+              ${r.type === 'multi' ? `<td>${pIdxTxt}</td>` : ''}
+            </tr>`;
+          }).join('');
+          const extraHead = (r.type === 'battle' ? '<th>HP</th>' : '') + (r.type === 'multi' ? '<th>문제</th>' : '');
+          detail = `<div class="room-detail">
+            <table><thead><tr><th>이름</th><th>점수</th><th>정답</th><th>연속</th>${extraHead}</tr></thead><tbody>${rows}</tbody></table>
+          </div>`;
+        }
+      }
+
       return `<div class="room-card ${pendCls}">
         <div class="head">
           <div>
-            <b>${typeEmo[r.type]||''} ${r.label || '방 #' + r.code}</b>
+            <b>${typeEmo[r.type]||''} ${escapeHtml(r.label || '방 #' + r.code)}</b>
             <span class="badge pri">${r.code}</span>
             ${!r.approved ? '<span class="badge acc">⏳ 승인대기</span>' : ''}
-            ${r.phase !== 'lobby' ? `<span class="badge ok">${phaseLabel[r.phase]}</span>` : ''}
+            ${r.phase !== 'lobby' ? `<span class="badge ok">${phaseLabel[r.phase]||r.phase}</span>` : ''}
+            ${waitBadge}
           </div>
+          <button class="expand-btn" onclick="toggleRoomExpand('${r.code}')">${expanded?'접기 ▴':'펼치기 ▾'}</button>
         </div>
-        <div class="meta">${gmLabel[r.gameMode]} · ${diffLabel[r.difficulty]} · ${r.questionCount}문제 · 방장: ${r.ownerName||'-'} · ${r.playerCount}/${r.capacity}명 ${r.phase !== 'lobby' ? ` · 진행 ${r.qIndex+1}/${r.total}` : ''}</div>
-        ${r.players.length ? `<div class="players">참여자: ${r.players.map(p => `${p.name}(${p.score}점)`).join(', ')}</div>` : ''}
+        <div class="meta">${gmLabel[r.gameMode]} · ${diffLabel[r.difficulty]} · ${r.questionCount}문제 · ${r.questionTime||30}초/문 · 방장: ${escapeHtml(r.ownerName||'-')} · ${r.playerCount}/${r.capacity}명${progress}</div>
+        ${!expanded && r.players.length ? `<div class="players">참여자: ${r.players.slice().sort((a,b)=>b.score-a.score).map(p => `${escapeHtml(p.name)}(${p.score})`).join(', ')}</div>` : ''}
+        ${detail}
         <div class="btns">
           ${!r.approved ? `<button class="btn btn-sec btn-sm" onclick="approveRoom('${r.code}',true)">✅ 승인</button>` : ''}
           ${r.approved && r.phase === 'lobby' ? `<button class="btn btn-ghost btn-sm" onclick="approveRoom('${r.code}',false)">↩ 승인 취소</button>` : ''}
-          ${r.phase === 'question' || r.phase === 'reveal' ? `<button class="btn btn-err btn-sm" onclick="stopRoom('${r.code}')">⏹ 강제 종료</button>` : ''}
-          <button class="btn btn-err btn-sm" onclick="closeRoom('${r.code}')">🗑 방 삭제</button>
+          ${isActive ? `<button class="btn btn-err btn-sm" onclick="stopRoom('${r.code}')">⏹ 강제 종료</button>` : ''}
+          <button class="btn btn-ghost btn-sm" onclick="broadcastToRoom('${r.code}')">📢 방 공지</button>
+          <button class="btn btn-acc btn-sm" onclick="duplicateRoom('${r.code}')">📋 복제</button>
+          <button class="btn btn-err btn-sm" onclick="closeRoom('${r.code}')">🗑 삭제</button>
           <a class="btn btn-ghost btn-sm" href="/room.html?code=${r.code}&watch=1" target="_blank">👁 관전</a>
         </div>
       </div>`;
     }).join('');
 
+  // 접속 학생 패널 — 위치 배지 포함 (B3)
   document.getElementById('students-area').innerHTML = students.length === 0
     ? '<div class="empty">접속한 학생이 없어요</div>'
-    : students.map(s => `<div class="student-row">
-        <div><span class="dot ${s.online?'online':''}"></span><b>${s.name}</b> <span style="color:var(--txt2);font-size:.82rem">${s.studentId}</span> ${s.currentRoom ? `<span class="badge pri">방 ${s.currentRoom}</span>` : ''}</div>
-        <button class="btn btn-err btn-sm" onclick="kickStudent('${s.studentId}')">⛔ 강퇴</button>
-      </div>`).join('');
+    : students.map(s => {
+        let location;
+        if (s.currentRoom) {
+          const phaseTxt = { lobby:'대기실', question:'문제중', reveal:'공개', waiting:'대기', results:'종료' }[s.locationPhase] || '';
+          const qTxt = s.locationQ ? ` ${s.locationQ}` : '';
+          location = `<span class="badge pri">🚪 방 ${s.currentRoom}${phaseTxt?` · ${phaseTxt}${qTxt}`:''}</span>`;
+        } else {
+          location = `<span class="badge">로비</span>`;
+        }
+        return `<div class="student-row">
+          <div><span class="dot ${s.online?'online':''}"></span><b>${escapeHtml(s.name)}</b> <span style="color:var(--txt2);font-size:.82rem">${escapeHtml(s.studentId)}</span> ${location}</div>
+          <button class="btn btn-err btn-sm" onclick="kickStudent('${s.studentId}')">⛔ 강퇴</button>
+        </div>`;
+      }).join('');
 }
 
-async function loadAutoApprove() {
-  const r = await teacherApi('/api/teacher/auto-approve');
-  if (r && r.enabled !== undefined) applyAutoApproveUI(r.enabled);
+function toggleRoomExpand(code) {
+  if (expandedRooms.has(code)) expandedRooms.delete(code); else expandedRooms.add(code);
+  refresh();
 }
+
 function applyAutoApproveUI(enabled) {
   const t = document.getElementById('auto-approve-tog');
   const l = document.getElementById('auto-approve-label');
   const h = document.getElementById('auto-approve-hint');
   if (t) t.checked = !!enabled;
-  if (l) { l.textContent = enabled ? '🔁 자동 승인 ON' : '🔁 자동 승인 OFF'; l.style.color = enabled ? 'var(--sec)' : 'var(--txt2)'; }
+  if (l) { l.textContent = enabled ? '🔁 자동 승인 ON' : '🔁 자동 승인'; l.style.color = enabled ? 'var(--sec)' : 'var(--txt2)'; }
   if (h) h.style.display = enabled ? 'block' : 'none';
 }
 async function toggleAutoApprove() {
   const enabled = document.getElementById('auto-approve-tog').checked;
   const r = await teacherApi('/api/teacher/auto-approve', { method: 'POST', body: { enabled } });
-  if (r.error) { alert(r.error); document.getElementById('auto-approve-tog').checked = !enabled; return; }
+  if (r.error) { toast(r.error, 'err'); document.getElementById('auto-approve-tog').checked = !enabled; return; }
   applyAutoApproveUI(r.enabled);
-  if (r.approvedPending > 0) {
-    // 작은 토스트 대신 간단한 상태 메시지
-    const h = document.getElementById('auto-approve-hint');
-    if (h) h.innerHTML = `✅ <b style="color:var(--sec)">자동 승인 ON</b> — 대기 중이던 ${r.approvedPending}개 방을 일괄 승인했습니다.`;
+  if (r.approvedPending > 0) toast(`대기 중이던 ${r.approvedPending}개 방을 일괄 승인했습니다.`, 'ok');
+  refresh();
+}
+
+// C1: 교실 잠금
+function applyLockUI(locked) {
+  const t = document.getElementById('lock-tog');
+  const h = document.getElementById('lock-hint');
+  const bar = document.getElementById('control-bar');
+  if (t) t.checked = !!locked;
+  if (h) h.style.display = locked ? 'block' : 'none';
+  if (bar) bar.classList.toggle('lock-active', !!locked);
+}
+async function toggleLock() {
+  const locked = document.getElementById('lock-tog').checked;
+  if (locked && !confirm('🔒 교실을 잠그시겠습니까?\n\n이미 접속한 학생 세션은 유지되지만, 신규 로그인·방 생성은 차단됩니다.')) {
+    document.getElementById('lock-tog').checked = false; return;
   }
+  const r = await teacherApi('/api/teacher/classroom/lock', { method: 'POST', body: { locked } });
+  if (r.error) { toast(r.error, 'err'); document.getElementById('lock-tog').checked = !locked; return; }
+  applyLockUI(r.locked);
+  toast(r.locked ? '🔒 교실을 잠갔습니다' : '🔓 교실 잠금을 해제했습니다', r.locked ? 'acc' : 'ok');
+}
+
+// D2/D3: 알림 설정
+async function toggleNotif() {
+  const on = document.getElementById('notif-tog').checked;
+  if (on) {
+    const ok = await requestNotifyPermission();
+    if (!ok) {
+      document.getElementById('notif-tog').checked = false;
+      toast('브라우저 알림 권한이 거부되었습니다. 브라우저 설정에서 허용해주세요.', 'err');
+      return;
+    }
+  }
+  localStorage.setItem('sigfig-notif', on ? '1' : '0');
+  toast(on ? '🔔 데스크톱 알림 ON' : '알림 OFF', on ? 'ok' : '');
+}
+function toggleBeep() {
+  const on = document.getElementById('beep-tog').checked;
+  localStorage.setItem('sigfig-beep', on ? '1' : '0');
+  if (on) beep();
+}
+
+// A1: 일괄 승인/거부
+async function bulkApprove(action) {
+  const label = action === 'approve' ? '모두 승인' : '모두 거절(대기 방 삭제)';
+  if (!confirm(`${label}하시겠습니까?`)) return;
+  const r = await teacherApi('/api/teacher/room/approve-bulk', { method: 'POST', body: { action } });
+  if (r.error) { toast(r.error, 'err'); return; }
+  toast(`일괄 ${action === 'approve' ? '승인' : '거절'}: ${r.affected}개`, 'ok');
   refresh();
 }
 
 async function approveRoom(code, approved) {
   const r = await teacherApi('/api/teacher/room/approve', { method: 'POST', body: { code, approved } });
-  if (r.error) alert(r.error);
+  if (r.error) toast(r.error, 'err');
   refresh();
 }
 async function stopRoom(code) {
@@ -379,6 +832,20 @@ async function kickStudent(studentId) {
   refresh();
 }
 
+// C3: 방 복제 — 선택한 방의 config로 즉시 새 방 생성
+async function duplicateRoom(code) {
+  const r = roomsCache.find(x => x.code === code);
+  if (!r) return;
+  if (!confirm(`이 방의 설정으로 새 방을 만드시겠습니까?\n(${r.label || '방 #' + r.code} · ${r.playerCount}/${r.capacity}명)`)) return;
+  const config = { ...(r.fullConfig || {}) };
+  const newLabel = (r.label || '방') + ' (복제)';
+  config.label = newLabel.slice(0, 30);
+  const resp = await teacherApi('/api/room', { method: 'POST', body: { type: r.type, config } });
+  if (resp.error) { toast(resp.error, 'err'); return; }
+  toast(`📋 새 방 ${resp.code} 생성됨`, 'ok');
+  refresh();
+}
+
 async function changePassword() {
   const pw = prompt('새 비밀번호 (4자 이상):');
   if (!pw || pw.length < 4) return;
@@ -387,10 +854,108 @@ async function changePassword() {
   else alert('비밀번호가 변경되었습니다.');
 }
 
+// C4: 공지 보내기
+function openBroadcast(preselectRoom) {
+  document.getElementById('bc-err').textContent = '';
+  document.getElementById('bc-text').value = '';
+  document.getElementById('bc-quick').value = '';
+  const roomSel = document.getElementById('bc-room');
+  roomSel.innerHTML = roomsCache.map(r => `<option value="${r.code}">${escapeHtml(r.label || '방 #' + r.code)} (${r.code} · ${r.playerCount}명)</option>`).join('')
+    || '<option value="">(활성 방 없음)</option>';
+  if (preselectRoom) {
+    document.getElementById('bc-target').value = 'room';
+    roomSel.value = preselectRoom;
+  } else {
+    document.getElementById('bc-target').value = 'classroom';
+  }
+  onBcTargetChange();
+  document.getElementById('broadcast-modal').classList.add('show');
+  setTimeout(() => document.getElementById('bc-text').focus(), 50);
+}
+function closeBroadcast() { document.getElementById('broadcast-modal').classList.remove('show'); }
+function onBcTargetChange() {
+  const t = document.getElementById('bc-target').value;
+  document.getElementById('bc-room-wrap').style.display = t === 'room' ? 'block' : 'none';
+}
+function onBcQuickPick() {
+  const q = document.getElementById('bc-quick').value;
+  if (q) document.getElementById('bc-text').value = q;
+}
+function broadcastToRoom(code) { openBroadcast(code); }
+async function sendBroadcast() {
+  const target = document.getElementById('bc-target').value;
+  const text = document.getElementById('bc-text').value.trim();
+  const ttlMs = parseInt(document.getElementById('bc-ttl').value) || 10000;
+  if (!text) { document.getElementById('bc-err').textContent = '공지 내용을 입력하세요'; return; }
+  const body = { target, text, ttlMs };
+  if (target === 'room') body.roomCode = document.getElementById('bc-room').value;
+  const r = await teacherApi('/api/teacher/broadcast', { method: 'POST', body });
+  if (r.error) { document.getElementById('bc-err').textContent = r.error; return; }
+  toast('📢 공지를 보냈습니다', 'ok');
+  closeBroadcast();
+}
+
+// C2: 프리셋
+async function loadPresets() {
+  const r = await teacherApi('/api/teacher/presets');
+  if (r.error) return;
+  presetsCache = r.presets || [];
+  const sel = document.getElementById('m-preset');
+  sel.innerHTML = '<option value="">— 직접 설정 —</option>' + presetsCache.map(p => `<option value="${p.id}">${escapeHtml(p.name)}</option>`).join('');
+}
+function loadPresetValues() {
+  const id = document.getElementById('m-preset').value;
+  if (!id) return;
+  const p = presetsCache.find(x => x.id === id);
+  if (!p) return;
+  pickType(p.type);
+  const c = p.config || {};
+  if (c.gameMode !== undefined) document.getElementById('m-gm').value = String(c.gameMode);
+  if (c.difficulty) document.getElementById('m-diff').value = c.difficulty;
+  if (c.questionCount) document.getElementById('m-qc').value = c.questionCount;
+  if (c.questionTime) document.getElementById('m-qt').value = c.questionTime;
+  if (c.revealTime) document.getElementById('m-rt').value = c.revealTime;
+  if (c.capacity) document.getElementById('m-cap').value = c.capacity;
+  if (c.label !== undefined) document.getElementById('m-label').value = c.label;
+  if (c.addSubMode) document.getElementById('m-addsub').value = c.addSubMode;
+  if (c.singleMode) document.getElementById('m-single-mode').value = c.singleMode;
+  if (c.timeLimit) document.getElementById('m-timelimit').value = String(c.timeLimit);
+  if (c.multiMode) document.getElementById('m-multi-mode').value = c.multiMode;
+  if (c.teamCount) document.getElementById('m-team-count').value = String(c.teamCount);
+  if (c.battleMode) document.getElementById('m-battle-mode').value = c.battleMode;
+  if (c.hpStart) document.getElementById('m-hp').value = String(c.hpStart);
+  // 조건부 필드 가시성 갱신
+  onMGmChange();
+  onMSingleModeChange();
+  onMMultiModeChange();
+  onMBattleModeChange();
+}
+async function deleteCurrentPreset() {
+  const id = document.getElementById('m-preset').value;
+  if (!id) { toast('삭제할 프리셋을 먼저 선택하세요', ''); return; }
+  const p = presetsCache.find(x => x.id === id);
+  if (!p) return;
+  if (!confirm(`프리셋 "${p.name}"을(를) 삭제하시겠습니까?`)) return;
+  const r = await teacherApi('/api/teacher/presets', { method: 'POST', body: { delete: true, id } });
+  if (r.error) { toast(r.error, 'err'); return; }
+  await loadPresets();
+  toast('프리셋을 삭제했습니다', 'ok');
+}
+
 let createType = 'multi';
 function createRoomDialog() {
   pickType('multi');
   document.getElementById('m-err').textContent = '';
+  document.getElementById('m-preset').value = '';
+  document.getElementById('m-save-preset').checked = false;
+  document.getElementById('m-preset-name').style.display = 'none';
+  document.getElementById('m-preset-name').value = '';
+  // gm/하위 모드 가시성 동기화
+  onMGmChange();
+  onMSingleModeChange();
+  onMMultiModeChange();
+  onMBattleModeChange();
+  loadPresets();
   document.getElementById('create-modal').classList.add('show');
 }
 function closeCreateModal() {
@@ -410,9 +975,38 @@ function pickType(type) {
     capRange.textContent = '(2~35명)';
   } else {
     capWrap.style.display = 'block';
-    capInput.min = 2; capInput.max = 6; capInput.value = 4;
-    capRange.textContent = '(2~6명)';
+    capInput.min = 2; capInput.max = 10; capInput.value = 6;
+    capRange.textContent = '(2~10명)';
   }
+  // 타입별 하위 옵션 토글
+  document.getElementById('m-single-mode-wrap').style.display = type === 'single' ? 'block' : 'none';
+  document.getElementById('m-multi-mode-wrap').style.display = type === 'multi' ? 'block' : 'none';
+  document.getElementById('m-battle-mode-wrap').style.display = type === 'battle' ? 'block' : 'none';
+  onMSingleModeChange();
+  onMMultiModeChange();
+  onMBattleModeChange();
+}
+function onMGmChange() {
+  const gm = document.getElementById('m-gm').value;
+  document.getElementById('m-addsub-wrap').style.display = gm === '4' ? 'block' : 'none';
+}
+function onMSingleModeChange() {
+  if (createType !== 'single') {
+    document.getElementById('m-qc-wrap').style.display = 'block';
+    document.getElementById('m-timelimit-wrap').style.display = 'none';
+    return;
+  }
+  const m = document.getElementById('m-single-mode').value;
+  document.getElementById('m-qc-wrap').style.display = m === 'count' ? 'block' : 'none';
+  document.getElementById('m-timelimit-wrap').style.display = m === 'timed' ? 'block' : 'none';
+}
+function onMMultiModeChange() {
+  const m = document.getElementById('m-multi-mode').value;
+  document.getElementById('m-team-count-wrap').style.display = (createType === 'multi' && m === 'team') ? 'block' : 'none';
+}
+function onMBattleModeChange() {
+  const m = document.getElementById('m-battle-mode').value;
+  document.getElementById('m-hp-wrap').style.display = (createType === 'battle' && m === 'survival') ? 'block' : 'none';
 }
 async function submitCreateRoom() {
   const qc = parseInt(document.getElementById('m-qc').value);
@@ -429,8 +1023,15 @@ async function submitCreateRoom() {
     revealTime: rt,
     capacity: parseInt(document.getElementById('m-cap').value) || 4,
     label: document.getElementById('m-label').value.trim(),
+    addSubMode: document.getElementById('m-addsub').value,
+    singleMode: document.getElementById('m-single-mode').value,
+    timeLimit: parseInt(document.getElementById('m-timelimit').value),
+    multiMode: document.getElementById('m-multi-mode').value,
+    teamCount: parseInt(document.getElementById('m-team-count').value),
+    battleMode: document.getElementById('m-battle-mode').value,
+    hpStart: parseInt(document.getElementById('m-hp').value),
   };
-  const max = createType === 'multi' ? 35 : (createType === 'battle' ? 6 : 1);
+  const max = createType === 'multi' ? 35 : (createType === 'battle' ? 10 : 1);
   const min = createType === 'single' ? 1 : 2;
   if (createType !== 'single' && (config.capacity < min || config.capacity > max)) {
     document.getElementById('m-err').textContent = `정원은 ${min}~${max}명 사이여야 합니다.`;
@@ -438,7 +1039,17 @@ async function submitCreateRoom() {
   }
   const r = await teacherApi('/api/room', { method: 'POST', body: { type: createType, config } });
   if (r.error) { document.getElementById('m-err').textContent = r.error; return; }
+  // 프리셋 저장 요청 시
+  if (document.getElementById('m-save-preset').checked) {
+    const pname = document.getElementById('m-preset-name').value.trim();
+    if (pname) {
+      const pr = await teacherApi('/api/teacher/presets', { method: 'POST', body: { name: pname, type: createType, config } });
+      if (pr.error) toast('프리셋 저장 실패: ' + pr.error, 'err');
+      else toast('⭐ 프리셋으로 저장됨', 'ok');
+    }
+  }
   closeCreateModal();
+  toast(`🆕 방 ${r.code} 만들기 완료`, 'ok');
   refresh();
 }
 
@@ -457,6 +1068,12 @@ function showTab(t) {
 
 // ============ 학생 마스터 DB ============
 let studentsDbCache = [];
+let currentStuFilter = 'all';
+function setStuFilter(f) {
+  currentStuFilter = f;
+  document.querySelectorAll('#stu-chips button').forEach(b => b.classList.toggle('active', b.dataset.f === f));
+  renderStudentsDb();
+}
 async function loadStudentsDb() {
   const r = await teacherApi('/api/teacher/students');
   if (r.error) return;
@@ -465,7 +1082,19 @@ async function loadStudentsDb() {
 }
 function renderStudentsDb() {
   const q = document.getElementById('stu-search').value.trim().toLowerCase();
-  const filtered = studentsDbCache.filter(s => !q || s.studentId.toLowerCase().includes(q) || s.name.toLowerCase().includes(q));
+  const todayStart = new Date(); todayStart.setHours(0,0,0,0);
+  const ts = todayStart.getTime();
+  const byFilter = studentsDbCache.filter(s => {
+    switch (currentStuFilter) {
+      case 'online': return !!s.online;
+      case 'offline': return !s.online;
+      case 'today': return (s.stats?.lastPlayedAt || 0) >= ts || !!s.online;
+      case 'blocked': return !!s.blocked;
+      case 'noplay': return (s.stats?.totalGames || 0) === 0;
+      default: return true;
+    }
+  });
+  const filtered = byFilter.filter(s => !q || s.studentId.toLowerCase().includes(q) || s.name.toLowerCase().includes(q));
   const el = document.getElementById('students-db-area');
   if (!filtered.length) { el.innerHTML = '<div class="empty">등록된 학생이 없어요</div>'; return; }
   el.innerHTML = `<div style="color:var(--txt2);font-size:.82rem;margin-bottom:8px">총 ${filtered.length}명 · 클릭하면 상세 전적</div>
@@ -659,6 +1288,146 @@ async function pushAllSheets() {
 }
 
 document.getElementById('in-pw').addEventListener('keydown', e => { if (e.key === 'Enter') login(); });
+
+// ============ Phase H — 교사 도구 ============
+// QR 로그인 표시 (U6) — Google Chart API로 즉석 QR
+function openQRLogin() {
+  const cls = localStorage.getItem('sigfig-teacher-classroom') || '';
+  const url = location.origin + '/?classroom=' + encodeURIComponent(cls);
+  const qrUrl = 'https://chart.googleapis.com/chart?chs=280x280&cht=qr&chl=' + encodeURIComponent(url);
+  showModalHtml('📱 학생 QR 로그인', `
+    <p style="color:var(--txt2);font-size:.9rem;margin-bottom:10px">학생이 카메라로 스캔하면 이 교실 코드로 접속 페이지가 열립니다.</p>
+    <div style="text-align:center"><img src="${qrUrl}" alt="QR" style="max-width:280px;border-radius:var(--r);background:#fff;padding:8px"></div>
+    <div style="text-align:center;margin-top:10px"><code style="background:var(--bg);padding:6px 10px;border-radius:6px;font-size:.88rem">${url}</code></div>
+  `);
+}
+// 명단 CSV 업로드 (U7) — 학번,이름 형식
+function openImportStudents() {
+  showModalHtml('📋 명단 CSV 업로드', `
+    <p style="color:var(--txt2);font-size:.9rem;margin-bottom:10px">CSV 형식: <code>학번,이름</code> (첫 줄 헤더 허용)</p>
+    <textarea id="csv-input" rows="10" style="width:100%;font-family:monospace;font-size:.9rem" placeholder="10101,홍길동
+10102,김철수
+10103,이영희"></textarea>
+    <div class="actions" style="margin-top:10px">
+      <button class="btn btn-ghost" onclick="closeGenericModal()">취소</button>
+      <button class="btn btn-pri" onclick="submitImportStudents()">✅ 업로드</button>
+    </div>
+  `);
+}
+async function submitImportStudents() {
+  const raw = document.getElementById('csv-input').value;
+  const lines = raw.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+  const rows = [];
+  for (const line of lines) {
+    const [sid, name] = line.split(',').map(s => s && s.trim());
+    if (!sid || !name) continue;
+    if (/^학번|studentId/i.test(sid)) continue;
+    rows.push({ studentId: sid, name });
+  }
+  if (!rows.length) { toast('유효한 데이터가 없습니다', 'err'); return; }
+  const r = await teacherApi('/api/teacher/students/import', { method: 'POST', body: { rows } });
+  if (r.error) { toast(r.error, 'err'); return; }
+  toast(`${r.added}명 추가 (총 ${r.total}명)`, 'ok');
+  closeGenericModal();
+  loadStudentsDb();
+}
+// 오늘 수업 요약 (U15)
+async function openSummary() {
+  const r = await teacherApi('/api/teacher/session/summary');
+  if (r.error) { toast(r.error, 'err'); return; }
+  const top = (r.topScorers || []).map((e,i) => `<tr><td>${i+1}</td><td>${escapeHtml(e.name)}</td><td>${e.score}</td><td>${e.correct}/${e.total}</td></tr>`).join('') || '<tr><td colspan="4" style="text-align:center;color:var(--txt2)">기록 없음</td></tr>';
+  showModalHtml('📊 오늘 수업 요약 — ' + r.date, `
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:14px">
+      <div class="stat"><div class="lbl">출석</div><div class="val">${r.attendance}</div></div>
+      <div class="stat"><div class="lbl">총 게임</div><div class="val">${r.games.total}</div></div>
+      <div class="stat"><div class="lbl">평균 점수</div><div class="val">${r.avgScore}</div></div>
+      <div class="stat"><div class="lbl">정답률</div><div class="val">${r.accuracy}%</div></div>
+    </div>
+    <div style="margin-bottom:10px;color:var(--txt2);font-size:.88rem">싱글 ${r.games.single} · 멀티 ${r.games.multi} · 대전 ${r.games.battle}</div>
+    <h4>🏆 오늘의 TOP 5</h4>
+    <table><thead><tr><th>#</th><th>이름</th><th>점수</th><th>정답</th></tr></thead><tbody>${top}</tbody></table>
+    <div class="actions" style="margin-top:10px"><button class="btn btn-acc" onclick="window.print()">🖨 인쇄/PDF</button><button class="btn btn-ghost" onclick="closeGenericModal()">닫기</button></div>
+  `);
+}
+// 이달의 MVP (F6)
+async function openMonthlyMVP() {
+  const r = await teacherApi('/api/teacher/monthly-mvp');
+  if (r.error) { toast(r.error, 'err'); return; }
+  const rows = (r.ranking || []).map((e,i) => {
+    const medal = ['🥇','🥈','🥉'][i] || (i+1);
+    return `<tr><td style="font-size:1.2rem">${medal}</td><td><b>${escapeHtml(e.name)}</b> <span style="color:var(--txt2);font-size:.8rem">${e.studentId}</span></td><td style="font-weight:800;color:var(--sec)">${e.score.toLocaleString()}</td><td>${e.games}게임</td></tr>`;
+  }).join('') || '<tr><td colspan="4" style="text-align:center;color:var(--txt2);padding:20px">이번 달 기록이 없어요</td></tr>';
+  showModalHtml('🏆 이달의 MVP — ' + r.month, `
+    <table><thead><tr><th>순위</th><th>이름</th><th>총점</th><th>게임수</th></tr></thead><tbody>${rows}</tbody></table>
+    <div class="actions" style="margin-top:10px"><button class="btn btn-ghost" onclick="closeGenericModal()">닫기</button></div>
+  `);
+}
+// 이상 패턴 감지 (U17)
+async function checkAnomaly() {
+  const r = await teacherApi('/api/teacher/anomaly');
+  if (r.error) { toast(r.error, 'err'); return; }
+  if (!r.flagged || !r.flagged.length) { toast('이상 패턴 없음 ✅', 'ok'); return; }
+  const rows = r.flagged.map(f => `<tr><td>${escapeHtml(f.name)} (${f.studentId})</td><td>${f.reason}</td><td>방 ${f.roomCode}</td></tr>`).join('');
+  showModalHtml('🔍 이상 패턴 감지', `
+    <p style="color:var(--err);font-weight:700;margin-bottom:10px">주의가 필요한 학생 ${r.flagged.length}명 감지됨</p>
+    <table><thead><tr><th>학생</th><th>사유</th><th>방</th></tr></thead><tbody>${rows}</tbody></table>
+    <div class="actions" style="margin-top:10px"><button class="btn btn-ghost" onclick="closeGenericModal()">닫기</button></div>
+  `);
+}
+// 공용 모달 헬퍼
+function showModalHtml(title, bodyHtml) {
+  let m = document.getElementById('generic-modal');
+  if (!m) {
+    m = document.createElement('div');
+    m.id = 'generic-modal';
+    m.className = 'modal-back';
+    m.innerHTML = `<div class="modal"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px"><h3 id="gm-title" style="margin:0"></h3><button class="btn btn-ghost btn-sm" onclick="closeGenericModal()">✖</button></div><div id="gm-body"></div></div>`;
+    document.body.appendChild(m);
+  }
+  m.querySelector('#gm-title').textContent = title;
+  m.querySelector('#gm-body').innerHTML = bodyHtml;
+  m.classList.add('show');
+}
+function closeGenericModal() { const m = document.getElementById('generic-modal'); if (m) m.classList.remove('show'); }
+
+// 교사 단축키 (D-U18) — 입력 중이 아닐 때만
+document.addEventListener('keydown', e => {
+  if (document.activeElement && ['INPUT','TEXTAREA','SELECT'].includes(document.activeElement.tagName)) return;
+  if (e.key === '?') { showShortcutHelp(); }
+  else if (e.key.toLowerCase() === 'a' && !e.ctrlKey && !e.metaKey) { if (document.getElementById('bulk-bar').style.display !== 'none') bulkApprove('approve'); }
+  else if (e.key.toLowerCase() === 'n' && !e.ctrlKey && !e.metaKey) { createRoomDialog(); }
+  else if (e.key.toLowerCase() === 'b' && !e.ctrlKey && !e.metaKey) { openBroadcast(); }
+  else if (e.key.toLowerCase() === 'l' && !e.ctrlKey && !e.metaKey) { const t = document.getElementById('lock-tog'); t.checked = !t.checked; toggleLock(); }
+  else if (e.key === 'Escape') { document.querySelectorAll('.modal-back.show').forEach(m => m.classList.remove('show')); }
+});
+function showShortcutHelp() {
+  let m = document.getElementById('shortcut-help');
+  if (!m) {
+    m = document.createElement('div');
+    m.id = 'shortcut-help';
+    m.className = 'modal-back show';
+    m.innerHTML = `<div class="modal" style="max-width:420px">
+      <h3>⌨️ 교사 단축키</h3>
+      <table style="width:100%;font-size:.92rem">
+        <tr><td><kbd>A</kbd></td><td>승인 대기 모두 승인</td></tr>
+        <tr><td><kbd>N</kbd></td><td>새 방 만들기</td></tr>
+        <tr><td><kbd>B</kbd></td><td>공지 보내기</td></tr>
+        <tr><td><kbd>L</kbd></td><td>교실 잠금 토글</td></tr>
+        <tr><td><kbd>Esc</kbd></td><td>모달 닫기</td></tr>
+        <tr><td><kbd>?</kbd></td><td>이 도움말</td></tr>
+      </table>
+      <div class="actions"><button class="btn btn-pri" onclick="document.getElementById('shortcut-help').classList.remove('show')">확인</button></div>
+    </div>`;
+    document.body.appendChild(m);
+  } else m.classList.add('show');
+}
+
+// 프리셋 저장 체크 시 이름 입력 칸 표시
+document.getElementById('m-save-preset').addEventListener('change', e => {
+  document.getElementById('m-preset-name').style.display = e.target.checked ? 'block' : 'none';
+});
+// 공지 입력 Enter → 전송
+document.getElementById('bc-text').addEventListener('keydown', e => { if (e.key === 'Enter') sendBroadcast(); });
 
 init();
 </script>

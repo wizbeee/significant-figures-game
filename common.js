@@ -114,6 +114,124 @@ function drawInst(cv, m) {
   else drawTherm(ctx, w, h, m);
 }
 
+// ==================== 공지 토스트 (학생) ====================
+// 서버 응답의 notices[] 배열을 받아 한 번씩만 화면에 띄운다 (localStorage로 id 추적)
+const _SEEN_KEY = 'sigfig-seen-notices';
+function _loadSeen() {
+  try { return new Set(JSON.parse(localStorage.getItem(_SEEN_KEY) || '[]')); }
+  catch (e) { return new Set(); }
+}
+function _saveSeen(set) {
+  const arr = Array.from(set);
+  // 과거 id가 쌓이지 않도록 최근 200개만 유지
+  const trimmed = arr.slice(-200);
+  try { localStorage.setItem(_SEEN_KEY, JSON.stringify(trimmed)); } catch (e) {}
+}
+function _ensureNoticeStack() {
+  let s = document.getElementById('notice-stack');
+  if (!s) {
+    s = document.createElement('div');
+    s.id = 'notice-stack';
+    s.className = 'notice-stack';
+    document.body.appendChild(s);
+  }
+  return s;
+}
+function showNoticeToast(notice) {
+  const stack = _ensureNoticeStack();
+  const el = document.createElement('div');
+  el.className = 'notice-toast';
+  const label = notice.target === 'room' ? '방 공지' : '교실 공지';
+  el.innerHTML = `<div class="icon">📢</div>
+    <div class="body"><b>${label}</b>${String(notice.text||'').replace(/[<>&]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;'}[c]))}</div>
+    <button class="close" aria-label="닫기">✕</button>`;
+  el.querySelector('.close').addEventListener('click', () => _removeNotice(el));
+  stack.appendChild(el);
+  const remain = Math.max(3000, (notice.expiresAt || Date.now() + 10000) - Date.now());
+  setTimeout(() => _removeNotice(el), remain);
+}
+function _removeNotice(el) {
+  if (!el.parentElement) return;
+  el.style.animation = 'noticeOut .3s forwards';
+  setTimeout(() => el.remove(), 300);
+}
+function processNotices(list) {
+  if (!Array.isArray(list) || list.length === 0) return;
+  const seen = _loadSeen();
+  let changed = false;
+  for (const n of list) {
+    if (!n || !n.id || seen.has(n.id)) continue;
+    showNoticeToast(n);
+    seen.add(n.id);
+    changed = true;
+  }
+  if (changed) _saveSeen(seen);
+}
+
+// ==================== 설정(테마/글꼴/색약/소리) ====================
+function applyAppPrefs() {
+  const theme = localStorage.getItem('sigfig-theme') || 'dark';
+  const font = localStorage.getItem('sigfig-font') || 'md';
+  const cb = localStorage.getItem('sigfig-cb') === '1';
+  document.body.classList.remove('theme-light','theme-dark','font-sm','font-md','font-lg','cb-mode');
+  document.body.classList.add(theme === 'light' ? 'theme-light' : 'theme-dark');
+  document.body.classList.add('font-' + (['sm','md','lg'].includes(font) ? font : 'md'));
+  if (cb) document.body.classList.add('cb-mode');
+}
+function openSettings() {
+  let m = document.getElementById('app-settings');
+  if (!m) {
+    m = document.createElement('div');
+    m.id = 'app-settings';
+    m.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.7);display:flex;align-items:center;justify-content:center;z-index:9500;padding:20px';
+    m.innerHTML = `<div style="background:var(--bg2);border:1px solid var(--bg3);border-radius:var(--r);padding:24px;max-width:440px;width:100%">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px"><h3 style="margin:0">⚙️ 화면 설정</h3><button class="btn btn-ghost btn-sm" id="as-close">✖</button></div>
+      <div style="display:flex;flex-direction:column;gap:14px">
+        <div><label style="display:block;color:var(--txt2);font-size:.82rem;margin-bottom:6px;font-weight:600">🎨 테마</label>
+          <div style="display:flex;gap:8px"><button class="btn btn-ghost btn-sm" data-theme="dark">🌙 다크</button><button class="btn btn-ghost btn-sm" data-theme="light">☀️ 라이트</button></div></div>
+        <div><label style="display:block;color:var(--txt2);font-size:.82rem;margin-bottom:6px;font-weight:600">🔤 글꼴 크기</label>
+          <div style="display:flex;gap:8px"><button class="btn btn-ghost btn-sm" data-font="sm">작게</button><button class="btn btn-ghost btn-sm" data-font="md">보통</button><button class="btn btn-ghost btn-sm" data-font="lg">크게</button></div></div>
+        <div><label style="display:flex;gap:8px;align-items:center;cursor:pointer"><input type="checkbox" id="as-cb" style="width:18px;height:18px"><span>👁 색약 모드 (정답/오답에 기호 추가)</span></label></div>
+        <div><label style="display:flex;gap:8px;align-items:center;cursor:pointer"><input type="checkbox" id="as-sound" style="width:18px;height:18px"><span>🔊 게임 효과음</span></label></div>
+      </div>
+    </div>`;
+    document.body.appendChild(m);
+    m.querySelector('#as-close').onclick = () => m.style.display = 'none';
+    m.querySelectorAll('[data-theme]').forEach(b => b.onclick = () => { localStorage.setItem('sigfig-theme', b.dataset.theme); applyAppPrefs(); });
+    m.querySelectorAll('[data-font]').forEach(b => b.onclick = () => { localStorage.setItem('sigfig-font', b.dataset.font); applyAppPrefs(); });
+    m.querySelector('#as-cb').onchange = e => { localStorage.setItem('sigfig-cb', e.target.checked ? '1' : '0'); applyAppPrefs(); };
+    m.querySelector('#as-sound').onchange = e => { localStorage.setItem('sigfig-sound', e.target.checked ? '1' : '0'); };
+  }
+  m.querySelector('#as-cb').checked = localStorage.getItem('sigfig-cb') === '1';
+  m.querySelector('#as-sound').checked = localStorage.getItem('sigfig-sound') !== '0';
+  m.style.display = 'flex';
+}
+// 간단 효과음 (F17)
+function gameBeep(kind) {
+  if (localStorage.getItem('sigfig-sound') === '0') return;
+  try {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return;
+    const ctx = new AC();
+    const o = ctx.createOscillator(), g = ctx.createGain();
+    o.connect(g); g.connect(ctx.destination);
+    const freqs = { ok: [660, 880], no: [330, 220], level: [523, 659, 784], combo: [784, 988], hint: [440, 554] };
+    const seq = freqs[kind] || freqs.ok;
+    o.type = 'sine';
+    g.gain.setValueAtTime(0.001, ctx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.18, ctx.currentTime + 0.01);
+    seq.forEach((f, i) => o.frequency.setValueAtTime(f, ctx.currentTime + i * 0.08));
+    g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.08 * seq.length);
+    o.start(); o.stop(ctx.currentTime + 0.08 * seq.length + 0.05);
+  } catch (e) {}
+}
+
+// 페이지 로드 시 prefs 적용
+if (typeof document !== 'undefined') {
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', applyAppPrefs);
+  else applyAppPrefs();
+}
+
 // ==================== API 헬퍼 ====================
 async function api(path, opts = {}) {
   const headers = { 'Content-Type': 'application/json' };

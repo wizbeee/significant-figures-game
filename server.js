@@ -40,7 +40,7 @@ if (fs.existsSync(LEGACY_CONFIG_FILE) && !classrooms[DEFAULT_CLASSROOM]) {
       name: '기본 교실',
       passwordHash: hashPw(old.teacherPassword || process.env.TEACHER_PASSWORD || '3000'),
       createdAt: Date.now(),
-      config: { autoApproveRooms: !!old.autoApproveRooms, sheetsUrl: old.sheetsUrl || '' },
+      config: { autoApproveRooms: !!old.autoApproveRooms, sheetsUrl: old.sheetsUrl || '', locked: false, presets: [], journal: [] },
     };
     saveClassrooms();
     console.log('[이관] 레거시 config.json → default 교실로 이전 완료');
@@ -54,7 +54,7 @@ if (Object.keys(classrooms).length === 0) {
     name: '기본 교실',
     passwordHash: hashPw(process.env.TEACHER_PASSWORD || '3000'),
     createdAt: Date.now(),
-    config: { autoApproveRooms: false, sheetsUrl: '' },
+    config: { autoApproveRooms: false, sheetsUrl: '', locked: false, presets: [], journal: [] },
   };
   saveClassrooms();
 }
@@ -110,6 +110,23 @@ function migrateLegacyIfNeeded() {
 }
 migrateLegacyIfNeeded();
 
+// 교실 레코드 — 신규 필드 기본값 보정 (한 번 돌려두면 구 데이터도 안전)
+function migrateClassroomShape() {
+  let changed = false;
+  for (const code of Object.keys(classrooms)) {
+    const c = classrooms[code];
+    if (!c.config) { c.config = {}; changed = true; }
+    const cf = c.config;
+    if (cf.autoApproveRooms === undefined) { cf.autoApproveRooms = false; changed = true; }
+    if (cf.sheetsUrl === undefined) { cf.sheetsUrl = ''; changed = true; }
+    if (cf.locked === undefined) { cf.locked = false; changed = true; }
+    if (!Array.isArray(cf.presets)) { cf.presets = []; changed = true; }
+    if (!Array.isArray(cf.journal)) { cf.journal = []; changed = true; }
+  }
+  if (changed) saveClassrooms();
+}
+migrateClassroomShape();
+
 const saveLB = () => fs.writeFileSync(LB_FILE, JSON.stringify(leaderboards, null, 2));
 const saveStudentsDb = () => fs.writeFileSync(STUDENTS_FILE, JSON.stringify(studentsDb, null, 2));
 const saveAttendance = () => fs.writeFileSync(ATTEND_FILE, JSON.stringify(attendance, null, 2));
@@ -127,8 +144,14 @@ function clsAttendance(code) {
 function clsCfg(code) {
   const c = classrooms[code];
   if (!c) return null;
-  if (!c.config) c.config = { autoApproveRooms: false, sheetsUrl: '' };
-  return c.config;
+  if (!c.config) c.config = {};
+  const cf = c.config;
+  if (cf.autoApproveRooms === undefined) cf.autoApproveRooms = false;
+  if (cf.sheetsUrl === undefined) cf.sheetsUrl = '';
+  if (cf.locked === undefined) cf.locked = false;
+  if (!Array.isArray(cf.presets)) cf.presets = [];
+  if (!Array.isArray(cf.journal)) cf.journal = [];
+  return cf;
 }
 
 // 교실 코드 정규화 (2~20자, 한글/영문/숫자/하이픈/언더스코어)
@@ -155,6 +178,19 @@ function emptyStats() {
     battleWins: 0, battleLosses: 0,
   };
 }
+function emptyProfile() {
+  return {
+    level: 1, exp: 0,
+    title: '', titlesOwned: [],
+    avatar: '🙂', avatarsOwned: ['🙂'],
+    dailyStreak: 0, lastDailyAt: 0,
+    quests: {},                 // questId → { progress, completedAt }
+    achievements: [],           // 뱃지 배열
+    hintsUsed: 0,
+    lastRevengeTarget: null,
+    wrongBank: [],              // 오답 모음 (최대 100개)
+  };
+}
 // 기존 레코드 마이그레이션: 누락된 필드 채우기
 function ensureStatsShape(s) {
   if (!s) return emptyStats();
@@ -162,17 +198,38 @@ function ensureStatsShape(s) {
   for (const k of Object.keys(d)) if (s[k] === undefined) s[k] = d[k];
   return s;
 }
+function ensureProfileShape(p) {
+  if (!p) return emptyProfile();
+  const d = emptyProfile();
+  for (const k of Object.keys(d)) if (p[k] === undefined) p[k] = d[k];
+  return p;
+}
+// 레벨 계산 — exp 100 * level 씩 증가 (간단 커브)
+function expForLevel(n) { return 100 * n; }
+function addExp(profile, amount) {
+  profile.exp = (profile.exp || 0) + (amount || 0);
+  let leveled = false;
+  while (profile.exp >= expForLevel(profile.level)) {
+    profile.exp -= expForLevel(profile.level);
+    profile.level += 1;
+    leveled = true;
+  }
+  return leveled;
+}
 function registerOrTouchStudent(classroomCode, studentId, name) {
   const sdb = clsStudents(classroomCode);
   let rec = sdb[studentId];
-  if (rec) rec.stats = ensureStatsShape(rec.stats);
+  if (rec) {
+    rec.stats = ensureStatsShape(rec.stats);
+    rec.profile = ensureProfileShape(rec.profile);
+  }
   if (!rec) {
-    rec = { studentId, name, joinedAt: Date.now(), stats: emptyStats(), blocked: false };
+    rec = { studentId, name, joinedAt: Date.now(), stats: emptyStats(), profile: emptyProfile(), blocked: false };
     sdb[studentId] = rec;
   } else {
     rec.name = name; // 이름은 최신 로그인으로 갱신
   }
-  // 출결 기록 (교실별)
+  // 출결 기록 (교실별) + 연속 출석(F2)
   const adb = clsAttendance(classroomCode);
   const day = todayKey();
   if (!adb[day]) adb[day] = {};
@@ -180,16 +237,46 @@ function registerOrTouchStudent(classroomCode, studentId, name) {
   a.lastSeen = Date.now();
   a.name = name;
   adb[day][studentId] = a;
+  // 오늘 처음 출석 시 연속 출석 갱신
+  if (a.firstSeen === a.lastSeen) {
+    updateDailyStreak(rec, day);
+  }
   saveStudentsDb();
   saveAttendance();
   return rec;
+}
+// 연속 출석 — 어제 또는 오늘 마지막 체크에서 하루 차이면 +1, 아니면 리셋
+function updateDailyStreak(rec, todayStr) {
+  rec.profile = ensureProfileShape(rec.profile);
+  const lastDay = rec.profile._lastDailyDay || null;
+  if (lastDay === todayStr) return; // 중복 호출 방어
+  if (!lastDay) {
+    rec.profile.dailyStreak = 1;
+  } else {
+    const d1 = new Date(lastDay + 'T00:00:00');
+    const d2 = new Date(todayStr + 'T00:00:00');
+    const diff = Math.round((d2 - d1) / 86400000);
+    if (diff === 1) rec.profile.dailyStreak = (rec.profile.dailyStreak || 0) + 1;
+    else rec.profile.dailyStreak = 1;
+  }
+  rec.profile._lastDailyDay = todayStr;
+  rec.profile.lastDailyAt = Date.now();
+  // 연속 출석 뱃지
+  const s = rec.profile.dailyStreak;
+  const badges = rec.profile.achievements || (rec.profile.achievements = []);
+  const newBadges = [];
+  if (s === 3 && !badges.includes('streak-3')) { badges.push('streak-3'); newBadges.push('streak-3'); }
+  if (s === 7 && !badges.includes('streak-7')) { badges.push('streak-7'); newBadges.push('streak-7'); }
+  if (s === 30 && !badges.includes('streak-30')) { badges.push('streak-30'); newBadges.push('streak-30'); }
+  return newBadges;
 }
 function accumulateStats(classroomCode, studentId, finalPlayer, roomType, battleResult) {
   const sdb = clsStudents(classroomCode);
   const rec = sdb[studentId];
   if (!rec) return;
   const s = ensureStatsShape(rec.stats);
-  rec.stats = s;
+  const p = ensureProfileShape(rec.profile);
+  rec.stats = s; rec.profile = p;
   s.totalGames += 1;
   s.totalCorrect += finalPlayer.correct || 0;
   s.totalWrong += (finalPlayer.wrong || 0);
@@ -204,11 +291,117 @@ function accumulateStats(classroomCode, studentId, finalPlayer, roomType, battle
     if (battleResult === 'win') s.battleWins += 1;
     else if (battleResult === 'lose') s.battleLosses += 1;
   }
+  // 경험치 (F3) — 점수 1/10 + 정답당 +5 + 승리 보너스
+  const gained = Math.floor((finalPlayer.score || 0) / 10) + (finalPlayer.correct || 0) * 5 + (battleResult === 'win' ? 50 : 0);
+  const leveled = addExp(p, gained);
+  // 오답 은행(U5) — 최근 100개 유지
+  if (Array.isArray(finalPlayer.wrongHistory) && finalPlayer.wrongHistory.length) {
+    p.wrongBank = (p.wrongBank || []);
+    for (const w of finalPlayer.wrongHistory) {
+      p.wrongBank.push({ at: Date.now(), q: w.q, submitted: w.submitted, timeout: !!w.timeout });
+    }
+    if (p.wrongBank.length > 100) p.wrongBank = p.wrongBank.slice(-100);
+  }
+  // 퀘스트·업적 체크 (F16)
+  checkQuestsAndAchievements(rec, finalPlayer, roomType, battleResult);
+  // 칭호 자동 해금 (F4)
+  autoUnlockTitles(rec);
   const adb = clsAttendance(classroomCode);
   const day = todayKey();
   if (adb[day] && adb[day][studentId]) adb[day][studentId].games = (adb[day][studentId].games||0) + 1;
   saveStudentsDb();
   saveAttendance();
+  return { gained, leveled };
+}
+
+// ============ 퀘스트·업적·칭호 정의 ============
+const QUEST_DEFS = {
+  'daily-play-3': { name: '오늘 3판 플레이', target: 3, type: 'games-today', reward: { exp: 50 } },
+  'daily-correct-20': { name: '오늘 20문제 정답', target: 20, type: 'correct-today', reward: { exp: 80 } },
+  'streak-5': { name: '5문제 연속 정답', target: 5, type: 'streak', reward: { exp: 60, badge: 'streak-5' } },
+  'lightning-5': { name: '2초 이내 정답 5회', target: 5, type: 'lightning', reward: { exp: 100, badge: 'lightning-master' } },
+  'all-modes': { name: '3가지 모드 모두 플레이', target: 3, type: 'modes', reward: { exp: 120, badge: 'versatile' } },
+  'battle-win-3': { name: '대전 3승', target: 3, type: 'battle-win', reward: { exp: 150, badge: 'warrior' } },
+};
+const TITLE_DEFS = [
+  { id: 'novice', name: '🌱 새싹', cond: rec => rec.stats.totalGames >= 1 },
+  { id: 'dedicated', name: '📚 꾸준히왕', cond: rec => (rec.profile.dailyStreak || 0) >= 7 },
+  { id: 'sharpshooter', name: '🎯 명사수', cond: rec => { const s = rec.stats; return s.totalCorrect + s.totalWrong >= 50 && s.totalCorrect / Math.max(1, s.totalCorrect + s.totalWrong) >= 0.85; } },
+  { id: 'lightning', name: '⚡ 번개왕', cond: rec => (rec.profile.achievements || []).includes('lightning-master') },
+  { id: 'warrior', name: '⚔️ 전사', cond: rec => (rec.stats.battleWins || 0) >= 10 },
+  { id: 'legend', name: '💎 레전드', cond: rec => rec.profile.level >= 20 },
+  { id: 'master', name: '👑 유효숫자 마스터', cond: rec => rec.profile.level >= 50 },
+];
+function checkQuestsAndAchievements(rec, finalPlayer, roomType, battleResult) {
+  const p = ensureProfileShape(rec.profile);
+  rec.profile = p;
+  p.quests = p.quests || {};
+  const today = todayKey();
+  // 일일 퀘스트 키에는 날짜 prefix — 다른 날이면 리셋
+  const keyWith = (id) => `${today}/${id}`;
+  const ensureQ = (id) => {
+    const k = keyWith(id);
+    if (!p.quests[k]) p.quests[k] = { progress: 0 };
+    return p.quests[k];
+  };
+  // games-today
+  { const q = ensureQ('daily-play-3'); if (!q.completedAt) { q.progress += 1; if (q.progress >= QUEST_DEFS['daily-play-3'].target) { q.completedAt = Date.now(); addExp(p, QUEST_DEFS['daily-play-3'].reward.exp); } } }
+  // correct-today
+  { const q = ensureQ('daily-correct-20'); if (!q.completedAt) { q.progress += (finalPlayer.correct || 0); if (q.progress >= QUEST_DEFS['daily-correct-20'].target) { q.completedAt = Date.now(); addExp(p, QUEST_DEFS['daily-correct-20'].reward.exp); } } }
+  // streak (누적 — 역대 최대 연속 기록)
+  {
+    const id = 'streak-5';
+    const k = keyWith(id);
+    if (!p.quests[k]) p.quests[k] = { progress: 0 };
+    const q = p.quests[k];
+    if (!q.completedAt) {
+      q.progress = Math.max(q.progress || 0, finalPlayer.maxStreak || 0);
+      if (q.progress >= QUEST_DEFS[id].target) {
+        q.completedAt = Date.now();
+        addExp(p, QUEST_DEFS[id].reward.exp);
+        if (!p.achievements.includes(QUEST_DEFS[id].reward.badge)) p.achievements.push(QUEST_DEFS[id].reward.badge);
+      }
+    }
+  }
+  // all-modes — 평생 누적(저장 플래그)
+  {
+    const modesSet = new Set(p._modesPlayed || []);
+    if (roomType) modesSet.add(roomType);
+    p._modesPlayed = Array.from(modesSet);
+    const k = 'lifetime/all-modes';
+    if (!p.quests[k]) p.quests[k] = { progress: 0 };
+    const q = p.quests[k];
+    if (!q.completedAt) {
+      q.progress = p._modesPlayed.length;
+      if (q.progress >= 3) {
+        q.completedAt = Date.now();
+        addExp(p, QUEST_DEFS['all-modes'].reward.exp);
+        if (!p.achievements.includes('versatile')) p.achievements.push('versatile');
+      }
+    }
+  }
+  // battle-win-3 (lifetime)
+  if (battleResult === 'win') {
+    const k = 'lifetime/battle-win-3';
+    if (!p.quests[k]) p.quests[k] = { progress: 0 };
+    const q = p.quests[k];
+    if (!q.completedAt) {
+      q.progress = (q.progress || 0) + 1;
+      if (q.progress >= 3) {
+        q.completedAt = Date.now();
+        addExp(p, QUEST_DEFS['battle-win-3'].reward.exp);
+        if (!p.achievements.includes('warrior')) p.achievements.push('warrior');
+      }
+    }
+  }
+}
+function autoUnlockTitles(rec) {
+  const p = ensureProfileShape(rec.profile);
+  rec.profile = p;
+  p.titlesOwned = p.titlesOwned || [];
+  for (const t of TITLE_DEFS) {
+    if (!p.titlesOwned.includes(t.id) && t.cond(rec)) p.titlesOwned.push(t.id);
+  }
 }
 
 // ==================== 메모리 상태 ====================
@@ -216,8 +409,22 @@ const rooms = new Map();            // code → room (room.classroomCode 포함)
 const students = new Map();         // (classroomCode + ':' + studentId) → session { classroomCode, studentId, name, token, lastSeen, currentRoom }
 const studentTokens = new Map();    // token → { classroomCode, studentId }
 const teacherTokens = new Map();    // token → classroomCode
+const notices = new Map();          // classroomCode → [{id, target:'classroom'|'room', roomCode?, text, expiresAt, createdAt}]
+const pendingSince = new Map();     // roomCode → timestamp (승인 대기 시작 시각)
 
 function studentSessKey(classroomCode, studentId) { return classroomCode + ':' + studentId; }
+
+// 공지 만료 제거 + 특정 학생용 활성 공지 목록
+function activeNoticesFor(classroomCode, studentRoomCode) {
+  const list = notices.get(classroomCode);
+  if (!list || !list.length) return [];
+  const now = Date.now();
+  // 만료 정리
+  const fresh = list.filter(n => n.expiresAt > now);
+  if (fresh.length !== list.length) notices.set(classroomCode, fresh);
+  return fresh.filter(n => n.target === 'classroom' || (n.target === 'room' && n.roomCode === studentRoomCode))
+              .map(n => ({ id: n.id, text: n.text, target: n.target, roomCode: n.roomCode, expiresAt: n.expiresAt }));
+}
 
 // ==================== 유효숫자 로직 ====================
 function analyze(str) {
@@ -920,6 +1127,7 @@ function leaveRoom(room, student) {
     if (room.phaseTimer) clearTimeout(room.phaseTimer);
     if (room.multiTick) { clearInterval(room.multiTick); room.multiTick = null; }
     rooms.delete(room.code);
+    pendingSince.delete(room.code);
   }
   room.updatedAt = Date.now();
 }
@@ -1166,6 +1374,11 @@ async function handleApi(req, res, pathname, query) {
     const name = String(body.name || '').trim().slice(0, 12);
     if (!classroomCode) return sendJSON(res, { error: '교실 코드가 필요해요. 선생님께 문의하세요.' }, 400);
     if (!clsroom(classroomCode)) return sendJSON(res, { error: '존재하지 않는 교실 코드예요.' }, 404);
+    // 교실 잠금 — 이미 로그인된 세션은 그대로, 신규 로그인만 차단
+    if (clsCfg(classroomCode).locked) {
+      const sKey0 = studentSessKey(classroomCode, String(studentId || '').trim().slice(0, 10));
+      if (!students.has(sKey0)) return sendJSON(res, { error: '🔒 지금은 교실이 잠겨 있어요. 선생님께 확인하세요.' }, 403);
+    }
     if (!studentId || !name) return sendJSON(res, { error: '학번과 이름을 입력하세요.' }, 400);
     if (!/^[0-9A-Za-z]+$/.test(studentId)) return sendJSON(res, { error: '학번은 숫자/영문만 가능' }, 400);
     // 차단 확인 (교실별)
@@ -1203,8 +1416,92 @@ async function handleApi(req, res, pathname, query) {
   if (method === 'GET' && pathname === '/api/me') {
     const s = authStudent(req);
     if (!s) return sendJSON(res, { error: '로그인 필요' }, 401);
-    return sendJSON(res, { classroomCode: s.classroomCode, studentId: s.studentId, name: s.name, currentRoom: s.currentRoom });
+    return sendJSON(res, {
+      classroomCode: s.classroomCode, studentId: s.studentId, name: s.name, currentRoom: s.currentRoom,
+      notices: activeNoticesFor(s.classroomCode, s.currentRoom),
+    });
   }
+  // 학생 프로필 조회 (본인만) — 레벨/칭호/아바타/연속출석/퀘스트/오답/업적
+  if (method === 'GET' && pathname === '/api/student/profile') {
+    const s = authStudent(req);
+    if (!s) return sendJSON(res, { error: '로그인 필요' }, 401);
+    const sdb = clsStudents(s.classroomCode);
+    const rec = sdb[s.studentId];
+    if (!rec) return sendJSON(res, { error: '학생 레코드 없음' }, 404);
+    rec.profile = ensureProfileShape(rec.profile);
+    rec.stats = ensureStatsShape(rec.stats);
+    // 활성 퀘스트 — 오늘/평생 상태
+    const today = todayKey();
+    const activeQuests = [];
+    for (const [id, def] of Object.entries(QUEST_DEFS)) {
+      const dayKey = (id === 'all-modes' || id === 'battle-win-3') ? 'lifetime' : today;
+      const k = dayKey + '/' + id;
+      const q = rec.profile.quests[k] || { progress: 0 };
+      activeQuests.push({ id, name: def.name, target: def.target, progress: q.progress || 0, completed: !!q.completedAt, reward: def.reward });
+    }
+    const titles = TITLE_DEFS.map(t => ({ id: t.id, name: t.name, owned: (rec.profile.titlesOwned || []).includes(t.id) }));
+    return sendJSON(res, {
+      level: rec.profile.level, exp: rec.profile.exp, expNext: expForLevel(rec.profile.level),
+      title: rec.profile.title || '', titlesOwned: rec.profile.titlesOwned || [], titles,
+      avatar: rec.profile.avatar || '🙂', avatarsOwned: rec.profile.avatarsOwned || ['🙂'],
+      dailyStreak: rec.profile.dailyStreak || 0,
+      achievements: rec.profile.achievements || [],
+      quests: activeQuests,
+      wrongBank: rec.profile.wrongBank || [],
+    });
+  }
+  // 프로필 변경 (칭호/아바타 선택) — 보유한 것만 적용
+  if (method === 'POST' && pathname === '/api/student/profile') {
+    const s = authStudent(req);
+    if (!s) return sendJSON(res, { error: '로그인 필요' }, 401);
+    const sdb = clsStudents(s.classroomCode);
+    const rec = sdb[s.studentId];
+    if (!rec) return sendJSON(res, { error: '학생 레코드 없음' }, 404);
+    rec.profile = ensureProfileShape(rec.profile);
+    const body = await readBody(req);
+    if (typeof body.title === 'string') {
+      if (body.title === '' || (rec.profile.titlesOwned || []).includes(body.title)) rec.profile.title = body.title;
+    }
+    if (typeof body.avatar === 'string' && body.avatar.length <= 4) {
+      const owned = rec.profile.avatarsOwned || ['🙂'];
+      if (owned.includes(body.avatar)) rec.profile.avatar = body.avatar;
+    }
+    saveStudentsDb();
+    return sendJSON(res, { ok: true, title: rec.profile.title, avatar: rec.profile.avatar });
+  }
+  // 아바타 해금 — 레벨 조건 달성 시 획득
+  if (method === 'POST' && pathname === '/api/student/unlock-avatar') {
+    const s = authStudent(req);
+    if (!s) return sendJSON(res, { error: '로그인 필요' }, 401);
+    const sdb = clsStudents(s.classroomCode);
+    const rec = sdb[s.studentId];
+    if (!rec) return sendJSON(res, { error: '학생 레코드 없음' }, 404);
+    rec.profile = ensureProfileShape(rec.profile);
+    const body = await readBody(req);
+    const emoji = String(body.avatar || '').slice(0, 4);
+    const AVATAR_UNLOCKS = [
+      { avatar: '🙂', level: 1 }, { avatar: '😎', level: 2 }, { avatar: '🤓', level: 3 }, { avatar: '🧠', level: 5 },
+      { avatar: '🔬', level: 7 }, { avatar: '⚡', level: 10 }, { avatar: '🦸', level: 15 }, { avatar: '🎯', level: 20 },
+      { avatar: '🏆', level: 30 }, { avatar: '👑', level: 50 },
+    ];
+    const def = AVATAR_UNLOCKS.find(a => a.avatar === emoji);
+    if (!def) return sendJSON(res, { error: '알 수 없는 아바타' }, 400);
+    if ((rec.profile.level || 1) < def.level) return sendJSON(res, { error: `레벨 ${def.level} 이상 필요` }, 403);
+    const owned = rec.profile.avatarsOwned || ['🙂'];
+    if (!owned.includes(emoji)) owned.push(emoji);
+    rec.profile.avatarsOwned = owned;
+    saveStudentsDb();
+    return sendJSON(res, { ok: true, avatarsOwned: owned });
+  }
+  // 아바타 해금 목록 조회
+  if (method === 'GET' && pathname === '/api/student/avatars') {
+    return sendJSON(res, { unlocks: [
+      { avatar: '🙂', level: 1 }, { avatar: '😎', level: 2 }, { avatar: '🤓', level: 3 }, { avatar: '🧠', level: 5 },
+      { avatar: '🔬', level: 7 }, { avatar: '⚡', level: 10 }, { avatar: '🦸', level: 15 }, { avatar: '🎯', level: 20 },
+      { avatar: '🏆', level: 30 }, { avatar: '👑', level: 50 },
+    ]});
+  }
+
   // 본인 또는 임의 학생의 누적 전적 조회 (공개 — 학번으로 조회 가능, 단 교실 범위 내)
   if (method === 'GET' && pathname === '/api/student/stats') {
     const sid = query.studentId;
@@ -1265,8 +1562,11 @@ async function handleApi(req, res, pathname, query) {
     const classroomCode = s ? s.classroomCode : teacherCls;
     const type = ['single','multi','battle'].includes(body.type) ? body.type : 'single';
     const cCfg = clsCfg(classroomCode) || {};
+    // 교실 잠금 — 학생의 신규 방 생성 차단 (교사는 허용)
+    if (!teacherCls && cCfg.locked) return sendJSON(res, { error: '🔒 교실 잠김 — 새 방을 만들 수 없습니다.' }, 403);
     const autoApprove = !!teacherCls || !!cCfg.autoApproveRooms;
     const room = createRoom(classroomCode, type, body.config || {}, s, autoApprove);
+    if (!room.approved) pendingSince.set(room.code, Date.now());
     if (s) {
       // 학생은 생성 후 자동 입장
       try { joinRoom(room, s); } catch (e) {}
@@ -1404,7 +1704,10 @@ async function handleApi(req, res, pathname, query) {
     if (!room) return sendJSON(res, { error: '방 없음' }, 404);
     const forTeacher = authTeacher(req);
     const viewerS = authStudent(req);
-    return sendJSON(res, roomView(room, forTeacher, viewerS?.studentId));
+    const view = roomView(room, forTeacher, viewerS?.studentId);
+    // 공지 피기백 — 학생이 방 화면에서도 토스트로 볼 수 있도록
+    if (viewerS) view.notices = activeNoticesFor(viewerS.classroomCode, viewerS.currentRoom);
+    return sendJSON(res, view);
   }
 
   // ---------- 점수판 (글로벌) ----------
@@ -1513,7 +1816,7 @@ async function handleApi(req, res, pathname, query) {
       c = classrooms[code] = {
         code, name: name || code,
         passwordHash: hashPw(pw), createdAt: Date.now(),
-        config: { autoApproveRooms: false, sheetsUrl: '' },
+        config: { autoApproveRooms: false, sheetsUrl: '', locked: false, presets: [], journal: [] },
       };
       saveClassrooms();
     } else {
@@ -1575,30 +1878,270 @@ async function handleApi(req, res, pathname, query) {
     }
     return sendJSON(res, { ok: true, enabled: c.autoApproveRooms, approvedPending: approvedCount });
   }
+  // 교실 잠금 조회/토글 — 시험·평가 중 신규 로그인·방 생성 차단 (현 세션은 유지)
+  if (method === 'GET' && pathname === '/api/teacher/classroom/lock') {
+    const cls = teacherClassroom(req);
+    if (!cls) return sendJSON(res, { error: '교사 권한' }, 401);
+    return sendJSON(res, { locked: !!clsCfg(cls).locked });
+  }
+  if (method === 'POST' && pathname === '/api/teacher/classroom/lock') {
+    const cls = teacherClassroom(req);
+    if (!cls) return sendJSON(res, { error: '교사 권한' }, 401);
+    const body = await readBody(req);
+    const c = clsCfg(cls);
+    c.locked = !!body.locked;
+    saveClassrooms();
+    maybePushSheets(cls, 'classroom_lock', { locked: c.locked, at: Date.now() });
+    return sendJSON(res, { ok: true, locked: c.locked });
+  }
+  // 방 프리셋(템플릿) — 자주 쓰는 방 설정을 저장/불러오기
+  if (method === 'GET' && pathname === '/api/teacher/presets') {
+    const cls = teacherClassroom(req);
+    if (!cls) return sendJSON(res, { error: '교사 권한' }, 401);
+    return sendJSON(res, { presets: clsCfg(cls).presets || [] });
+  }
+  if (method === 'POST' && pathname === '/api/teacher/presets') {
+    const cls = teacherClassroom(req);
+    if (!cls) return sendJSON(res, { error: '교사 권한' }, 401);
+    const body = await readBody(req);
+    const cfg = clsCfg(cls);
+    if (!Array.isArray(cfg.presets)) cfg.presets = [];
+    if (body.delete && body.id) {
+      cfg.presets = cfg.presets.filter(p => p.id !== body.id);
+      saveClassrooms();
+      return sendJSON(res, { ok: true, presets: cfg.presets });
+    }
+    const name = String(body.name || '').trim().slice(0, 30);
+    const type = ['single','multi','battle'].includes(body.type) ? body.type : 'multi';
+    const config = body.config || {};
+    if (!name) return sendJSON(res, { error: '프리셋 이름이 필요합니다' }, 400);
+    if (cfg.presets.length >= 30) return sendJSON(res, { error: '프리셋은 최대 30개까지 저장할 수 있습니다' }, 400);
+    const preset = { id: crypto.randomBytes(6).toString('hex'), name, type, config, createdAt: Date.now() };
+    cfg.presets.push(preset);
+    saveClassrooms();
+    return sendJSON(res, { ok: true, preset, presets: cfg.presets });
+  }
+  // 월간 MVP — 이번 달 총점 1위 학생 (F6)
+  if (method === 'GET' && pathname === '/api/teacher/monthly-mvp') {
+    const cls = teacherClassroom(req);
+    if (!cls) return sendJSON(res, { error: '교사 권한' }, 401);
+    const now = new Date();
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
+    const totals = {};
+    for (const t of ['single','multi','battle']) {
+      for (const e of (leaderboards[t] || [])) {
+        if ((e.classroomCode || DEFAULT_CLASSROOM) !== cls) continue;
+        if ((e.at || 0) < monthStart) continue;
+        const k = e.studentId;
+        if (!totals[k]) totals[k] = { studentId: k, name: e.name, score: 0, games: 0 };
+        totals[k].score += e.score || 0;
+        totals[k].games += 1;
+      }
+    }
+    const sorted = Object.values(totals).sort((a,b) => b.score - a.score).slice(0, 10);
+    return sendJSON(res, { month: now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0'), ranking: sorted });
+  }
+  // 수업 요약 리포트 (U15) — 오늘 교실 전체 통계
+  if (method === 'GET' && pathname === '/api/teacher/session/summary') {
+    const cls = teacherClassroom(req);
+    if (!cls) return sendJSON(res, { error: '교사 권한' }, 401);
+    const today = todayKey();
+    const adb = clsAttendance(cls)[today] || {};
+    const atCount = Object.keys(adb).length;
+    const todayStart = new Date(); todayStart.setHours(0,0,0,0);
+    const ts = todayStart.getTime();
+    const byType = { single:[], multi:[], battle:[] };
+    for (const t of ['single','multi','battle']) {
+      for (const e of (leaderboards[t] || [])) {
+        if ((e.classroomCode || DEFAULT_CLASSROOM) !== cls) continue;
+        if ((e.at || 0) < ts) continue;
+        byType[t].push(e);
+      }
+    }
+    const allEntries = [...byType.single, ...byType.multi, ...byType.battle];
+    const avgScore = allEntries.length ? Math.round(allEntries.reduce((a,e) => a + (e.score||0), 0) / allEntries.length) : 0;
+    const totalCorrect = allEntries.reduce((a,e) => a + (e.correct||0), 0);
+    const totalTotal = allEntries.reduce((a,e) => a + (e.total||0), 0);
+    const accuracy = totalTotal > 0 ? Math.round(totalCorrect/totalTotal*100) : 0;
+    const topScorers = allEntries.slice().sort((a,b) => b.score - a.score).slice(0, 5);
+    return sendJSON(res, {
+      date: today, attendance: atCount,
+      games: { single: byType.single.length, multi: byType.multi.length, battle: byType.battle.length, total: allEntries.length },
+      avgScore, accuracy, topScorers,
+    });
+  }
+  // 이상 패턴 감지 (U17) — 같은 답만 반복 제출한 학생
+  if (method === 'GET' && pathname === '/api/teacher/anomaly') {
+    const cls = teacherClassroom(req);
+    if (!cls) return sendJSON(res, { error: '교사 권한' }, 401);
+    const flagged = [];
+    for (const r of rooms.values()) {
+      if (r.classroomCode !== cls) continue;
+      for (const p of Object.values(r.players)) {
+        const hist = p.wrongHistory || [];
+        if (hist.length < 5) continue;
+        // 같은 답만 5회 이상 제출 → 플래그
+        const answers = hist.map(h => JSON.stringify(h.submitted));
+        const uniq = new Set(answers);
+        if (uniq.size === 1 && answers.length >= 5) {
+          flagged.push({ studentId: p.studentId, name: p.name, reason: '동일 답안 5회 이상 반복', roomCode: r.code });
+        }
+      }
+    }
+    return sendJSON(res, { flagged });
+  }
+  // CSV로 학생 일괄 등록 (U7)
+  if (method === 'POST' && pathname === '/api/teacher/students/import') {
+    const cls = teacherClassroom(req);
+    if (!cls) return sendJSON(res, { error: '교사 권한' }, 401);
+    const body = await readBody(req);
+    const rows = Array.isArray(body.rows) ? body.rows : [];
+    const sdb = clsStudents(cls);
+    let added = 0;
+    for (const r of rows) {
+      const sid = String(r.studentId || '').trim().slice(0, 10);
+      const name = String(r.name || '').trim().slice(0, 12);
+      if (!sid || !name) continue;
+      if (!/^[0-9A-Za-z]+$/.test(sid)) continue;
+      if (!sdb[sid]) {
+        sdb[sid] = { studentId: sid, name, joinedAt: Date.now(), stats: emptyStats(), profile: emptyProfile(), blocked: false, preregistered: true };
+        added++;
+      } else {
+        sdb[sid].name = name;
+        sdb[sid].preregistered = true;
+      }
+    }
+    saveStudentsDb();
+    return sendJSON(res, { ok: true, added, total: Object.keys(sdb).length });
+  }
+  // 힌트 요청 (F9) — 점수 -20 차감, 간단한 힌트 문자열 반환
+  if (method === 'POST' && pathname === '/api/hint') {
+    const s = authStudent(req);
+    if (!s) return sendJSON(res, { error: '로그인 필요' }, 401);
+    const body = await readBody(req);
+    const room = rooms.get(body.code || s.currentRoom);
+    if (!room) return sendJSON(res, { error: '방 없음' }, 404);
+    if (room.phase !== 'question') return sendJSON(res, { error: '현재 힌트 불가' }, 400);
+    const p = Object.values(room.players).find(x => x.studentId === s.studentId);
+    if (!p) return sendJSON(res, { error: '참여자 아님' }, 400);
+    const isMulti = room.type === 'multi';
+    const q = isMulti ? p.pQuestions[p.pIdx] : room.questions[room.qIndex];
+    if (!q) return sendJSON(res, { error: '문제 없음' }, 400);
+    p.score = Math.max(0, p.score - 20);
+    // 누적 힌트 사용 기록
+    const sdb = clsStudents(s.classroomCode);
+    if (sdb[s.studentId]) {
+      sdb[s.studentId].profile = ensureProfileShape(sdb[s.studentId].profile);
+      sdb[s.studentId].profile.hintsUsed = (sdb[s.studentId].profile.hintsUsed || 0) + 1;
+      saveStudentsDb();
+    }
+    let hint = '';
+    if (q.gameMode === 1) hint = `유효숫자 개수는 ${q.count}개`;
+    else if (q.gameMode === 2) hint = `총 ${q.count}개 디지트가 유효숫자`;
+    else if (q.gameMode === 3) hint = `측정값 유효숫자: ${q.meas.sf}개`;
+    else if (q.gameMode === 4) hint = q.kind === 'plain' ? `답의 소수점 이하 자릿수: ${q.dpResult}` : `답의 지수: 10^${q.targetExp}, 가수 자릿수: ${q.mantDP}`;
+    return sendJSON(res, { ok: true, hint, newScore: p.score });
+  }
+
+  // 교사 공지 브로드캐스트 — 전체 교실 또는 특정 방에 토스트 전달 (TTL 기반 메모리 저장)
+  if (method === 'POST' && pathname === '/api/teacher/broadcast') {
+    const cls = teacherClassroom(req);
+    if (!cls) return sendJSON(res, { error: '교사 권한' }, 401);
+    const body = await readBody(req);
+    const text = String(body.text || '').trim().slice(0, 200);
+    if (!text) return sendJSON(res, { error: '공지 내용을 입력하세요' }, 400);
+    const target = body.target === 'room' ? 'room' : 'classroom';
+    const roomCode = target === 'room' ? String(body.roomCode || '').trim() : null;
+    if (target === 'room') {
+      const r = rooms.get(roomCode);
+      if (!r || r.classroomCode !== cls) return sendJSON(res, { error: '대상 방을 찾을 수 없습니다' }, 404);
+    }
+    const ttlMs = Math.max(2000, Math.min(5 * 60 * 1000, parseInt(body.ttlMs) || 10000));
+    const notice = {
+      id: crypto.randomBytes(6).toString('hex'),
+      target, roomCode, text,
+      createdAt: Date.now(), expiresAt: Date.now() + ttlMs,
+    };
+    const list = notices.get(cls) || [];
+    list.push(notice);
+    notices.set(cls, list);
+    maybePushSheets(cls, 'broadcast', { target, roomCode, text, at: Date.now() });
+    return sendJSON(res, { ok: true, notice });
+  }
   if (method === 'GET' && pathname === '/api/teacher/overview') {
     const cls = teacherClassroom(req);
     if (!cls) return sendJSON(res, { error: '교사 권한' }, 401);
     const now = Date.now();
-    const studentList = [...students.values()].filter(s => s.classroomCode === cls).map(s => ({
-      studentId: s.studentId, name: s.name,
-      lastSeen: s.lastSeen, online: now - s.lastSeen < 10000,
-      currentRoom: s.currentRoom,
-    }));
-    const roomList = [...rooms.values()].filter(r => r.classroomCode === cls).map(r => ({
-      code: r.code, type: r.type, phase: r.phase,
-      approved: r.approved,
-      label: r.config.label, gameMode: r.config.gameMode,
-      difficulty: r.config.difficulty, questionCount: r.config.questionCount,
-      capacity: r.config.capacity,
-      qIndex: r.qIndex, total: r.questions.length,
-      playerCount: Object.keys(r.players).length,
-      ownerId: r.ownerId,
-      ownerName: (Object.values(r.players).find(p => p.studentId === r.ownerId) || {}).name || '',
-      players: Object.values(r.players).map(p => ({ studentId: p.studentId, name: p.name, score: p.score, correct: p.correct, wrong: p.wrong })),
-      createdAt: r.createdAt,
-    }));
+    const cfg = clsCfg(cls);
+    const sdb = clsStudents(cls);
+    // 온라인 학생 — 방 진행 상태까지 보강 (B3)
+    const studentList = [...students.values()].filter(s => s.classroomCode === cls).map(s => {
+      const roomInfo = s.currentRoom ? rooms.get(s.currentRoom) : null;
+      let locationPhase = null, locationQ = null;
+      if (roomInfo) {
+        locationPhase = roomInfo.phase;
+        if (roomInfo.phase === 'question' || roomInfo.phase === 'reveal') {
+          locationQ = `${(roomInfo.qIndex||0)+1}/${roomInfo.questions.length||roomInfo.config.questionCount}`;
+        }
+      }
+      return {
+        studentId: s.studentId, name: s.name,
+        lastSeen: s.lastSeen, online: now - s.lastSeen < 10000,
+        currentRoom: s.currentRoom,
+        locationPhase, locationQ,
+      };
+    });
+    const roomList = [...rooms.values()].filter(r => r.classroomCode === cls).map(r => {
+      const playerCount = Object.keys(r.players).length;
+      // 설정 요약 문자열 (A2) — 대기 카드에서 한눈에 보이도록
+      const gmMap = { 1:'개수', 2:'찾기', 3:'측정', 4:'덧뺄' };
+      const diffMap = { easy:'쉬움', medium:'보통', hard:'어려움', mixed:'혼합' };
+      const configSummary = `${gmMap[r.config.gameMode]||'게임'} · ${diffMap[r.config.difficulty]||''} · ${r.config.questionCount}문제 · ${r.config.questionTime}초/문`;
+      return {
+        code: r.code, type: r.type, phase: r.phase,
+        approved: r.approved,
+        label: r.config.label, gameMode: r.config.gameMode,
+        difficulty: r.config.difficulty, questionCount: r.config.questionCount,
+        questionTime: r.config.questionTime, revealTime: r.config.revealTime,
+        capacity: r.config.capacity,
+        qIndex: r.qIndex, total: r.questions.length,
+        playerCount,
+        ownerId: r.ownerId,
+        ownerName: (Object.values(r.players).find(p => p.studentId === r.ownerId) || {}).name || '',
+        // A4: 인라인 펼치기용 상세 플레이어 (score/correct/wrong/maxStreak/hp/eliminated/pIdx)
+        players: Object.values(r.players).map(p => ({
+          studentId: p.studentId, name: p.name,
+          score: p.score, correct: p.correct, wrong: p.wrong,
+          maxStreak: p.maxStreak || 0,
+          hp: p.hp || 0, eliminated: !!p.eliminated,
+          team: p.team || 0,
+          pIdx: p.pIdx,  // 멀티 — 개인 진행 번호
+        })),
+        // A2·D4: 대기 시작 시각 → 경과 시간 표시용
+        pendingSince: !r.approved ? (pendingSince.get(r.code) || r.createdAt) : null,
+        configSummary,
+        // A4: 전체 config 복제 기능에 활용
+        fullConfig: r.config,
+        createdAt: r.createdAt,
+      };
+    });
     // 점수판 숫자 — 본인 교실 기록만 카운트
     const myCount = t => (leaderboards[t] || []).filter(e => (e.classroomCode || DEFAULT_CLASSROOM) === cls).length;
+    // B2: 오늘 출석 — present(오늘 온 학생 중 현재도 접속) / late(오늘 왔지만 현재 오프) / absent(DB에는 있지만 오늘 흔적 無)
+    const today = todayKey();
+    const todayAttend = (clsAttendance(cls) || {})[today] || {};
+    const onlineSet = new Set(studentList.filter(s => s.online).map(s => s.studentId));
+    const todaySids = Object.keys(todayAttend);
+    const present = [], late = [], absent = [];
+    for (const sid of Object.keys(sdb)) {
+      if (sdb[sid].blocked) continue;
+      if (todaySids.includes(sid)) {
+        if (onlineSet.has(sid)) present.push({ studentId: sid, name: sdb[sid].name, firstSeen: todayAttend[sid].firstSeen, games: todayAttend[sid].games||0 });
+        else late.push({ studentId: sid, name: sdb[sid].name, firstSeen: todayAttend[sid].firstSeen, lastSeen: todayAttend[sid].lastSeen, games: todayAttend[sid].games||0 });
+      } else {
+        absent.push({ studentId: sid, name: sdb[sid].name });
+      }
+    }
     return sendJSON(res, {
       classroomCode: cls, classroomName: classrooms[cls].name,
       students: studentList, rooms: roomList,
@@ -1607,6 +2150,8 @@ async function handleApi(req, res, pathname, query) {
         multi: myCount('multi'),
         battle: myCount('battle'),
       },
+      classroom: { locked: !!cfg.locked, autoApprove: !!cfg.autoApproveRooms },
+      todayAttendance: { date: today, present, late, absent },
     });
   }
   if (method === 'POST' && pathname === '/api/teacher/room/approve') {
@@ -1616,10 +2161,49 @@ async function handleApi(req, res, pathname, query) {
     const room = rooms.get(body.code);
     if (!room || room.classroomCode !== cls) return sendJSON(res, { error: '방 없음' }, 404);
     room.approved = body.approved !== false;
+    if (room.approved) pendingSince.delete(room.code);
     if (room.approved && room.type === 'single' && room.phase === 'lobby' && Object.keys(room.players).length > 0) {
       startRoom(room);
     }
     return sendJSON(res, { ok: true, approved: room.approved });
+  }
+  // 일괄 승인/거부/삭제 — 수업 중 빠른 대응용
+  // body: { action: 'approve'|'reject', codes?: string[], filterType?: 'single'|'multi'|'battle' }
+  if (method === 'POST' && pathname === '/api/teacher/room/approve-bulk') {
+    const cls = teacherClassroom(req);
+    if (!cls) return sendJSON(res, { error: '교사 권한' }, 401);
+    const body = await readBody(req);
+    const action = body.action === 'reject' ? 'reject' : 'approve';
+    const codes = Array.isArray(body.codes) ? body.codes.map(String) : null;
+    const filterType = ['single','multi','battle'].includes(body.filterType) ? body.filterType : null;
+    let affected = 0;
+    for (const room of rooms.values()) {
+      if (room.classroomCode !== cls) continue;
+      if (codes && !codes.includes(room.code)) continue;
+      if (filterType && room.type !== filterType) continue;
+      if (room.approved && action === 'approve') continue;  // 이미 승인
+      if (!codes && room.approved && action === 'reject') continue;  // 필터만으로는 기승인 방을 건드리지 않음
+      if (action === 'approve') {
+        room.approved = true;
+        pendingSince.delete(room.code);
+        if (room.type === 'single' && room.phase === 'lobby' && Object.keys(room.players).length > 0) startRoom(room);
+        affected++;
+      } else {
+        // reject — 대기방은 삭제, 진행 중은 보존 (의도치 않은 중단 방지)
+        if (!room.approved) {
+          if (room.phaseTimer) clearTimeout(room.phaseTimer);
+          if (room.multiTick) { clearInterval(room.multiTick); room.multiTick = null; }
+          Object.values(room.players).forEach(p => {
+            const s = students.get(studentSessKey(cls, p.studentId));
+            if (s) s.currentRoom = null;
+          });
+          rooms.delete(room.code);
+          pendingSince.delete(room.code);
+          affected++;
+        }
+      }
+    }
+    return sendJSON(res, { ok: true, action, affected });
   }
   if (method === 'POST' && pathname === '/api/teacher/room/stop') {
     const cls = teacherClassroom(req);
@@ -1645,6 +2229,7 @@ async function handleApi(req, res, pathname, query) {
         if (s) s.currentRoom = null;
       });
       rooms.delete(body.code);
+      pendingSince.delete(body.code);
     }
     return sendJSON(res, { ok: true });
   }
@@ -1923,6 +2508,7 @@ setInterval(() => {
     if (Object.keys(room.players).length === 0 && now - room.updatedAt > 1000 * 20) {
       if (room.phaseTimer) clearTimeout(room.phaseTimer);
       rooms.delete(code);
+      pendingSince.delete(code);
     }
   }
 }, 1000 * 5);

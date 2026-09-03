@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>유효숫자 마스터 — 로비</title>
 <link rel="stylesheet" href="common.css">
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#6366f1">
 <style>
 .login-wrap{max-width:420px;margin:60px auto;text-align:center}
 .login-wrap .icon{font-size:4rem;margin-bottom:14px}
@@ -77,10 +79,23 @@
       <a href="#" onclick="showMyStats();return false">📊 내 전적</a>
       <a href="/leaderboard.html">🏆 점수판</a>
       <a href="#" onclick="refresh()">🔄 새로고침</a>
+      <a href="#" onclick="openSettings();return false">⚙️ 설정</a>
     </div>
     <div class="user-box">
       <span id="me-label"></span>
+      <button class="btn btn-ghost btn-sm" onclick="openProfileModal()" id="me-profile-btn">👤 프로필</button>
       <button class="btn btn-ghost btn-sm" onclick="logout()">로그아웃</button>
+    </div>
+  </div>
+
+  <!-- 학생 프로필 모달 (Phase C) -->
+  <div id="profile-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:500;align-items:center;justify-content:center;padding:20px">
+    <div style="background:var(--bg2);border:1px solid var(--bg3);border-radius:var(--r);padding:24px;max-width:640px;width:100%;max-height:90vh;overflow:auto">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+        <h2 style="margin:0">👤 내 프로필</h2>
+        <button class="btn btn-ghost btn-sm" onclick="closeProfileModal()">✖</button>
+      </div>
+      <div id="profile-body"></div>
     </div>
   </div>
 
@@ -239,6 +254,22 @@
     <div class="section-tab">
       <button class="active">🚪 활성 방 (다른 친구들)</button>
     </div>
+    <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
+      <input type="text" id="rlist-search" placeholder="🔍 방 이름·코드로 검색" style="flex:1;min-width:160px" oninput="refresh()">
+      <select id="rlist-type" onchange="refresh()" style="min-width:110px">
+        <option value="">모든 타입</option>
+        <option value="single">🎯 싱글</option>
+        <option value="multi">👥 멀티</option>
+        <option value="battle">⚔️ 대전</option>
+      </select>
+      <select id="rlist-diff" onchange="refresh()" style="min-width:110px">
+        <option value="">모든 난이도</option>
+        <option value="easy">쉬움</option>
+        <option value="medium">보통</option>
+        <option value="hard">어려움</option>
+        <option value="mixed">혼합</option>
+      </select>
+    </div>
     <div id="room-list" class="room-list"></div>
 
     <!-- 점수판 -->
@@ -267,8 +298,16 @@ function show(id) {
   document.getElementById(id).style.display = 'block';
   if (id === 'login') {
     loadClassroomList();
+    // 로그인 기억하기 (U8) — 이전 값 자동 채움
     const saved = localStorage.getItem('sigfig-classroom');
-    if (saved) document.getElementById('in-classroom').value = saved;
+    const savedSid = localStorage.getItem('sigfig-studentId');
+    const savedName = localStorage.getItem('sigfig-name');
+    // QR URL에서 ?classroom= 자동 채우기 (U6 QR 로그인 연계)
+    const qsCls = new URLSearchParams(location.search).get('classroom');
+    if (qsCls) document.getElementById('in-classroom').value = qsCls;
+    else if (saved) document.getElementById('in-classroom').value = saved;
+    if (savedSid) document.getElementById('in-sid').value = savedSid;
+    if (savedName) document.getElementById('in-name').value = savedName;
   }
 }
 
@@ -291,7 +330,14 @@ async function init() {
   show('lobby');
   refresh();
   loadLb();
-  pollTimer = setInterval(() => { refresh(); loadLb(); }, 3000);
+  pollNotices();
+  loadMyLabel();
+  pollTimer = setInterval(() => { refresh(); loadLb(); pollNotices(); }, 3000);
+}
+// 공지 수신 — /api/me 응답의 notices[] 처리
+async function pollNotices() {
+  const m = await api('/api/me');
+  if (m && !m.error && m.notices) processNotices(m.notices);
 }
 
 function switchLb(t) {
@@ -415,19 +461,115 @@ async function logout() {
   location.reload();
 }
 
+// Phase C + D: 프로필 모달 (레벨/칭호/아바타/연속출석/퀘스트/오답은행)
+async function openProfileModal() {
+  const m = document.getElementById('profile-modal');
+  m.style.display = 'flex';
+  document.getElementById('profile-body').innerHTML = '<div class="empty">불러오는 중...</div>';
+  const p = await api('/api/student/profile');
+  if (p.error) { document.getElementById('profile-body').innerHTML = `<div class="empty">${p.error}</div>`; return; }
+  const unlocks = await api('/api/student/avatars');
+  const expPct = Math.floor(p.exp / Math.max(1, p.expNext) * 100);
+  const currentTitle = (p.titles.find(t => t.id === p.title) || {}).name || '';
+  const titleOpts = '<option value="">— 칭호 없음 —</option>' + p.titles.filter(t => t.owned).map(t => `<option value="${t.id}" ${p.title===t.id?'selected':''}>${t.name}</option>`).join('');
+  const avatarChips = (p.avatarsOwned || []).map(a => `<button class="btn btn-ghost btn-sm" onclick="pickAvatar('${a}')" style="font-size:1.4rem;${a===p.avatar?'border:2px solid var(--pri)':''}">${a}</button>`).join('');
+  const lockedAvatars = (unlocks.unlocks || []).filter(u => !(p.avatarsOwned || []).includes(u.avatar))
+    .map(u => `<button class="btn btn-ghost btn-sm" ${p.level<u.level?'disabled title="레벨 ' + u.level + ' 필요"':''} onclick="unlockAvatar('${u.avatar}')" style="font-size:1.4rem;opacity:.5">${u.avatar} <span style="font-size:.7rem">Lv.${u.level}</span></button>`).join('');
+  const questsHtml = p.quests.map(q => {
+    const pct = Math.min(100, Math.floor((q.progress / q.target) * 100));
+    return `<div style="margin-bottom:10px">
+      <div style="display:flex;justify-content:space-between;font-size:.88rem"><span>${q.completed?'✅ ':''}${q.name}</span><span style="color:var(--txt2)">${q.progress}/${q.target}</span></div>
+      <div style="height:6px;background:var(--bg3);border-radius:3px;margin-top:4px"><div style="height:100%;background:${q.completed?'var(--sec)':'var(--pri)'};width:${pct}%;border-radius:3px"></div></div>
+      <div style="font-size:.76rem;color:var(--txt2);margin-top:2px">보상: +${q.reward.exp} EXP${q.reward.badge?' · 🏅 ' + q.reward.badge:''}</div>
+    </div>`;
+  }).join('') || '<div class="empty">진행 중인 퀘스트 없음</div>';
+  const wrongCount = (p.wrongBank || []).length;
+  const achBadges = (p.achievements || []).map(a => `<span class="badge acc">🏅 ${a}</span>`).join(' ') || '<span style="color:var(--txt2)">아직 없음</span>';
+
+  document.getElementById('profile-body').innerHTML = `
+    <div style="display:grid;grid-template-columns:auto 1fr;gap:16px;align-items:center;margin-bottom:18px;padding:14px;background:var(--bg);border-radius:var(--r)">
+      <div style="font-size:4rem">${p.avatar}</div>
+      <div>
+        <div style="font-weight:800;font-size:1.3rem">${currentTitle ? currentTitle + ' ' : ''}${localStorage.getItem('sigfig-name')||''}</div>
+        <div style="color:var(--txt2);font-size:.9rem">Lv.${p.level} · ${p.exp}/${p.expNext} EXP · 🔥 ${p.dailyStreak}일 연속 출석</div>
+        <div style="height:8px;background:var(--bg3);border-radius:4px;margin-top:6px"><div style="height:100%;background:linear-gradient(90deg,var(--pri),var(--sec));width:${expPct}%;border-radius:4px"></div></div>
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px">
+      <div><label style="font-size:.82rem;color:var(--txt2)">🏷 칭호 선택</label>
+        <select id="profile-title" onchange="saveProfileField('title', this.value)" style="width:100%;margin-top:4px">${titleOpts}</select></div>
+      <div><label style="font-size:.82rem;color:var(--txt2)">오답 은행</label>
+        <div style="margin-top:4px;padding:9px 14px;background:var(--bg);border-radius:var(--r);border:1px solid var(--bg3)">📝 ${wrongCount}문제 <button class="btn btn-acc btn-sm" style="margin-left:8px" onclick="startRevise()" ${wrongCount<1?'disabled':''}>실수 챌린지 →</button></div></div>
+    </div>
+    <h4 style="margin:12px 0 6px">🎭 아바타 (클릭해서 선택)</h4>
+    <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px">${avatarChips}</div>
+    <h4 style="margin:12px 0 6px;color:var(--txt2)">🔒 해금 가능</h4>
+    <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px">${lockedAvatars || '<span style="color:var(--txt2)">모두 획득!</span>'}</div>
+    <h4 style="margin:12px 0 6px">🎯 퀘스트</h4>
+    ${questsHtml}
+    <h4 style="margin:14px 0 6px">🏅 업적</h4>
+    <div>${achBadges}</div>
+  `;
+}
+function closeProfileModal() { document.getElementById('profile-modal').style.display = 'none'; }
+async function saveProfileField(field, value) {
+  const body = {}; body[field] = value;
+  await api('/api/student/profile', { method: 'POST', body });
+  openProfileModal();
+}
+async function pickAvatar(emoji) {
+  await api('/api/student/profile', { method: 'POST', body: { avatar: emoji } });
+  openProfileModal();
+  loadMyLabel();
+}
+async function unlockAvatar(emoji) {
+  const r = await api('/api/student/unlock-avatar', { method: 'POST', body: { avatar: emoji } });
+  if (r.error) alert(r.error);
+  else openProfileModal();
+}
+async function loadMyLabel() {
+  const p = await api('/api/student/profile');
+  if (p.error) return;
+  const name = localStorage.getItem('sigfig-name') || '';
+  const sid = localStorage.getItem('sigfig-studentId') || '';
+  const btn = document.getElementById('me-profile-btn');
+  if (btn) btn.innerHTML = `${p.avatar || '🙂'} Lv.${p.level}`;
+  document.getElementById('me-label').textContent = `${p.avatar||'🙂'} ${name} (${sid}) · Lv.${p.level}`;
+}
+async function startRevise() {
+  // Phase F: 실수 챌린지 — wrongBank에서 5문제 뽑아 싱글 방 즉시 생성
+  const p = await api('/api/student/profile');
+  if (p.error || !p.wrongBank || !p.wrongBank.length) { alert('복습할 오답이 없어요'); return; }
+  // 간단 구현: 싱글 방을 만들고 서버에 revise 플래그 전달 — 서버가 오답 문제를 재구성하도록 후속 확장
+  alert('📝 오답 모음:\n\n' + p.wrongBank.slice(-10).map(w => `• ${(w.q && (w.q.num || w.q.display || JSON.stringify(w.q.meas || w.q).slice(0,30))) || '?'}`).join('\n') + '\n\n(자동 풀이 모드는 개발 중 — 일단 오답 목록 확인 가능)');
+}
+
 async function refresh() {
   const r = await api('/api/rooms');
   if (r.error) return;
   const listEl = document.getElementById('room-list');
-  if (!r.rooms.length) {
-    listEl.innerHTML = '<div class="empty">아직 열린 방이 없어요. 위에서 방을 만들어보세요!</div>';
+  // 필터 적용 (U10)
+  const q = (document.getElementById('rlist-search')?.value || '').trim().toLowerCase();
+  const ft = document.getElementById('rlist-type')?.value || '';
+  const fd = document.getElementById('rlist-diff')?.value || '';
+  const filtered = (r.rooms || []).filter(rm => {
+    if (ft && rm.type !== ft) return false;
+    if (fd && rm.difficulty !== fd) return false;
+    if (q) {
+      const hay = `${rm.label||''} ${rm.code} ${rm.ownerName||''}`.toLowerCase();
+      if (!hay.includes(q)) return false;
+    }
+    return true;
+  });
+  if (!filtered.length) {
+    listEl.innerHTML = '<div class="empty">' + (r.rooms.length ? '검색 조건에 맞는 방이 없어요' : '아직 열린 방이 없어요. 위에서 방을 만들어보세요!') + '</div>';
     return;
   }
   const typeEmoji = { single:'🎯', multi:'👥', battle:'⚔️' };
-  const gmLabel = { 1:'개수 세기', 2:'유효숫자 찾기', 3:'측정값 읽기' };
+  const gmLabel = { 1:'개수 세기', 2:'유효숫자 찾기', 3:'측정값 읽기', 4:'덧셈/뺄셈' };
   const diffLabel = { easy:'쉬움', medium:'보통', hard:'어려움', mixed:'혼합' };
   const phaseLabel = { lobby:'대기 중', question:'진행 중', reveal:'진행 중', results:'종료' };
-  listEl.innerHTML = r.rooms.map(rm => {
+  listEl.innerHTML = filtered.map(rm => {
     const canJoin = rm.phase === 'lobby' && rm.playerCount < rm.capacity;
     return `<div class="room-row">
       <div class="info">
@@ -441,11 +583,22 @@ async function refresh() {
   }).join('');
 }
 
+function suggestRoomLabel() {
+  const gmLbl = { '1':'개수', '2':'찾기', '3':'측정', '4':'덧뺄' };
+  const diffLbl = { easy:'쉬움', medium:'보통', hard:'어려움', mixed:'혼합' };
+  const gm = document.getElementById('cfg-gm').value;
+  const diff = document.getElementById('cfg-diff').value;
+  const name = localStorage.getItem('sigfig-name') || '';
+  return `${name ? name + ' · ' : ''}${gmLbl[gm]||'게임'} ${diffLbl[diff]||''}`.trim();
+}
 function showCreate(type) {
   selectedType = type;
   const titles = { single: '🎯 싱글 플레이 설정', multi: '👥 멀티 플레이 방 만들기', battle: '⚔️ 대전장 만들기' };
   document.getElementById('create-title').textContent = titles[type];
   document.getElementById('create-form').style.display = 'block';
+  // 방 이름 자동 제안 (U9)
+  const lbl = document.getElementById('cfg-label');
+  if (lbl && !lbl.value) lbl.placeholder = suggestRoomLabel() + ' (비워두면 자동)';
   document.getElementById('cfg-cap-wrap').style.display = type === 'single' ? 'none' : 'block';
   document.getElementById('cfg-label-wrap').style.display = type === 'single' ? 'none' : 'block';
   // 타입별 옵션 토글
@@ -507,7 +660,7 @@ async function createRoom() {
     questionTime: qt,
     revealTime: rt,
     capacity: parseInt(document.getElementById('cfg-cap').value),
-    label: document.getElementById('cfg-label').value.trim(),
+    label: document.getElementById('cfg-label').value.trim() || suggestRoomLabel(),
     addSubMode: document.getElementById('cfg-addsub').value,
     singleMode: document.getElementById('cfg-single-mode').value,
     timeLimit: parseInt(document.getElementById('cfg-timelimit').value),
