@@ -2126,6 +2126,27 @@ async function handleApi(req, res, pathname, query) {
     return sendJSON(res, { ok: true });
   }
 
+  // ---------- 틀린 문제 다시 보기 (본인 것만) ----------
+  // 게임이 끝난 뒤(results) 또는 멀티에서 본인이 다 푼 뒤(pPhase === 'done')에만 열람 가능.
+  // p.wrongHistory 는 이미 정답이 포함된 뷰(viewQuestion(q, false))라 추가 계산 없음.
+  if (method === 'GET' && pathname === '/api/room/review') {
+    const s = authStudent(req);
+    if (!s) return sendJSON(res, { error: '로그인 필요' }, 401);
+    const room = rooms.get(String(query.code || s.currentRoom || ''));
+    if (!room) return sendJSON(res, { error: '방 없음' }, 404);
+    const p = Object.values(room.players).find(x => x.studentId === s.studentId);
+    if (!p) return sendJSON(res, { error: '참여자 아님' }, 400);
+    const finished = room.phase === 'results' || (room.type === 'multi' && p.pPhase === 'done');
+    if (!finished) return sendJSON(res, { error: '게임이 끝난 뒤에 볼 수 있어요' }, 400);
+    const items = (p.wrongHistory || []).map(it => ({
+      qIndex: it.qIndex, q: it.q, submitted: it.submitted, timeout: !!it.timeout,
+    }));
+    const total = room.type === 'multi'
+      ? ((p.correct || 0) + (p.wrong || 0))
+      : room.questions.length;
+    return sendJSON(res, { items, total, correct: p.correct || 0 });
+  }
+
   // ---------- 방장 시작 ----------
   if (method === 'POST' && pathname === '/api/room/start') {
     const s = authStudent(req);
