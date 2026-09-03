@@ -207,6 +207,7 @@ function migrateClassroomShape() {
     if (cf.autoApproveRooms === undefined) { cf.autoApproveRooms = false; changed = true; }
     if (cf.sheetsUrl === undefined) { cf.sheetsUrl = ''; changed = true; }
     if (cf.locked === undefined) { cf.locked = false; changed = true; }
+    if (cf.rosterOnly === undefined) { cf.rosterOnly = false; changed = true; }
     if (!Array.isArray(cf.presets)) { cf.presets = []; changed = true; }
     if (!Array.isArray(cf.journal)) { cf.journal = []; changed = true; }
   }
@@ -229,6 +230,11 @@ function clsAttendance(code) {
   if (!attendance[code]) attendance[code] = {};
   return attendance[code];
 }
+// 명단(preregistered) 학생 수 — 구 레코드에는 필드가 없으므로 !! 로 처리
+function countPreregistered(code) {
+  const sdb = clsStudents(code);
+  return Object.values(sdb).filter(r => !!r.preregistered).length;
+}
 function clsCfg(code) {
   const c = classrooms[code];
   if (!c) return null;
@@ -237,6 +243,7 @@ function clsCfg(code) {
   if (cf.autoApproveRooms === undefined) cf.autoApproveRooms = false;
   if (cf.sheetsUrl === undefined) cf.sheetsUrl = '';
   if (cf.locked === undefined) cf.locked = false;
+  if (cf.rosterOnly === undefined) cf.rosterOnly = false;
   if (!Array.isArray(cf.presets)) cf.presets = [];
   if (!Array.isArray(cf.journal)) cf.journal = [];
   return cf;
@@ -246,6 +253,15 @@ function clsCfg(code) {
 function normCode(v) {
   return String(v || '').trim().slice(0, 20);
 }
+// 이름 정규화 — 명단 대조용. 공백(유니코드 공백·폭 없는 공백 포함) 제거 + 소문자화 + NFC 정규화
+// 예) '홍 길동' / '홍길동' / 'HONG' / 'hong' 을 같은 것으로 본다.
+function normName(s) {
+  return String(s == null ? '' : s)
+    .normalize('NFC')
+    .replace(/[\s\u00A0\u200B-\u200D\u2060\u3000\uFEFF]/g, '')
+    .toLowerCase();
+}
+
 function validCode(v) {
   const s = normCode(v);
   if (s.length < 2 || s.length > 20) return false;
@@ -1459,7 +1475,7 @@ async function handleApi(req, res, pathname, query) {
     const body = await readBody(req);
     const classroomCode = normCode(body.classroomCode || body.classCode);
     const studentId = String(body.studentId || '').trim().slice(0, 10);
-    const name = String(body.name || '').trim().slice(0, 12);
+    let name = String(body.name || '').trim().slice(0, 12);
     if (!classroomCode) return sendJSON(res, { error: '교실 코드가 필요해요. 선생님께 문의하세요.' }, 400);
     if (!clsroom(classroomCode)) return sendJSON(res, { error: '존재하지 않는 교실 코드예요.' }, 404);
     // 교실 잠금 — 이미 로그인된 세션은 그대로, 신규 로그인만 차단
@@ -1469,9 +1485,16 @@ async function handleApi(req, res, pathname, query) {
     }
     if (!studentId || !name) return sendJSON(res, { error: '학번과 이름을 입력하세요.' }, 400);
     if (!/^[0-9A-Za-z]+$/.test(studentId)) return sendJSON(res, { error: '학번은 숫자/영문만 가능' }, 400);
-    // 차단 확인 (교실별)
     const sdb = clsStudents(classroomCode);
     const rec = sdb[studentId];
+    // 명단 등록 학생만 입장 (rosterOnly) — CSV 로 등록된 학번·이름이 정확히 일치할 때만 통과
+    // OFF 일 때는 기존 동작(누구나 입장 + 이름 최신 로그인으로 갱신)을 그대로 유지한다.
+    if (clsCfg(classroomCode).rosterOnly) {
+      if (!rec || !rec.preregistered) return sendJSON(res, { error: '명단에 없는 학번이에요. 선생님께 확인하세요.' }, 403);
+      if (normName(rec.name) !== normName(name)) return sendJSON(res, { error: '학번과 이름이 명단과 달라요.' }, 403);
+      name = rec.name;   // 명단의 이름을 정본으로 사용 → registerOrTouchStudent 의 이름 덮어쓰기가 no-op 이 된다
+    }
+    // 차단 확인 (교실별)
     if (rec && rec.blocked) return sendJSON(res, { error: '차단된 학생입니다. 교사에게 문의하세요.' }, 403);
     // 기존 세션이 있으면 토큰 갱신
     const sKey = studentSessKey(classroomCode, studentId);
@@ -1982,6 +2005,48 @@ async function handleApi(req, res, pathname, query) {
     maybePushSheets(cls, 'classroom_lock', { locked: c.locked, at: Date.now() });
     return sendJSON(res, { ok: true, locked: c.locked });
   }
+  // 명단 학생만 입장 조회/토글 — 켜면 CSV 로 등록된 학번·이름이 일치해야 로그인 가능 (현 세션은 유지)
+  if (method === 'GET' && pathname === '/api/teacher/classroom/roster-only') {
+    const cls = teacherClassroom(req);
+    if (!cls) return sendJSON(res, { error: '교사 권한' }, 401);
+    return sendJSON(res, {
+      rosterOnly: !!clsCfg(cls).rosterOnly,
+      preregisteredCount: countPreregistered(cls),
+    });
+  }
+  if (method === 'POST' && pathname === '/api/teacher/classroom/roster-only') {
+    const cls = teacherClassroom(req);
+    if (!cls) return sendJSON(res, { error: '교사 권한' }, 401);
+    const body = await readBody(req);
+    const c = clsCfg(cls);
+    c.rosterOnly = !!body.rosterOnly;
+    saveClassrooms();
+    maybePushSheets(cls, 'classroom_roster_only', { rosterOnly: c.rosterOnly, at: Date.now() });
+    return sendJSON(res, { ok: true, rosterOnly: c.rosterOnly, preregisteredCount: countPreregistered(cls) });
+  }
+  // 기존 학생을 명단 학생으로 표시/해제 — CSV 를 쓰지 않은 교사가 토글을 켰다가 전원이 막히는 상황 방지
+  // body: { studentIds?: string[], all?: true, value: boolean }
+  if (method === 'POST' && pathname === '/api/teacher/students/preregister') {
+    const cls = teacherClassroom(req);
+    if (!cls) return sendJSON(res, { error: '교사 권한' }, 401);
+    const body = await readBody(req);
+    const value = !!body.value;
+    const sdb = clsStudents(cls);
+    const ids = body.all === true
+      ? Object.keys(sdb)
+      : (Array.isArray(body.studentIds) ? body.studentIds.map(String) : []);
+    if (!ids.length) return sendJSON(res, { error: '대상 학생이 없습니다' }, 400);
+    let changed = 0;
+    for (const sid of ids) {
+      const rec = sdb[sid];
+      if (!rec) continue;
+      if (!!rec.preregistered === value) continue;
+      rec.preregistered = value;
+      changed++;
+    }
+    if (changed) saveStudentsDb();
+    return sendJSON(res, { ok: true, changed, preregisteredCount: countPreregistered(cls) });
+  }
   // 방 프리셋(템플릿) — 자주 쓰는 방 설정을 저장/불러오기
   if (method === 'GET' && pathname === '/api/teacher/presets') {
     const cls = teacherClassroom(req);
@@ -2238,7 +2303,10 @@ async function handleApi(req, res, pathname, query) {
         multi: myCount('multi'),
         battle: myCount('battle'),
       },
-      classroom: { locked: !!cfg.locked, autoApprove: !!cfg.autoApproveRooms },
+      classroom: {
+        locked: !!cfg.locked, autoApprove: !!cfg.autoApproveRooms,
+        rosterOnly: !!cfg.rosterOnly, preregisteredCount: countPreregistered(cls),
+      },
       todayAttendance: { date: today, present, late, absent },
     });
   }
@@ -2620,5 +2688,5 @@ if (require.main === module) server.listen(PORT, HOST, () => {
 // ==================== 테스트용 export ====================
 // node test.js 에서 순수 함수만 가져다 쓰기 위한 통로. 직접 실행 시 동작에는 영향이 없다.
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { scheduleSave, flushAllSync };
+  module.exports = { scheduleSave, flushAllSync, normName, normCode };
 }

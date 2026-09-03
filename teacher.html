@@ -292,6 +292,10 @@
           <input type="checkbox" id="auto-approve-tog" onchange="toggleAutoApprove()">
           <span id="auto-approve-label" style="color:var(--txt2)">🔁 자동 승인</span>
         </label>
+        <label title="명단(CSV)에 등록된 학번·이름이 일치하는 학생만 로그인할 수 있습니다">
+          <input type="checkbox" id="roster-only-tog" onchange="toggleRosterOnly()">
+          <span id="roster-only-label" style="color:var(--txt2)">📋 명단 학생만 입장</span>
+        </label>
         <span class="sep"></span>
         <label title="승인 대기가 새로 생기면 데스크톱 알림을 표시합니다">
           <input type="checkbox" id="notif-tog" onchange="toggleNotif()">
@@ -310,6 +314,11 @@
       </div>
       <div id="lock-hint" style="color:var(--err);font-size:.82rem;margin:-4px 0 10px;display:none">
         🔒 <b>교실 잠김</b> — 현재 접속한 학생은 유지되지만, <b>새 로그인/방 생성이 차단</b>됩니다.
+      </div>
+      <div id="roster-only-hint" style="color:var(--acc);font-size:.82rem;margin:-4px 0 10px;display:none">
+        📋 <b>명단 학생만 입장 ON</b> — <b id="roster-only-count">0</b>명이 명단에 등록되어 있습니다.
+        학번과 이름이 명단과 <b>정확히 일치</b>해야 로그인되고, <b>남의 학번으로 들어가거나 이름을 바꿀 수 없습니다</b>.
+        (이미 접속 중인 학생은 그대로 유지됩니다)
       </div>
 
       <!-- 출석 요약 (B2) -->
@@ -405,6 +414,7 @@
           <input type="text" id="stu-search" placeholder="학번 또는 이름 검색" style="flex:1;min-width:200px" oninput="renderStudentsDb()">
           <button class="btn btn-sec btn-sm" onclick="downloadCsv('students')">📥 학생 명단 CSV</button>
           <button class="btn btn-sec btn-sm" onclick="downloadCsv('attendance')">📅 오늘 출결 CSV</button>
+          <button class="btn btn-ghost btn-sm" title="지금 등록된 학생 전원을 명단 학생으로 표시합니다" onclick="preregisterAll()">📋 현재 명단 전체를 등록 학생으로 표시</button>
         </div>
         <!-- B1: 학생 필터 칩 -->
         <div class="filter-chips" id="stu-chips">
@@ -621,6 +631,7 @@ async function refresh(ov) {
   if (ov.classroom) {
     applyLockUI(!!ov.classroom.locked);
     applyAutoApproveUI(!!ov.classroom.autoApprove);
+    applyRosterOnlyUI(!!ov.classroom.rosterOnly, ov.classroom.preregisteredCount || 0);
   }
 
   // 대기 일괄 바
@@ -779,6 +790,35 @@ async function toggleLock() {
   if (r.error) { toast(r.error, 'err'); document.getElementById('lock-tog').checked = !locked; return; }
   applyLockUI(r.locked);
   toast(r.locked ? '🔒 교실을 잠갔습니다' : '🔓 교실 잠금을 해제했습니다', r.locked ? 'acc' : 'ok');
+}
+
+// 명단 학생만 입장
+let rosterPreregCount = 0;
+function applyRosterOnlyUI(on, count) {
+  if (typeof count === 'number') rosterPreregCount = count;
+  const t = document.getElementById('roster-only-tog');
+  const h = document.getElementById('roster-only-hint');
+  const c = document.getElementById('roster-only-count');
+  if (t) t.checked = !!on;
+  if (h) h.style.display = on ? 'block' : 'none';
+  if (c) c.textContent = rosterPreregCount;
+}
+async function toggleRosterOnly() {
+  const tog = document.getElementById('roster-only-tog');
+  const on = tog.checked;
+  if (on) {
+    if (rosterPreregCount === 0) {
+      if (!confirm('⚠️ 명단에 등록된 학생이 0명입니다.\n\n지금 켜면 모든 학생이 로그인할 수 없습니다.\n[학생] 탭에서 명단 CSV를 올리거나 "현재 명단 전체를 등록 학생으로 표시"를 먼저 해주세요.\n\n그래도 켤까요?')) {
+        tog.checked = false; return;
+      }
+    } else if (!confirm(`📋 명단 학생만 입장을 켤까요?\n\n명단에 등록된 ${rosterPreregCount}명만 로그인할 수 있고, 학번과 이름이 모두 일치해야 합니다.\n(이미 접속 중인 학생 세션은 유지됩니다)`)) {
+      tog.checked = false; return;
+    }
+  }
+  const r = await teacherApi('/api/teacher/classroom/roster-only', { method: 'POST', body: { rosterOnly: on } });
+  if (r.error) { toast(r.error, 'err'); tog.checked = !on; return; }
+  applyRosterOnlyUI(r.rosterOnly, r.preregisteredCount);
+  toast(r.rosterOnly ? `📋 명단 학생만 입장 ON (등록 ${r.preregisteredCount}명)` : '명단 제한을 해제했습니다', r.rosterOnly ? 'acc' : 'ok');
 }
 
 // D2/D3: 알림 설정
@@ -1078,6 +1118,9 @@ async function loadStudentsDb() {
   const r = await teacherApi('/api/teacher/students');
   if (r.error) return;
   studentsDbCache = r.students || [];
+  // 명단 등록 인원수 갱신 (CSV 업로드 직후에도 토글 경고가 정확하도록)
+  rosterPreregCount = studentsDbCache.filter(s => !!s.preregistered).length;
+  applyRosterOnlyUI(document.getElementById('roster-only-tog')?.checked, rosterPreregCount);
   renderStudentsDb();
 }
 function renderStudentsDb() {
@@ -1110,7 +1153,7 @@ function renderStudentsDb() {
       return `<tr style="cursor:pointer" onclick="showStudentStats('${s.studentId}','${(s.name||'').replace(/'/g,"\\'")}')">
         <td><b>${s.studentId}</b></td>
         <td>${s.name}</td>
-        <td>${s.online?'<span class="badge ok">🟢 접속</span>':'<span class="badge">오프</span>'} ${s.blocked?'<span class="badge no">🚫 차단</span>':''}</td>
+        <td>${s.online?'<span class="badge ok">🟢 접속</span>':'<span class="badge">오프</span>'} ${s.blocked?'<span class="badge no">🚫 차단</span>':''} ${s.preregistered?'<span class="badge acc" title="명단에 등록된 학생">📋 명단</span>':''}</td>
         <td>${st.totalGames||0}</td>
         <td style="font-weight:700;color:var(--sec)">${(st.totalScore||0).toLocaleString()}</td>
         <td><span style="color:var(--sec)">${bw}</span>-<span style="color:var(--err)">${bl}</span></td>
@@ -1119,6 +1162,7 @@ function renderStudentsDb() {
         <td style="white-space:nowrap" onclick="event.stopPropagation()">
           <button class="btn btn-ghost btn-sm" onclick="showStudentStats('${s.studentId}','${(s.name||'').replace(/'/g,"\\'")}')">📊</button>
           <button class="btn btn-ghost btn-sm" onclick="renameStudent('${s.studentId}','${(s.name||'').replace(/'/g,"\\'")}')">✏️</button>
+          <button class="btn btn-ghost btn-sm" title="${s.preregistered?'명단에서 해제':'명단 학생으로 등록'}" onclick="togglePreregister('${s.studentId}',${!s.preregistered})">${s.preregistered?'📋✖':'📋'}</button>
           <button class="btn btn-ghost btn-sm" onclick="toggleBlock('${s.studentId}',${!s.blocked})">${s.blocked?'✅':'🚫'}</button>
           <button class="btn btn-err btn-sm" onclick="deleteStudent('${s.studentId}')">🗑</button>
         </td>
@@ -1193,6 +1237,24 @@ async function deleteStudent(sid) {
 async function toggleBlock(sid, blocked) {
   const r = await teacherApi('/api/teacher/student/block', { method: 'POST', body: { studentId: sid, blocked } });
   if (r.error) alert(r.error);
+  loadStudentsDb();
+}
+// 명단 등록/해제 — '명단 학생만 입장'이 켜졌을 때 로그인 가능한 학생을 정한다
+async function togglePreregister(sid, value) {
+  const r = await teacherApi('/api/teacher/students/preregister', { method: 'POST', body: { studentIds: [sid], value } });
+  if (r.error) { alert(r.error); return; }
+  rosterPreregCount = r.preregisteredCount;
+  applyRosterOnlyUI(document.getElementById('roster-only-tog')?.checked, r.preregisteredCount);
+  toast(value ? `📋 ${sid} 학생을 명단에 등록했습니다` : `${sid} 학생을 명단에서 해제했습니다`, value ? 'ok' : '');
+  loadStudentsDb();
+}
+async function preregisterAll() {
+  if (!confirm(`📋 현재 등록된 학생 ${studentsDbCache.length}명 전체를 "명단 학생"으로 표시할까요?\n\n'명단 학생만 입장'을 켰을 때 이 학생들만 로그인할 수 있습니다.`)) return;
+  const r = await teacherApi('/api/teacher/students/preregister', { method: 'POST', body: { all: true, value: true } });
+  if (r.error) { alert(r.error); return; }
+  rosterPreregCount = r.preregisteredCount;
+  applyRosterOnlyUI(document.getElementById('roster-only-tog')?.checked, r.preregisteredCount);
+  toast(`📋 ${r.changed}명을 명단에 등록했습니다 (총 ${r.preregisteredCount}명)`, 'ok');
   loadStudentsDb();
 }
 async function renameStudent(sid, oldName) {
