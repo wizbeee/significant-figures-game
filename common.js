@@ -170,7 +170,7 @@ function processNotices(list) {
 
 // ==================== 설정(테마/글꼴/색약/소리) ====================
 function applyAppPrefs() {
-  const theme = localStorage.getItem('sigfig-theme') || 'dark';
+  const theme = localStorage.getItem('sigfig-theme') || 'light';
   const font = localStorage.getItem('sigfig-font') || 'md';
   const cb = localStorage.getItem('sigfig-cb') === '1';
   document.body.classList.remove('theme-light','theme-dark','font-sm','font-md','font-lg','cb-mode');

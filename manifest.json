@@ -4,7 +4,7 @@
   "description": "유효숫자 실시간 퀴즈 게임 (학급용)",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#0f172a",
+  "background_color": "#f8fafc",
   "theme_color": "#6366f1",
   "orientation": "portrait",
   "icons": [

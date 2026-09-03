@@ -1,11 +1,17 @@
 :root{
-  --pri:#6366f1;--pri2:#4f46e5;--sec:#10b981;--acc:#f59e0b;--err:#ef4444;
-  --bg:#0f172a;--bg2:#1e293b;--bg3:#334155;--txt:#f1f5f9;--txt2:#94a3b8;--r:12px;
+  --pri:#6366f1;--pri2:#4f46e5;--sec:#059669;--acc:#b45309;--err:#dc2626;
+  --bg:#eef2f7;--bg2:#ffffff;--bg3:#e2e8f0;--txt:#0f172a;--txt2:#64748b;--r:12px;
   --scale:1;
 }
-/* 라이트 테마 */
+/* 다크 테마 (설정에서 선택) */
+body.theme-dark{
+  --sec:#10b981;--acc:#f59e0b;--err:#ef4444;
+  --bg:#0f172a;--bg2:#1e293b;--bg3:#334155;--txt:#f1f5f9;--txt2:#94a3b8;
+}
+/* 라이트 테마 — 기본값과 동일 (설정에서 명시 선택 시) */
 body.theme-light{
-  --bg:#f8fafc;--bg2:#ffffff;--bg3:#e2e8f0;--txt:#0f172a;--txt2:#64748b;
+  --sec:#059669;--acc:#b45309;--err:#dc2626;
+  --bg:#eef2f7;--bg2:#ffffff;--bg3:#e2e8f0;--txt:#0f172a;--txt2:#64748b;
 }
 /* 글꼴 크기 */
 body.font-sm{--scale:.92} body.font-md{--scale:1} body.font-lg{--scale:1.12}
@@ -26,14 +32,14 @@ h3{margin-bottom:10px}
 input,select,textarea{padding:10px 14px;border-radius:var(--r);border:1px solid var(--bg3);background:var(--bg);color:var(--txt);font-size:1rem;outline:none;transition:border .2s;font-family:inherit}
 input:focus,select:focus{border-color:var(--pri)}
 .btn{padding:11px 22px;border:none;border-radius:var(--r);font-size:1rem;font-weight:600;cursor:pointer;transition:all .2s;color:#fff;display:inline-flex;align-items:center;gap:8px}
-.btn:hover{transform:translateY(-2px);box-shadow:0 4px 15px rgba(0,0,0,.3)}
+.btn:hover{transform:translateY(-2px);box-shadow:0 4px 15px rgba(0,0,0,.18)}
 .btn:active{transform:translateY(0)}
 .btn:disabled{opacity:.5;cursor:not-allowed;transform:none}
 .btn-pri{background:linear-gradient(135deg,var(--pri),var(--pri2))}
 .btn-sec{background:linear-gradient(135deg,var(--sec),#059669)}
 .btn-acc{background:linear-gradient(135deg,var(--acc),#d97706)}
 .btn-err{background:linear-gradient(135deg,var(--err),#dc2626)}
-.btn-ghost{background:var(--bg3)}
+.btn-ghost{background:var(--bg3);color:var(--txt)}
 .btn-lg{padding:14px 32px;font-size:1.1rem}
 .btn-sm{padding:7px 14px;font-size:.87rem}
 .card{background:var(--bg2);border-radius:var(--r);padding:20px;border:1px solid var(--bg3);transition:all .2s}
@@ -90,7 +96,7 @@ tr:hover td{background:rgba(99,102,241,.05)}
 
 /* 공통 공지 토스트 (학생) */
 .notice-stack{position:fixed;top:70px;left:50%;transform:translateX(-50%);display:flex;flex-direction:column;gap:8px;z-index:9999;pointer-events:none;max-width:90vw;width:520px}
-.notice-toast{background:linear-gradient(135deg,#1e293b,#334155);border:2px solid var(--acc);border-radius:var(--r);padding:14px 18px;box-shadow:0 10px 40px rgba(0,0,0,.5);pointer-events:auto;animation:noticeIn .3s ease-out;font-size:1rem;color:var(--txt);display:flex;align-items:flex-start;gap:10px}
+.notice-toast{background:var(--bg2);border:2px solid var(--acc);border-radius:var(--r);padding:14px 18px;box-shadow:0 10px 40px rgba(0,0,0,.22);pointer-events:auto;animation:noticeIn .3s ease-out;font-size:1rem;color:var(--txt);display:flex;align-items:flex-start;gap:10px}
 .notice-toast .icon{font-size:1.3rem;flex-shrink:0}
 .notice-toast .body{flex:1;line-height:1.5}
 .notice-toast .body b{color:var(--acc);display:block;font-size:.78rem;margin-bottom:2px}
