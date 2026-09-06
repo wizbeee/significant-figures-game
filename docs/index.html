@@ -1,0 +1,1423 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>측정과 불확정도 - 손으로 만지며 배우기</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Gowun+Dodum&family=Gaegu:wght@400;700&family=IBM+Plex+Mono:wght@500;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #FBF6E9;
+  --card: #FFFFFF;
+  --ink: #2A2A2A;
+  --soft: #6B6B6B;
+  --line: #EDE7D6;
+  --c1: #FF8C42;
+  --c2: #14B8A6;
+  --c3: #8B5CF6;
+  --c4: #EC4899;
+  --c5: #F59E0B;
+  --c6: #F43F5E;
+  --c7: #059669;
+  --c8: #6366F1;
+  --c9: #0891B2;
+  --good: #10B981;
+  --bad: #EF4444;
+  --shadow: 0 8px 24px rgba(0,0,0,0.06);
+  --current-color: var(--c1);
+}
+* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+body {
+  font-family: 'Gowun Dodum', -apple-system, BlinkMacSystemFont, sans-serif;
+  background: var(--bg);
+  color: var(--ink);
+  line-height: 1.7;
+  min-height: 100vh;
+  padding: 20px 16px 60px;
+}
+.container { max-width: 920px; margin: 0 auto; }
+
+/* === 헤더 === */
+.header { text-align: center; margin-bottom: 20px; }
+.header .badge {
+  display: inline-block; padding: 6px 14px; background: var(--c1); color: white;
+  border-radius: 999px; font-size: 0.85rem; font-weight: 700; margin-bottom: 12px;
+}
+h1 { font-family: 'Gaegu', serif; font-size: 2.1rem; font-weight: 700; margin-bottom: 6px; line-height: 1.2; }
+.header p { color: var(--soft); font-size: 1rem; }
+
+/* === 진행 표시 === */
+.progress-wrap {
+  background: var(--card); border-radius: 18px; padding: 16px;
+  margin-bottom: 24px; box-shadow: var(--shadow);
+}
+.progress-group {
+  display: flex; flex-direction: column; gap: 8px;
+}
+.progress-group + .progress-group { margin-top: 12px; padding-top: 12px; border-top: 1px dashed var(--line); }
+.progress-label {
+  font-size: 0.75rem; font-weight: 700; color: var(--soft);
+  text-transform: uppercase; letter-spacing: 0.06em; padding-left: 4px;
+}
+.progress-dots { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+.progress-dot {
+  width: 40px; height: 40px; border-radius: 50%;
+  background: var(--bg); border: 2px solid var(--line);
+  display: flex; align-items: center; justify-content: center;
+  font-weight: 700; font-size: 0.9rem; cursor: pointer;
+  transition: all 0.25s; user-select: none;
+}
+.progress-dot:hover { transform: scale(1.05); }
+.progress-dot.active { transform: scale(1.15); border-color: var(--current-color); background: var(--current-color); color: white; }
+.progress-dot.done { background: #DDD5C2; border-color: #DDD5C2; color: white; }
+
+/* === 섹션 === */
+.section {
+  background: var(--card); border-radius: 24px; padding: 28px 24px;
+  box-shadow: var(--shadow); margin-bottom: 20px; display: none;
+  animation: slideIn 0.4s ease-out;
+}
+.section.active { display: block; }
+@keyframes slideIn {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.section-header {
+  display: flex; align-items: center; gap: 14px; margin-bottom: 18px;
+}
+.section-icon {
+  width: 56px; height: 56px; border-radius: 16px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1.7rem; background: var(--current-color); color: white;
+}
+.section-title h2 { font-family: 'Gaegu', serif; font-size: 1.6rem; margin: 0; line-height: 1.1; }
+.section-title small { color: var(--soft); font-size: 0.88rem; }
+
+.intro {
+  background: var(--bg); padding: 16px 18px; border-radius: 14px;
+  margin-bottom: 22px; font-size: 1rem; line-height: 1.75;
+}
+.intro strong {
+  background: var(--current-color); color: white;
+  padding: 2px 9px; border-radius: 7px; font-weight: 700; white-space: nowrap;
+}
+
+.playground {
+  background: linear-gradient(180deg, #FFFEF8, #FAF5E6);
+  border: 1px solid var(--line);
+  border-radius: 20px; padding: 22px 18px; margin-bottom: 16px;
+}
+.playground-label {
+  font-size: 0.78rem; color: var(--soft); font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 10px;
+}
+
+/* === 섹션 1: 전자저울 시연 === */
+.balance-area { text-align: center; margin: 18px 0; }
+.balance-wrap {
+  position: relative; max-width: 480px; margin: 20px auto 24px;
+  padding: 24px 20px;
+  background: linear-gradient(180deg, #E8E8EA 0%, #C8C8CC 100%);
+  border-radius: 18px;
+  box-shadow: 0 8px 20px rgba(0,0,0,0.18), inset 0 2px 0 rgba(255,255,255,0.6);
+  border: 2px solid #9A9A9E;
+}
+.balance-pan {
+  width: 130px; height: 22px; margin: 0 auto 14px;
+  background: linear-gradient(180deg, #D8D8DC 0%, #A8A8AC 100%);
+  border-radius: 50% / 100%;
+  border: 2px solid #888;
+  box-shadow: 0 3px 6px rgba(0,0,0,0.2);
+  position: relative;
+}
+.balance-pan::before {
+  content: ''; position: absolute; top: 100%; left: 50%; width: 4px; height: 14px;
+  background: #888; transform: translateX(-50%);
+}
+.beaker {
+  position: absolute; top: 10px; left: 50%; transform: translateX(-50%);
+  font-size: 2.4rem;
+}
+.balance-display {
+  background: #1A1F2E;
+  border-radius: 10px;
+  padding: 16px 20px;
+  margin-top: 16px;
+  box-shadow: inset 0 2px 6px rgba(0,0,0,0.5);
+  border: 2px solid #444;
+}
+.balance-display .lcd {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 2.4rem; font-weight: 700;
+  color: #5DFB6A;
+  text-shadow: 0 0 8px rgba(93,251,106,0.6);
+  letter-spacing: 0.04em;
+  text-align: right;
+  line-height: 1;
+}
+.balance-display .lcd .unit {
+  font-size: 1.4rem; margin-left: 8px; color: #5DFB6A; opacity: 0.85;
+}
+.balance-display .meta {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-top: 10px; font-size: 0.7rem; color: #5DFB6A; opacity: 0.7;
+  font-family: 'IBM Plex Mono', monospace;
+  text-transform: uppercase; letter-spacing: 0.1em;
+}
+.sig-figs-display { color: var(--soft); font-size: 0.95rem; margin-top: 14px; }
+.sig-figs-display strong { color: var(--c1); font-weight: 700; }
+
+.balance-buttons {
+  display: grid; grid-template-columns: repeat(2, 1fr);
+  gap: 10px; max-width: 600px; margin: 0 auto;
+}
+.balance-btn {
+  padding: 14px 10px; border: 2px solid var(--line); background: white;
+  border-radius: 14px; font-family: inherit; font-size: 0.95rem;
+  cursor: pointer; transition: all 0.2s; font-weight: 700; color: var(--ink);
+  line-height: 1.3;
+}
+.balance-btn small { display: block; font-size: 0.78rem; color: var(--soft); font-weight: 400; margin-top: 3px; }
+.balance-btn:hover { transform: translateY(-2px); border-color: var(--c1); }
+.balance-btn.selected { background: var(--c1); color: white; border-color: var(--c1); }
+.balance-btn.selected small { color: rgba(255,255,255,0.9); }
+
+/* === 섹션 2 & 6: 게임 === */
+.sf-game { text-align: center; }
+.sf-number {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 4.5rem; font-weight: 700;
+  letter-spacing: 0.06em; margin: 16px 0; color: var(--ink);
+  line-height: 1;
+}
+.sf-question { font-size: 1.05rem; margin-bottom: 16px; font-weight: 700; }
+.sf-options {
+  display: flex; justify-content: center; gap: 10px;
+  flex-wrap: wrap; margin-bottom: 14px;
+}
+.sf-option {
+  width: 60px; height: 60px; border: 3px solid var(--line);
+  background: white; border-radius: 14px; font-family: inherit;
+  font-size: 1.7rem; font-weight: 700; cursor: pointer;
+  transition: all 0.2s; color: var(--ink);
+}
+.sf-option:hover:not(:disabled) { transform: scale(1.06); border-color: var(--current-color); }
+.sf-option.correct { background: var(--good); color: white; border-color: var(--good); }
+.sf-option.wrong { background: var(--bad); color: white; border-color: var(--bad); }
+.sf-option:disabled { cursor: default; }
+
+.feedback {
+  padding: 0 14px;
+  border-radius: 12px; font-size: 0.95rem; margin-top: 14px;
+  max-height: 0; overflow: hidden; opacity: 0;
+  transition: all 0.3s ease-out;
+}
+.feedback.show { padding: 14px; max-height: 250px; opacity: 1; }
+.feedback.good { background: rgba(16,185,129,0.12); color: #047857; }
+.feedback.bad { background: rgba(239,68,68,0.12); color: #B91C1C; }
+
+.score-display { font-size: 0.95rem; color: var(--soft); margin-bottom: 10px; }
+.score-display strong { color: var(--current-color); font-size: 1.2rem; font-weight: 700; }
+
+.next-q-btn {
+  margin-top: 14px; padding: 11px 22px; background: var(--current-color);
+  color: white; border: none; border-radius: 12px; font-family: inherit;
+  cursor: pointer; font-weight: 700; font-size: 0.95rem;
+  display: none; transition: transform 0.2s;
+}
+.next-q-btn:hover { transform: translateY(-2px); }
+.next-q-btn.show { display: inline-block; }
+
+/* === 섹션 3: 불확정도 === */
+.uncertainty-area { text-align: center; }
+.uncertainty-display {
+  font-family: 'IBM Plex Mono', monospace; font-size: 2.4rem;
+  font-weight: 700; margin: 14px 0; color: var(--c3); letter-spacing: 0.02em;
+}
+.uncertainty-bar-container {
+  position: relative; height: 90px; background: white; border-radius: 14px;
+  margin: 22px 0; border: 2px solid var(--line); overflow: hidden;
+}
+.scale-line { position: absolute; top: 50%; left: 4%; right: 4%; height: 2px; background: var(--line); }
+.scale-tick { position: absolute; top: 50%; width: 1.5px; height: 12px; background: var(--soft); transform: translateY(-50%); }
+.scale-label {
+  position: absolute; top: 65%; font-size: 11px; color: var(--soft);
+  transform: translateX(-50%); font-family: 'IBM Plex Mono', monospace;
+}
+.uncertainty-bar {
+  position: absolute; top: 50%; height: 26px;
+  background: linear-gradient(90deg, rgba(139,92,246,0.2), rgba(139,92,246,0.7), rgba(139,92,246,0.2));
+  border-radius: 13px; transform: translateY(-50%);
+  transition: all 0.2s; pointer-events: none;
+}
+.uncertainty-center {
+  position: absolute; top: 50%; width: 18px; height: 18px;
+  background: var(--c3); border-radius: 50%; border: 3px solid white;
+  transform: translate(-50%, -50%);
+  box-shadow: 0 2px 8px rgba(139,92,246,0.5); transition: left 0.2s;
+}
+
+.slider-group { margin: 18px 0; text-align: left; }
+.slider-group label {
+  display: flex; justify-content: space-between; align-items: center;
+  font-weight: 700; margin-bottom: 8px; font-size: 0.95rem;
+}
+.slider-group label span { color: var(--current-color); font-family: 'IBM Plex Mono', monospace; }
+.slider-group input[type="range"] {
+  width: 100%; height: 8px; border-radius: 4px; background: var(--line);
+  outline: none; -webkit-appearance: none; appearance: none;
+}
+.slider-group input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none; appearance: none;
+  width: 28px; height: 28px; border-radius: 50%;
+  background: var(--current-color); cursor: pointer;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.2); border: none;
+}
+.slider-group input[type="range"]::-moz-range-thumb {
+  width: 28px; height: 28px; border-radius: 50%;
+  background: var(--current-color); cursor: pointer; border: none;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+}
+.relative-display {
+  background: rgba(0,0,0,0.04); padding: 14px 16px;
+  border-radius: 12px; margin-top: 14px; font-size: 1rem;
+}
+.relative-display strong { color: var(--current-color); font-family: 'IBM Plex Mono', monospace; }
+
+/* === 섹션 4, 5: 객관식 퀴즈 === */
+.quiz-scenario {
+  background: white; padding: 16px 18px; border-radius: 14px;
+  margin-bottom: 16px; font-size: 1rem; line-height: 1.6;
+  border-left: 5px solid var(--current-color);
+}
+.quiz-question {
+  font-size: 1.05rem; font-weight: 700; margin-bottom: 16px; text-align: center;
+}
+.quiz-options {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 12px;
+}
+.quiz-options.three { grid-template-columns: 1fr; }
+.quiz-options.four { grid-template-columns: 1fr 1fr; }
+.quiz-option {
+  padding: 18px 14px; background: white; border: 3px solid var(--line);
+  border-radius: 14px; font-family: 'IBM Plex Mono', monospace;
+  font-size: 1.05rem; cursor: pointer; transition: all 0.2s;
+  text-align: center; font-weight: 700; color: var(--ink);
+  line-height: 1.4;
+}
+.quiz-option .label-ko {
+  font-family: 'Gowun Dodum', sans-serif;
+  display: block; font-size: 0.9rem; margin-top: 4px; color: var(--soft); font-weight: 400;
+}
+.quiz-option:hover:not(:disabled) { transform: translateY(-2px); border-color: var(--current-color); }
+.quiz-option.correct { background: var(--good); color: white; border-color: var(--good); }
+.quiz-option.correct .label-ko { color: rgba(255,255,255,0.9); }
+.quiz-option.wrong { background: var(--bad); color: white; border-color: var(--bad); opacity: 0.85; }
+.quiz-option.wrong .label-ko { color: rgba(255,255,255,0.9); }
+.quiz-option:disabled { cursor: default; }
+
+/* === 섹션 6: 반올림 강조 === */
+.round-target {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 4rem; font-weight: 700; line-height: 1; margin: 16px 0;
+  letter-spacing: 0.02em;
+}
+.round-target .focus {
+  background: rgba(244,63,94,0.18); color: var(--c6);
+  padding: 4px 8px; border-radius: 8px;
+  border: 2.5px solid var(--c6);
+}
+.round-instruction {
+  font-size: 1rem; color: var(--soft); margin-bottom: 8px;
+}
+.round-instruction strong { color: var(--c6); font-weight: 700; }
+
+/* === 섹션 7: 측정 기구 비주얼 === */
+.tool-options {
+  display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px;
+}
+.tool-card {
+  background: white; border: 3px solid var(--line); border-radius: 16px;
+  padding: 18px 14px; cursor: pointer; transition: all 0.2s;
+  text-align: center; font-family: inherit;
+}
+.tool-card:hover:not(:disabled) { transform: translateY(-2px); border-color: var(--current-color); }
+.tool-card .tool-emoji { font-size: 2.4rem; display: block; margin-bottom: 6px; }
+.tool-card .tool-name { font-weight: 700; font-size: 0.95rem; line-height: 1.3; }
+.tool-card .tool-spec {
+  font-family: 'IBM Plex Mono', monospace; font-size: 0.78rem;
+  color: var(--soft); margin-top: 4px;
+}
+.tool-card.correct { background: var(--good); color: white; border-color: var(--good); }
+.tool-card.correct .tool-spec { color: rgba(255,255,255,0.9); }
+.tool-card.wrong { background: var(--bad); color: white; border-color: var(--bad); opacity: 0.8; }
+.tool-card.wrong .tool-spec { color: rgba(255,255,255,0.9); }
+
+/* === 섹션 8: 두 측정 비교 === */
+.compare-wrap {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 14px;
+  margin: 18px 0;
+}
+.compare-card {
+  background: white; border: 2px solid var(--line); border-radius: 14px;
+  padding: 16px; text-align: center; transition: all 0.3s;
+}
+.compare-card.winner { border-color: var(--good); box-shadow: 0 4px 14px rgba(16,185,129,0.25); }
+.compare-card .label {
+  font-size: 0.8rem; color: var(--soft); font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px;
+}
+.compare-card .value {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 1.5rem; font-weight: 700; color: var(--ink); margin-bottom: 12px;
+}
+.compare-card .pct {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 1.7rem; font-weight: 700; color: var(--c8);
+}
+.compare-card.winner .pct { color: var(--good); }
+.compare-card .pct-label {
+  font-size: 0.78rem; color: var(--soft); margin-top: 2px;
+}
+.winner-banner {
+  text-align: center; padding: 12px; background: rgba(16,185,129,0.1);
+  border-radius: 12px; margin-top: 12px; font-weight: 700; color: #047857;
+}
+
+/* === 섹션 9: 동전 밀도 단계 === */
+.density-step {
+  background: white; border-radius: 16px; padding: 18px;
+  border: 2px solid var(--line); margin-bottom: 14px;
+  transition: all 0.3s;
+}
+.density-step.active { border-color: var(--c9); box-shadow: 0 4px 14px rgba(8,145,178,0.18); }
+.density-step.done { opacity: 0.65; }
+.step-num {
+  display: inline-block; width: 28px; height: 28px; line-height: 28px;
+  background: var(--c9); color: white; border-radius: 50%;
+  font-weight: 700; font-size: 0.9rem; margin-right: 8px;
+}
+.density-step.done .step-num { background: var(--good); }
+.step-title { display: inline; font-weight: 700; font-size: 1.05rem; }
+.step-content { margin-top: 12px; padding-left: 36px; }
+.calc-line {
+  font-family: 'IBM Plex Mono', monospace; font-size: 1rem;
+  background: var(--bg); padding: 10px 12px; border-radius: 8px;
+  margin: 8px 0; line-height: 1.6; word-break: break-all;
+}
+.calc-line .red { color: var(--c6); font-weight: 700; }
+.calc-line .blue { color: var(--c8); font-weight: 700; }
+.calc-result {
+  font-family: 'IBM Plex Mono', monospace; font-size: 1.2rem;
+  font-weight: 700; color: var(--c9); margin-top: 8px;
+}
+.density-step .step-explain {
+  font-size: 0.88rem; color: var(--soft); margin-top: 8px;
+}
+.density-controls {
+  text-align: center; margin-top: 16px;
+}
+.density-btn {
+  padding: 12px 24px; background: var(--c9); color: white;
+  border: none; border-radius: 12px; font-family: inherit;
+  font-weight: 700; font-size: 1rem; cursor: pointer;
+  transition: transform 0.2s;
+}
+.density-btn:hover { transform: translateY(-2px); }
+.density-btn:disabled { background: var(--line); color: var(--soft); cursor: default; transform: none; }
+.density-btn.reset { background: white; color: var(--c9); border: 2px solid var(--c9); margin-left: 8px; }
+.final-result {
+  background: linear-gradient(135deg, rgba(8,145,178,0.1), rgba(8,145,178,0.05));
+  border-radius: 14px; padding: 18px; margin-top: 14px; text-align: center;
+  border: 2px solid var(--c9);
+  display: none;
+}
+.final-result.show { display: block; }
+.final-result .label { font-size: 0.85rem; color: var(--soft); margin-bottom: 6px; }
+.final-result .value {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 1.8rem; font-weight: 700; color: var(--c9);
+}
+
+/* === 네비게이션 === */
+.nav-buttons {
+  display: flex; justify-content: space-between; gap: 12px; margin-top: 14px;
+}
+.nav-btn {
+  padding: 14px 22px; border: none; border-radius: 14px;
+  font-family: inherit; font-size: 1rem; font-weight: 700;
+  cursor: pointer; transition: all 0.2s;
+}
+.nav-btn.prev { background: white; color: var(--ink); border: 2px solid var(--line); }
+.nav-btn.next {
+  background: var(--current-color); color: white;
+  flex: 1; max-width: 220px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+}
+.nav-btn:hover:not(:disabled) { transform: translateY(-2px); }
+.nav-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+
+/* === 종료 화면 === */
+.complete-message {
+  text-align: center; padding: 50px 24px;
+  background: linear-gradient(135deg, #FFF8E1, #FFE4B5);
+  border-radius: 24px; box-shadow: var(--shadow);
+}
+.complete-message .emoji { font-size: 5rem; margin-bottom: 16px; display: block; }
+.complete-message h3 {
+  font-family: 'Gaegu', serif; font-size: 2rem; margin-bottom: 10px;
+}
+.complete-message p { font-size: 1.05rem; margin-bottom: 20px; line-height: 1.7; }
+.restart-btn {
+  padding: 14px 28px; background: var(--c1); color: white;
+  border: none; border-radius: 14px; font-family: inherit;
+  font-size: 1rem; font-weight: 700; cursor: pointer;
+  box-shadow: 0 4px 12px rgba(255,140,66,0.3);
+  transition: transform 0.2s;
+}
+.restart-btn:hover { transform: translateY(-2px); }
+
+@media (max-width: 600px) {
+  body { padding: 12px 10px 40px; }
+  .section { padding: 22px 16px; }
+  h1 { font-size: 1.6rem; }
+  .header p { font-size: 0.92rem; }
+  .quiz-options { grid-template-columns: 1fr; }
+  .quiz-options.four { grid-template-columns: 1fr; }
+  .ruler-buttons, .balance-buttons { grid-template-columns: 1fr; gap: 8px; }
+  .sf-number { font-size: 3.2rem; }
+  .uncertainty-display { font-size: 1.8rem; }
+  .progress-dot { width: 36px; height: 36px; font-size: 0.85rem; }
+  .section-icon { width: 48px; height: 48px; font-size: 1.5rem; }
+  .section-title h2 { font-size: 1.3rem; }
+  .compare-wrap { grid-template-columns: 1fr; }
+  .round-target { font-size: 2.8rem; }
+  .step-content { padding-left: 0; }
+  .calc-line { font-size: 0.85rem; }
+}
+</style>
+</head>
+<body>
+<div class="container" id="main-container">
+  <header class="header">
+    <span class="badge">🔬 화학실험 인터랙티브</span>
+    <h1>측정과 불확정도, 손으로 만지며 배우기</h1>
+    <p>버튼을 누르고, 슬라이더를 움직이고, 직접 풀어보세요</p>
+  </header>
+
+  <div class="progress-wrap">
+    <div class="progress-group">
+      <div class="progress-label">📚 기초 (1-5)</div>
+      <div class="progress-dots" id="progress-basic">
+        <div class="progress-dot active" data-section="0">1</div>
+        <div class="progress-dot" data-section="1">2</div>
+        <div class="progress-dot" data-section="2">3</div>
+        <div class="progress-dot" data-section="3">4</div>
+        <div class="progress-dot" data-section="4">5</div>
+      </div>
+    </div>
+    <div class="progress-group">
+      <div class="progress-label">🚀 심화 (6-9)</div>
+      <div class="progress-dots" id="progress-adv">
+        <div class="progress-dot" data-section="5">6</div>
+        <div class="progress-dot" data-section="6">7</div>
+        <div class="progress-dot" data-section="7">8</div>
+        <div class="progress-dot" data-section="8">9</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 섹션 1: 전자저울 -->
+  <div class="section active" data-section="0" data-color="--c1">
+    <div class="section-header">
+      <div class="section-icon">⚖️</div>
+      <div class="section-title">
+        <h2>저울에 따라 보이는 게 달라요</h2>
+        <small>측정에는 한계가 있어요</small>
+      </div>
+    </div>
+    <div class="intro">
+      저울이 <strong>얼마나 정밀한가</strong>에 따라 우리가 알 수 있는 숫자가 달라져요.<br>
+      아래 버튼으로 저울을 바꾸고, 같은 비커가 어떻게 다르게 표시되는지 확인해 보세요.
+    </div>
+    <div class="playground">
+      <div class="playground-label">⚖️ 저울을 골라보세요</div>
+      <div class="balance-area">
+        <div class="balance-wrap">
+          <div class="beaker">🥛</div>
+          <div class="balance-pan"></div>
+          <div class="balance-display">
+            <div class="lcd"><span id="balance-value">25</span><span class="unit">g</span></div>
+            <div class="meta"><span>STABLE</span><span id="balance-spec">d = 1 g</span></div>
+          </div>
+        </div>
+        <div class="sig-figs-display" id="sigfigs-display">의미 있는 숫자: <strong>2개</strong></div>
+      </div>
+      <div class="balance-buttons">
+        <button class="balance-btn selected" data-precision="1">일반 저울<small>1 g 단위</small></button>
+        <button class="balance-btn" data-precision="0.1">정밀 저울<small>0.1 g 단위</small></button>
+        <button class="balance-btn" data-precision="0.01">고정밀 저울<small>0.01 g 단위</small></button>
+        <button class="balance-btn" data-precision="0.0001">분석저울<small>0.0001 g 단위</small></button>
+      </div>
+    </div>
+    <div class="intro" id="balance-explain">
+      💡 저울이 정밀할수록 더 많은 숫자를 자신 있게 적을 수 있어요. 이 숫자의 개수가 <strong>유효숫자</strong>예요.
+    </div>
+  </div>
+
+  <!-- 섹션 2: 유효숫자 -->
+  <div class="section" data-section="1" data-color="--c2">
+    <div class="section-header">
+      <div class="section-icon">🔢</div>
+      <div class="section-title">
+        <h2>유효숫자 세어보기</h2>
+        <small>의미 있는 숫자는 몇 개?</small>
+      </div>
+    </div>
+    <div class="intro">
+      <strong>0이 아닌 숫자는 셈</strong> · <strong>사이의 0도 셈</strong> · <strong>앞쪽 0은 안 셈</strong> · <strong>소수점 뒤 끝의 0은 셈</strong>
+    </div>
+    <div class="playground">
+      <div class="score-display">문제 <strong id="sf-q-num">1</strong>/5 · 점수 <strong id="sf-score">0</strong></div>
+      <div class="sf-game">
+        <div class="sf-question">이 숫자의 유효숫자는 몇 개일까요?</div>
+        <div class="sf-number" id="sf-number">23.4</div>
+        <div class="sf-options" id="sf-options"></div>
+        <div class="feedback" id="sf-feedback"></div>
+        <button class="next-q-btn" id="sf-next">다음 문제 →</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 섹션 3: 불확정도 -->
+  <div class="section" data-section="2" data-color="--c3">
+    <div class="section-header">
+      <div class="section-icon">🌀</div>
+      <div class="section-title">
+        <h2>흔들림(불확정도) 만져보기</h2>
+        <small>측정값은 항상 ± 만큼 흔들려요</small>
+      </div>
+    </div>
+    <div class="intro">
+      슬라이더를 움직여서 <strong>측정값</strong>과 <strong>흔들림</strong>이 어떻게 보이는지 살펴보세요.
+    </div>
+    <div class="playground">
+      <div class="uncertainty-area">
+        <div class="uncertainty-display"><span id="u-value-text">15</span> ± <span id="u-error-text">1.0</span> cm</div>
+        <div class="uncertainty-bar-container" id="u-container">
+          <div class="scale-line"></div>
+        </div>
+        <div class="slider-group">
+          <label>📍 측정값 <span id="u-value-label">15 cm</span></label>
+          <input type="range" id="u-value-slider" min="5" max="25" step="1" value="15">
+        </div>
+        <div class="slider-group">
+          <label>🌀 흔들림 (절대불확정도) <span id="u-error-label">± 1.0 cm</span></label>
+          <input type="range" id="u-error-slider" min="0.1" max="5" step="0.1" value="1">
+        </div>
+        <div class="relative-display">
+          📊 비율로 보면 <strong id="u-relative">약 6.7%</strong> 흔들려요 — 이게 <strong>상대불확정도</strong>예요
+        </div>
+      </div>
+    </div>
+    <div class="intro">
+      💡 같은 ± 1 cm여도 측정값이 <strong>5 cm일 때</strong>와 <strong>25 cm일 때</strong> 비율이 달라져요. 슬라이더로 직접 확인해 보세요.
+    </div>
+  </div>
+
+  <!-- 섹션 4: 표기 -->
+  <div class="section" data-section="3" data-color="--c4">
+    <div class="section-header">
+      <div class="section-icon">✍️</div>
+      <div class="section-title">
+        <h2>어떻게 적어야 할까?</h2>
+        <small>측정값과 흔들림 짝꿍 맞추기</small>
+      </div>
+    </div>
+    <div class="intro">
+      측정값과 절대불확정도는 <strong>소수점 끝자리</strong>가 같아야 해요. 상대불확정도는 <strong>유효숫자 1개</strong>로 적어요.
+    </div>
+    <div class="playground" id="quiz4-area"></div>
+  </div>
+
+  <!-- 섹션 5: 사칙연산 -->
+  <div class="section" data-section="4" data-color="--c5">
+    <div class="section-header">
+      <div class="section-icon">➕</div>
+      <div class="section-title">
+        <h2>곱하기·더하기 결과 적기</h2>
+        <small>유효숫자 규칙 적용해보기</small>
+      </div>
+    </div>
+    <div class="intro">
+      <strong>곱·나눗셈</strong>은 유효숫자 개수가 적은 쪽에 맞춰요. <strong>덧·뺄셈</strong>은 소수점 끝자리에 맞춰요.
+    </div>
+    <div class="playground" id="quiz5-area"></div>
+  </div>
+
+  <!-- 섹션 6: 반올림 마스터 -->
+  <div class="section" data-section="5" data-color="--c6">
+    <div class="section-header">
+      <div class="section-icon">🎯</div>
+      <div class="section-title">
+        <h2>반올림 마스터</h2>
+        <small>특히 정확히 5일 때, 어떻게 할까?</small>
+      </div>
+    </div>
+    <div class="intro">
+      반올림 규칙은 <strong>5보다 작으면 버림</strong>, <strong>크면 올림</strong>이에요.<br>
+      그런데 <strong>정확히 5</strong>일 때는? — <strong>짝수가 되도록</strong> 맞춰요!
+    </div>
+    <div class="playground">
+      <div class="score-display">문제 <strong id="rd-q-num">1</strong>/5 · 점수 <strong id="rd-score">0</strong></div>
+      <div class="sf-game">
+        <div class="round-instruction" id="rd-instruct">46.32를 <strong>2개의 유효숫자</strong>로 반올림하면?</div>
+        <div class="round-target" id="rd-target">46.<span class="focus">3</span>2</div>
+        <div class="quiz-options" id="rd-options"></div>
+        <div class="feedback" id="rd-feedback"></div>
+        <button class="next-q-btn" id="rd-next">다음 문제 →</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 섹션 7: 측정 기구 선택 -->
+  <div class="section" data-section="6" data-color="--c7">
+    <div class="section-header">
+      <div class="section-icon">⚗️</div>
+      <div class="section-title">
+        <h2>측정 기구 똑똑하게 고르기</h2>
+        <small>적절한 scale의 도구를 선택해요</small>
+      </div>
+    </div>
+    <div class="intro">
+      <strong>최소 눈금이 작을수록</strong> 정밀하지만, 측정량과 도구 용량도 맞아야 해요.<br>
+      측정량보다 너무 큰 도구는 부정확하고, 너무 작은 도구는 여러 번 옮겨야 해서 오차가 누적돼요.
+    </div>
+    <div class="playground" id="tool-area"></div>
+  </div>
+
+  <!-- 섹션 8: 백분율 불확정도 비교 -->
+  <div class="section" data-section="7" data-color="--c8">
+    <div class="section-header">
+      <div class="section-icon">📊</div>
+      <div class="section-title">
+        <h2>어느 측정이 더 정밀할까?</h2>
+        <small>백분율 상대불확정도 비교</small>
+      </div>
+    </div>
+    <div class="intro">
+      같은 도구(같은 절대불확정도)라도, <strong>많이 측정할수록 백분율 불확정도가 작아져요</strong>.<br>
+      슬라이더로 측정량을 바꾸며 비교해 보세요.
+    </div>
+    <div class="playground">
+      <div class="playground-label">📐 같은 뷰렛(±0.1 mL)으로 두 사람이 측정</div>
+      <div class="compare-wrap" id="compare-wrap">
+        <div class="compare-card" id="compare-A">
+          <div class="label">A 학생</div>
+          <div class="value" id="compA-value">1.0 ± 0.1 mL</div>
+          <div class="pct" id="compA-pct">10.0%</div>
+          <div class="pct-label">백분율 불확정도</div>
+        </div>
+        <div class="compare-card" id="compare-B">
+          <div class="label">B 학생</div>
+          <div class="value" id="compB-value">50.0 ± 0.1 mL</div>
+          <div class="pct" id="compB-pct">0.2%</div>
+          <div class="pct-label">백분율 불확정도</div>
+        </div>
+      </div>
+      <div class="winner-banner" id="compare-winner">🏆 B 학생의 측정이 50배 더 정밀해요!</div>
+
+      <div class="slider-group">
+        <label>A 학생 측정량 <span id="compA-label">1.0 mL</span></label>
+        <input type="range" id="compA-slider" min="0.5" max="50" step="0.5" value="1">
+      </div>
+      <div class="slider-group">
+        <label>B 학생 측정량 <span id="compB-label">50.0 mL</span></label>
+        <input type="range" id="compB-slider" min="0.5" max="50" step="0.5" value="50">
+      </div>
+      <div class="relative-display">
+        💡 <strong>같은 ± 0.1 mL</strong>이지만 측정량이 다르면 백분율 불확정도가 크게 달라져요.<br>
+        실험 정확도를 높이려면 <strong>측정량을 가능한 많게</strong> 하는 게 좋아요.
+      </div>
+    </div>
+  </div>
+
+  <!-- 섹션 9: 동전 밀도 실험 -->
+  <div class="section" data-section="8" data-color="--c9">
+    <div class="section-header">
+      <div class="section-icon">🪙</div>
+      <div class="section-title">
+        <h2>동전 밀도 실험 시뮬레이션</h2>
+        <small>오차 전파를 직접 따라가 봐요</small>
+      </div>
+    </div>
+    <div class="intro">
+      50원 동전 2개의 밀도를 구해 봐요. 단계별로 <strong>다음</strong> 버튼을 누르며 오차 전파를 확인하세요.<br>
+      이게 다음 차시 <strong>수행평가</strong>의 핵심이에요.
+    </div>
+    <div class="playground">
+      <div class="playground-label">📋 측정 데이터</div>
+      <div class="density-step" id="step-data">
+        <span class="step-num">📋</span>
+        <div class="step-title">측정값 (동전 2개, 1회 시행)</div>
+        <div class="step-content">
+          <div class="calc-line">동전 질량 <span class="blue">m = 8.3204 ± 0.0001 g</span> (분석저울)</div>
+          <div class="calc-line">초기 부피 <span class="blue">V₁ = 11.55 ± 0.05 mL</span> (눈금실린더)</div>
+          <div class="calc-line">나중 부피 <span class="blue">V₂ = 12.51 ± 0.05 mL</span> (눈금실린더)</div>
+        </div>
+      </div>
+
+      <div class="density-step" id="step-1">
+        <span class="step-num">1</span>
+        <span class="step-title">동전의 부피 = V₂ − V₁</span>
+        <div class="step-content" id="step-1-content" style="display:none;">
+          <div class="calc-line">측정값: 12.51 − 11.55 = <span class="red">0.96 mL</span></div>
+          <div class="calc-line">절대불확정도(<span class="red">덧/뺄셈은 절대값 합</span>): 0.05 + 0.05 = <span class="red">0.1 mL</span></div>
+          <div class="calc-result">→ V = 1.0 ± 0.1 mL</div>
+          <div class="step-explain">📌 측정값과 불확정도의 끝자리를 맞추기 위해 0.96 → 1.0으로 반올림</div>
+        </div>
+      </div>
+
+      <div class="density-step" id="step-2">
+        <span class="step-num">2</span>
+        <span class="step-title">상대불확정도로 변환</span>
+        <div class="step-content" id="step-2-content" style="display:none;">
+          <div class="calc-line">질량: 0.0001 / 8.3204 = <span class="blue">0.0000120…</span></div>
+          <div class="calc-line">부피: 0.1 / 0.96 = <span class="blue">0.10417…</span></div>
+          <div class="step-explain">📌 곱·나눗셈은 상대불확정도로 변환해서 계산해요</div>
+        </div>
+      </div>
+
+      <div class="density-step" id="step-3">
+        <span class="step-num">3</span>
+        <span class="step-title">상대불확정도의 합</span>
+        <div class="step-content" id="step-3-content" style="display:none;">
+          <div class="calc-line">0.0000120 + 0.10417 = <span class="red">0.10418</span></div>
+          <div class="step-explain">📌 곱·나눗셈에서는 상대불확정도를 더해요</div>
+        </div>
+      </div>
+
+      <div class="density-step" id="step-4">
+        <span class="step-num">4</span>
+        <span class="step-title">밀도 계산 = m / V</span>
+        <div class="step-content" id="step-4-content" style="display:none;">
+          <div class="calc-line">8.3204 / 0.96 = <span class="red">8.667 g/mL</span></div>
+          <div class="step-explain">📌 동전의 부피는 0.96(원래 계산값)을 그대로 사용해요</div>
+        </div>
+      </div>
+
+      <div class="density-step" id="step-5">
+        <span class="step-num">5</span>
+        <span class="step-title">절대불확정도로 재환산</span>
+        <div class="step-content" id="step-5-content" style="display:none;">
+          <div class="calc-line">8.667 × 0.10418 = <span class="red">0.9029 g/mL</span></div>
+          <div class="step-explain">📌 상대불확정도(0.10418) × 측정값(8.667)으로 절대불확정도를 구해요</div>
+        </div>
+      </div>
+
+      <div class="final-result" id="density-final">
+        <div class="label">🎯 최종 결과</div>
+        <div class="value">d = 8.7 ± 0.9 g/mL</div>
+      </div>
+
+      <div class="density-controls">
+        <button class="density-btn" id="density-next">다음 단계 →</button>
+        <button class="density-btn reset" id="density-reset">처음부터</button>
+      </div>
+    </div>
+    <div class="intro">
+      💡 실제 50원 주화의 밀도는 약 <strong>8.7 g/mL</strong>(백동 합금)이니 측정값은 잘 맞았어요. 그런데 불확정도가 <strong>±0.9</strong>, 무려 <strong>10%</strong>나 돼요. 왜 그럴까요? — 3단계를 다시 보면 상대불확정도의 <strong>99.99%</strong>가 부피에서 왔어요. 동전 2개의 부피(약 1 mL)가 눈금실린더의 읽기 오차(±0.05 mL)에 비해 너무 작아서예요. 질량은 분석저울로 재서 기여가 거의 0이고요. → 동전 개수를 늘려 부피를 키우거나, 더 정밀한 부피 측정 기구를 쓰면 불확정도가 줄어요. 7번 섹션의 <strong>측정 기구 고르기</strong>가 바로 이 이야기예요.
+    </div>
+  </div>
+
+  <div class="nav-buttons">
+    <button class="nav-btn prev" id="prev-btn" disabled>← 이전</button>
+    <button class="nav-btn next" id="next-btn">다음 →</button>
+  </div>
+</div>
+
+<script>
+// =========================================================================
+// 데이터
+// =========================================================================
+const SF_QUESTIONS = [
+  { num: '23.4', answer: 3, hint: '0이 아닌 숫자 셋 다 의미 있어요. (2, 3, 4)' },
+  { num: '0.005', answer: 1, hint: '앞쪽 0들은 자리만 표시할 뿐. 의미 있는 숫자는 5 하나뿐이에요.' },
+  { num: '0.500', answer: 3, hint: '소수점 뒤 끝의 0은 의미 있는 숫자예요. (5, 0, 0)' },
+  { num: '1.02', answer: 3, hint: '숫자 사이의 0도 의미 있는 숫자예요. (1, 0, 2)' },
+  { num: '0.0200', answer: 3, hint: '앞 0들은 빼고, 2와 뒤 0들만 셈. (2, 0, 0)' }
+];
+
+const QUIZ4_DATA = [
+  { scenario: '🔬 0.001 g까지 잴 수 있는 전자저울로 NaCl을 쟀어요. 표시값은 0.117 g.',
+    question: '어떻게 적는 게 맞을까요?',
+    options: ['0.117 ± 0.001 g', '0.1170 ± 0.001 g'],
+    correct: 0,
+    explain: '측정값과 흔들림은 끝자리가 같아야 해요. 0.117(소수점 3자리) ± 0.001(소수점 3자리) ✓' },
+  { scenario: '📏 ± 0.1 mL 부피 플라스크로 100 mL를 만들었어요.',
+    question: '어떻게 적는 게 맞을까요?',
+    options: ['100 ± 0.1 mL', '100.0 ± 0.1 mL'],
+    correct: 1,
+    explain: '0.1까지 알 수 있으니, 측정값도 100.0(소수점 1자리)으로 적어야 흔들림 0.1과 끝자리가 맞아요.' },
+  { scenario: '🌀 상대불확정도가 0.00855…로 계산됐어요.',
+    question: '어떻게 적는 게 맞을까요?',
+    options: ['0.00855', '0.009'],
+    correct: 1,
+    explain: '상대불확정도는 의미 있는 숫자 1개로! 흔들림 자체가 어림짐작인데, 너무 자세히 쓰면 가짜 정확함이 돼요.' }
+];
+
+const QUIZ5_DATA = [
+  { scenario: '🧮 2.5 × 3.42 를 계산기로 누르면 8.55가 나와요.',
+    question: '어떻게 적어야 맞을까요?',
+    options: ['8.55', '8.6'], correct: 1,
+    explain: '곱셈은 유효숫자 개수가 적은 쪽에 맞춰요. 2.5는 2개, 3.42는 3개. 작은 쪽 2개로! → 8.6' },
+  { scenario: '🧮 12.34 + 5.6 을 계산하면 17.94가 나와요.',
+    question: '어떻게 적어야 맞을까요?',
+    options: ['17.94', '17.9'], correct: 1,
+    explain: '덧셈은 소수점 끝자리가 큰(=정밀도가 낮은) 쪽에 맞춰요. 5.6은 소수점 1자리. → 17.9' },
+  { scenario: '🌀 가로의 흔들림 5%, 세로의 흔들림 3%.',
+    question: '면적(가로 × 세로)의 흔들림은?',
+    options: ['2% (5−3)', '8% (5+3)'], correct: 1,
+    explain: '곱셈에서는 상대불확정도(%)를 더해요. 빼지 않아요! 5% + 3% = 8%' },
+  { scenario: '📏 (20 ± 0.1) cm 막대에서 (10 ± 0.1) cm를 빼면?',
+    question: '결과의 흔들림은?',
+    options: ['10 ± 0.0 cm', '10 ± 0.2 cm'], correct: 1,
+    explain: '뺄셈에서도 절대불확정도는 더해요! 두 측정의 흔들림이 서로 반대로 생길 수 있으니, 최악의 경우를 가정해요.' }
+];
+
+const ROUND_QUESTIONS = [
+  { num: '46.32', target: 2, focus: '3', display: '46.<span class="focus">3</span>2',
+    options: ['46', '47', '46.3', '46.32'], correct: 0,
+    rule: '버림', explain: '소수점 첫째자리 3은 5보다 작으니 → 버림. 답: 46' },
+  { num: '52.87', target: 3, focus: '7', display: '52.8<span class="focus">7</span>',
+    options: ['52.8', '52.9', '53', '52.87'], correct: 1,
+    rule: '올림', explain: '버려질 7은 5보다 크니 → 올림. 답: 52.9' },
+  { num: '27.375', target: 4, focus: '5', display: '27.37<span class="focus">5</span>',
+    options: ['27.37', '27.38', '27.40', '27.375'], correct: 1,
+    rule: '짝수 맞춤', explain: '버려질 자리가 정확히 5! 앞 자리 7(홀수) → 짝수 8이 되도록 올림. 답: 27.38' },
+  { num: '27.345', target: 4, focus: '5', display: '27.34<span class="focus">5</span>',
+    options: ['27.34', '27.35', '27.36', '27.40'], correct: 0,
+    rule: '짝수 맞춤', explain: '버려질 자리가 정확히 5! 앞 자리 4(짝수) → 그대로 유지. 답: 27.34' },
+  { num: '0.0856', target: 2, focus: '5', display: '0.08<span class="focus">5</span>6',
+    options: ['0.08', '0.085', '0.086', '0.09'], correct: 2,
+    rule: '올림', explain: '0.0856의 유효숫자는 8, 5, 6. 2개로 줄이려면 5 자리에서 반올림. 다음 6은 5보다 크니 올림 → 0.086' }
+];
+
+const TOOL_QUESTIONS = [
+  { scenario: '💧 증류수 5 mL를 정확히 측정해야 해요.',
+    question: '어느 도구가 가장 정밀할까요?',
+    tools: [
+      { emoji: '🧪', name: '5 mL 피펫', spec: '눈금 0.01 mL' },
+      { emoji: '🥽', name: '10 mL 눈금실린더', spec: '눈금 0.1 mL' },
+      { emoji: '🍶', name: '100 mL 비커', spec: '눈금 10 mL' },
+      { emoji: '🪣', name: '1 L 비커', spec: '눈금 50 mL' }
+    ],
+    correct: 0,
+    explain: '5 mL 피펫이 최소 눈금(0.01 mL)이 가장 작아 가장 정밀해요. 측정량(5 mL)에도 딱 맞아요.' },
+  { scenario: '💧 증류수 40 mL를 정확히 측정해야 해요.',
+    question: '어느 도구가 가장 정밀할까요?',
+    tools: [
+      { emoji: '🧪', name: '5 mL 피펫', spec: '눈금 0.01 mL' },
+      { emoji: '🥽', name: '50 mL 눈금실린더', spec: '눈금 0.5 mL' },
+      { emoji: '🥽', name: '100 mL 눈금실린더', spec: '눈금 1 mL' },
+      { emoji: '🥽', name: '250 mL 눈금실린더', spec: '눈금 2 mL' }
+    ],
+    correct: 1,
+    explain: '5 mL 피펫은 8번 옮겨야 해서 오차 누적. 50 mL 눈금실린더가 측정량에 가깝고 최소 눈금도 작아 가장 정밀해요.' },
+  { scenario: '💧 증류수 200 mL를 정확히 측정해야 해요.',
+    question: '어느 도구가 가장 정밀할까요?',
+    tools: [
+      { emoji: '🥽', name: '50 mL 눈금실린더', spec: '눈금 0.5 mL' },
+      { emoji: '🥽', name: '250 mL 눈금실린더', spec: '눈금 2 mL' },
+      { emoji: '🥽', name: '500 mL 눈금실린더', spec: '눈금 5 mL' },
+      { emoji: '🍶', name: '1 L 비커', spec: '눈금 50 mL' }
+    ],
+    correct: 1,
+    explain: '50 mL는 4번 옮기면 오차 누적. 250 mL 눈금실린더가 측정량에 가까우면서 최소 눈금이 가장 작아 정밀해요.' }
+];
+
+// =========================================================================
+// 섹션 전환
+// =========================================================================
+const TOTAL = 9;
+let current = 0;
+
+function applyColor(idx) {
+  const sections = document.querySelectorAll('.section');
+  const colorVar = sections[idx].dataset.color;
+  document.documentElement.style.setProperty('--current-color', `var(${colorVar})`);
+}
+
+function goTo(n) {
+  current = Math.max(0, Math.min(TOTAL - 1, n));
+  document.querySelectorAll('.section').forEach((s, i) => s.classList.toggle('active', i === current));
+  document.querySelectorAll('.progress-dot').forEach((d) => {
+    const idx = parseInt(d.dataset.section);
+    d.classList.toggle('active', idx === current);
+    d.classList.toggle('done', idx < current);
+  });
+  applyColor(current);
+  document.getElementById('prev-btn').disabled = current === 0;
+  document.getElementById('next-btn').textContent = current === TOTAL - 1 ? '✨ 완료!' : '다음 →';
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+document.getElementById('prev-btn').addEventListener('click', () => goTo(current - 1));
+document.getElementById('next-btn').addEventListener('click', () => {
+  if (current === TOTAL - 1) showComplete();
+  else goTo(current + 1);
+});
+document.querySelectorAll('.progress-dot').forEach(dot => {
+  dot.addEventListener('click', () => goTo(parseInt(dot.dataset.section)));
+});
+
+// =========================================================================
+// 섹션 1: 자
+// =========================================================================
+// === 섹션 1: 전자저울 ===
+// 비커의 실제 질량(참값): 24.6783 g
+const TRUE_MASS = 24.6783;
+
+function updateBalance(precision) {
+  const rounded = Math.round(TRUE_MASS / precision) * precision;
+  const decimals = precision >= 1 ? 0 : (precision >= 0.1 ? 1 : (precision >= 0.01 ? 2 : (precision >= 0.001 ? 3 : 4)));
+  const display = rounded.toFixed(decimals);
+
+  document.getElementById('balance-value').textContent = display;
+  document.getElementById('balance-spec').textContent = 'd = ' + precision + ' g';
+
+  let sigFigs, explain;
+  if (precision >= 1) {
+    sigFigs = '2개';
+    explain = '💡 일반 저울로는 <strong>1 g 자리</strong>까지만 자신 있게 읽을 수 있어요. 의미 있는 숫자: <strong>2개</strong> (2, 5)';
+  } else if (precision >= 0.1) {
+    sigFigs = '3개';
+    explain = '💡 정밀 저울로는 <strong>0.1 g 자리</strong>까지 읽을 수 있어요. 의미 있는 숫자: <strong>3개</strong> (2, 4, 7)';
+  } else if (precision >= 0.01) {
+    sigFigs = '4개';
+    explain = '💡 고정밀 저울로는 <strong>0.01 g 자리</strong>까지 읽을 수 있어요. 의미 있는 숫자: <strong>4개</strong> (2, 4, 6, 8)';
+  } else if (precision >= 0.001) {
+    sigFigs = '5개';
+    explain = '💡 이 저울로는 <strong>0.001 g 자리</strong>까지 읽을 수 있어요. 의미 있는 숫자: <strong>5개</strong> (2, 4, 6, 7, 8)';
+  } else {
+    sigFigs = '6개';
+    explain = '💡 분석저울로는 <strong>0.0001 g 자리</strong>까지 읽을 수 있어요. 의미 있는 숫자: <strong>6개</strong> (2, 4, 6, 7, 8, 3)';
+  }
+  document.getElementById('sigfigs-display').innerHTML = `의미 있는 숫자: <strong>${sigFigs}</strong>`;
+  document.getElementById('balance-explain').innerHTML = explain;
+}
+
+document.querySelectorAll('.balance-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.balance-btn').forEach(b => b.classList.remove('selected'));
+    btn.classList.add('selected');
+    updateBalance(parseFloat(btn.dataset.precision));
+  });
+});
+
+// =========================================================================
+// 섹션 2: 유효숫자
+// =========================================================================
+let sfIdx = 0, sfScore = 0;
+
+function setupSf() {
+  const optsEl = document.getElementById('sf-options');
+  optsEl.innerHTML = '';
+  for (let i = 1; i <= 5; i++) {
+    const btn = document.createElement('button');
+    btn.className = 'sf-option';
+    btn.textContent = i;
+    btn.dataset.n = i;
+    btn.addEventListener('click', () => answerSf(i, btn));
+    optsEl.appendChild(btn);
+  }
+  document.getElementById('sf-next').addEventListener('click', nextSf);
+  showSfQ();
+}
+
+function showSfQ() {
+  const q = SF_QUESTIONS[sfIdx];
+  document.getElementById('sf-q-num').textContent = sfIdx + 1;
+  document.getElementById('sf-score').textContent = sfScore;
+  document.getElementById('sf-number').textContent = q.num;
+  document.querySelectorAll('.sf-option').forEach(o => {
+    o.classList.remove('correct', 'wrong');
+    o.disabled = false;
+  });
+  const fb = document.getElementById('sf-feedback');
+  fb.classList.remove('show', 'good', 'bad');
+  fb.innerHTML = '';
+  document.getElementById('sf-next').classList.remove('show');
+}
+
+function answerSf(n, btn) {
+  const q = SF_QUESTIONS[sfIdx];
+  document.querySelectorAll('.sf-option').forEach(o => o.disabled = true);
+  const fb = document.getElementById('sf-feedback');
+  if (n === q.answer) {
+    btn.classList.add('correct');
+    sfScore++;
+    fb.classList.add('show', 'good');
+    fb.innerHTML = `🎯 정답이에요! ${q.hint}`;
+  } else {
+    btn.classList.add('wrong');
+    document.querySelector(`.sf-option[data-n="${q.answer}"]`).classList.add('correct');
+    fb.classList.add('show', 'bad');
+    fb.innerHTML = `정답은 <strong>${q.answer}개</strong>예요. ${q.hint}`;
+  }
+  document.getElementById('sf-score').textContent = sfScore;
+  document.getElementById('sf-next').classList.add('show');
+}
+
+function nextSf() {
+  sfIdx++;
+  if (sfIdx < SF_QUESTIONS.length) {
+    showSfQ();
+  } else {
+    document.getElementById('sf-options').innerHTML = '';
+    document.getElementById('sf-number').textContent = '🎉';
+    document.getElementById('sf-q-num').textContent = SF_QUESTIONS.length;
+    const fb = document.getElementById('sf-feedback');
+    fb.classList.add('show', 'good');
+    fb.innerHTML = `잘했어요! <strong>${sfScore}/${SF_QUESTIONS.length}</strong> 맞췄어요.`;
+    document.getElementById('sf-next').classList.remove('show');
+  }
+}
+
+// =========================================================================
+// 섹션 3: 불확정도
+// =========================================================================
+function setupUncertainty() {
+  const c = document.getElementById('u-container');
+  for (let i = 0; i <= 30; i += 5) {
+    const x = 4 + (i / 30 * 92);
+    const tick = document.createElement('div');
+    tick.className = 'scale-tick';
+    tick.style.left = x + '%';
+    c.appendChild(tick);
+    const label = document.createElement('div');
+    label.className = 'scale-label';
+    label.style.left = x + '%';
+    label.textContent = i;
+    c.appendChild(label);
+  }
+  const bar = document.createElement('div');
+  bar.className = 'uncertainty-bar';
+  bar.id = 'u-bar';
+  c.appendChild(bar);
+  const center = document.createElement('div');
+  center.className = 'uncertainty-center';
+  center.id = 'u-center';
+  c.appendChild(center);
+  document.getElementById('u-value-slider').addEventListener('input', updateUncertainty);
+  document.getElementById('u-error-slider').addEventListener('input', updateUncertainty);
+  updateUncertainty();
+}
+
+function updateUncertainty() {
+  const v = parseFloat(document.getElementById('u-value-slider').value);
+  const e = parseFloat(document.getElementById('u-error-slider').value);
+  document.getElementById('u-value-text').textContent = v;
+  document.getElementById('u-error-text').textContent = e.toFixed(1);
+  document.getElementById('u-value-label').textContent = v + ' cm';
+  document.getElementById('u-error-label').textContent = '± ' + e.toFixed(1) + ' cm';
+  const toX = val => 4 + (Math.max(0, Math.min(30, val)) / 30 * 92);
+  const left = toX(v - e);
+  const right = toX(v + e);
+  const bar = document.getElementById('u-bar');
+  bar.style.left = left + '%';
+  bar.style.width = (right - left) + '%';
+  document.getElementById('u-center').style.left = toX(v) + '%';
+  const rel = (e / v * 100).toFixed(1);
+  document.getElementById('u-relative').textContent = `약 ${rel}%`;
+}
+
+// =========================================================================
+// 섹션 4, 5: 객관식 퀴즈
+// =========================================================================
+function renderQuiz(areaId, data) {
+  const area = document.getElementById(areaId);
+  let idx = 0;
+  function show() {
+    const q = data[idx];
+    area.innerHTML = `
+      <div class="score-display">문제 <strong>${idx + 1}</strong>/${data.length}</div>
+      <div class="quiz-scenario">${q.scenario}</div>
+      <div class="quiz-question">${q.question}</div>
+      <div class="quiz-options">
+        ${q.options.map((o, i) => `<button class="quiz-option" data-i="${i}">${o}</button>`).join('')}
+      </div>
+      <div class="feedback" id="${areaId}-fb"></div>
+      <div style="text-align: center;">
+        <button class="next-q-btn" id="${areaId}-next">${idx < data.length - 1 ? '다음 문제 →' : '🎉 모두 풀었어요'}</button>
+      </div>
+    `;
+    area.querySelectorAll('.quiz-option').forEach(opt => {
+      opt.addEventListener('click', () => {
+        const picked = parseInt(opt.dataset.i);
+        area.querySelectorAll('.quiz-option').forEach((o, i) => {
+          o.disabled = true;
+          if (i === q.correct) o.classList.add('correct');
+          else if (i === picked) o.classList.add('wrong');
+        });
+        const fb = document.getElementById(areaId + '-fb');
+        fb.classList.add('show', picked === q.correct ? 'good' : 'bad');
+        fb.innerHTML = (picked === q.correct ? '🎯 정답! ' : '💡 ') + q.explain;
+        document.getElementById(areaId + '-next').classList.add('show');
+      });
+    });
+    document.getElementById(areaId + '-next').addEventListener('click', () => {
+      if (idx < data.length - 1) { idx++; show(); }
+      else {
+        area.innerHTML = `<div style="text-align:center; padding: 30px 20px;">
+          <div style="font-size: 4rem;">🌟</div>
+          <h3 style="font-family: 'Gaegu', serif; font-size: 1.6rem; margin: 12px 0;">잘 풀었어요!</h3>
+          <p style="color: var(--soft);">이 섹션을 다 풀었어요. 다음으로 넘어가 볼까요?</p>
+        </div>`;
+      }
+    });
+  }
+  show();
+}
+
+// =========================================================================
+// 섹션 6: 반올림 마스터
+// =========================================================================
+let rdIdx = 0, rdScore = 0;
+
+function setupRound() {
+  showRdQ();
+  document.getElementById('rd-next').addEventListener('click', nextRd);
+}
+
+function showRdQ() {
+  const q = ROUND_QUESTIONS[rdIdx];
+  document.getElementById('rd-q-num').textContent = rdIdx + 1;
+  document.getElementById('rd-score').textContent = rdScore;
+  document.getElementById('rd-instruct').innerHTML = `${q.num}을 <strong>${q.target}개의 유효숫자</strong>로 반올림하면?`;
+  document.getElementById('rd-target').innerHTML = q.display;
+  const optsEl = document.getElementById('rd-options');
+  optsEl.innerHTML = '';
+  q.options.forEach((opt, i) => {
+    const btn = document.createElement('button');
+    btn.className = 'quiz-option';
+    btn.textContent = opt;
+    btn.dataset.i = i;
+    btn.addEventListener('click', () => answerRd(i, btn));
+    optsEl.appendChild(btn);
+  });
+  const fb = document.getElementById('rd-feedback');
+  fb.classList.remove('show', 'good', 'bad');
+  fb.innerHTML = '';
+  document.getElementById('rd-next').classList.remove('show');
+}
+
+function answerRd(i, btn) {
+  const q = ROUND_QUESTIONS[rdIdx];
+  document.querySelectorAll('#rd-options .quiz-option').forEach((o, idx) => {
+    o.disabled = true;
+    if (idx === q.correct) o.classList.add('correct');
+    else if (idx === i) o.classList.add('wrong');
+  });
+  const fb = document.getElementById('rd-feedback');
+  if (i === q.correct) {
+    rdScore++;
+    fb.classList.add('show', 'good');
+    fb.innerHTML = `🎯 정답! [${q.rule}] ${q.explain}`;
+  } else {
+    fb.classList.add('show', 'bad');
+    fb.innerHTML = `💡 [${q.rule}] ${q.explain}`;
+  }
+  document.getElementById('rd-score').textContent = rdScore;
+  document.getElementById('rd-next').classList.add('show');
+}
+
+function nextRd() {
+  rdIdx++;
+  if (rdIdx < ROUND_QUESTIONS.length) {
+    showRdQ();
+  } else {
+    document.getElementById('rd-options').innerHTML = '';
+    document.getElementById('rd-target').innerHTML = '🎉';
+    document.getElementById('rd-instruct').innerHTML = '반올림 마스터 완료!';
+    const fb = document.getElementById('rd-feedback');
+    fb.classList.add('show', 'good');
+    fb.innerHTML = `잘했어요! <strong>${rdScore}/${ROUND_QUESTIONS.length}</strong> 맞췄어요. 정확히 5일 때 짝수로 맞추는 규칙, 잊지 마세요.`;
+    document.getElementById('rd-next').classList.remove('show');
+  }
+}
+
+// =========================================================================
+// 섹션 7: 측정 기구 선택
+// =========================================================================
+function renderToolQuiz() {
+  const area = document.getElementById('tool-area');
+  let idx = 0;
+  function show() {
+    const q = TOOL_QUESTIONS[idx];
+    area.innerHTML = `
+      <div class="score-display">문제 <strong>${idx + 1}</strong>/${TOOL_QUESTIONS.length}</div>
+      <div class="quiz-scenario">${q.scenario}</div>
+      <div class="quiz-question">${q.question}</div>
+      <div class="tool-options">
+        ${q.tools.map((t, i) => `
+          <button class="tool-card" data-i="${i}">
+            <span class="tool-emoji">${t.emoji}</span>
+            <div class="tool-name">${t.name}</div>
+            <div class="tool-spec">(${t.spec})</div>
+          </button>
+        `).join('')}
+      </div>
+      <div class="feedback" id="tool-fb"></div>
+      <div style="text-align: center;">
+        <button class="next-q-btn" id="tool-next">${idx < TOOL_QUESTIONS.length - 1 ? '다음 시나리오 →' : '🎉 모두 풀었어요'}</button>
+      </div>
+    `;
+    area.querySelectorAll('.tool-card').forEach(card => {
+      card.addEventListener('click', () => {
+        const picked = parseInt(card.dataset.i);
+        area.querySelectorAll('.tool-card').forEach((c, i) => {
+          c.disabled = true;
+          if (i === q.correct) c.classList.add('correct');
+          else if (i === picked) c.classList.add('wrong');
+        });
+        const fb = document.getElementById('tool-fb');
+        fb.classList.add('show', picked === q.correct ? 'good' : 'bad');
+        fb.innerHTML = (picked === q.correct ? '🎯 정답! ' : '💡 ') + q.explain;
+        document.getElementById('tool-next').classList.add('show');
+      });
+    });
+    document.getElementById('tool-next').addEventListener('click', () => {
+      if (idx < TOOL_QUESTIONS.length - 1) { idx++; show(); }
+      else {
+        area.innerHTML = `<div style="text-align:center; padding: 30px 20px;">
+          <div style="font-size: 4rem;">⚗️</div>
+          <h3 style="font-family: 'Gaegu', serif; font-size: 1.6rem; margin: 12px 0;">측정 기구 마스터!</h3>
+          <p style="color: var(--soft);">측정량과 도구의 용량·정밀도를 함께 고려하는 게 핵심이에요.</p>
+        </div>`;
+      }
+    });
+  }
+  show();
+}
+
+// =========================================================================
+// 섹션 8: 백분율 불확정도 비교
+// =========================================================================
+function setupCompare() {
+  const sliderA = document.getElementById('compA-slider');
+  const sliderB = document.getElementById('compB-slider');
+  function update() {
+    const a = parseFloat(sliderA.value);
+    const b = parseFloat(sliderB.value);
+    const errA = (0.1 / a * 100);
+    const errB = (0.1 / b * 100);
+    document.getElementById('compA-value').textContent = a.toFixed(1) + ' ± 0.1 mL';
+    document.getElementById('compB-value').textContent = b.toFixed(1) + ' ± 0.1 mL';
+    document.getElementById('compA-pct').textContent = errA.toFixed(1) + '%';
+    document.getElementById('compB-pct').textContent = errB.toFixed(1) + '%';
+    document.getElementById('compA-label').textContent = a.toFixed(1) + ' mL';
+    document.getElementById('compB-label').textContent = b.toFixed(1) + ' mL';
+    const cardA = document.getElementById('compare-A');
+    const cardB = document.getElementById('compare-B');
+    const banner = document.getElementById('compare-winner');
+    cardA.classList.toggle('winner', errA < errB);
+    cardB.classList.toggle('winner', errB < errA);
+    if (Math.abs(errA - errB) < 0.05) {
+      banner.innerHTML = '⚖️ 두 측정의 정밀도가 비슷해요';
+      banner.style.background = 'rgba(0,0,0,0.05)';
+      banner.style.color = 'var(--soft)';
+    } else {
+      const winner = errA < errB ? 'A' : 'B';
+      const ratio = (Math.max(errA, errB) / Math.min(errA, errB)).toFixed(1);
+      banner.innerHTML = `🏆 ${winner} 학생의 측정이 ${ratio}배 더 정밀해요!`;
+      banner.style.background = 'rgba(16,185,129,0.1)';
+      banner.style.color = '#047857';
+    }
+  }
+  sliderA.addEventListener('input', update);
+  sliderB.addEventListener('input', update);
+  update();
+}
+
+// =========================================================================
+// 섹션 9: 동전 밀도 실험 단계별 시뮬레이션
+// =========================================================================
+let densityStep = 0;
+const DENSITY_TOTAL = 5;
+
+function setupDensity() {
+  document.getElementById('density-next').addEventListener('click', nextDensityStep);
+  document.getElementById('density-reset').addEventListener('click', resetDensity);
+}
+
+function nextDensityStep() {
+  if (densityStep >= DENSITY_TOTAL) return;
+  densityStep++;
+  const stepEl = document.getElementById(`step-${densityStep}`);
+  const contentEl = document.getElementById(`step-${densityStep}-content`);
+  stepEl.classList.add('active');
+  if (contentEl) contentEl.style.display = 'block';
+  if (densityStep > 1) {
+    const prevEl = document.getElementById(`step-${densityStep - 1}`);
+    prevEl.classList.remove('active');
+    prevEl.classList.add('done');
+  }
+  if (densityStep === DENSITY_TOTAL) {
+    document.getElementById('density-final').classList.add('show');
+    document.getElementById('density-next').disabled = true;
+    document.getElementById('density-next').textContent = '✅ 완료';
+    document.getElementById(`step-${densityStep}`).classList.remove('active');
+    document.getElementById(`step-${densityStep}`).classList.add('done');
+  }
+  stepEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+function resetDensity() {
+  densityStep = 0;
+  for (let i = 1; i <= DENSITY_TOTAL; i++) {
+    const stepEl = document.getElementById(`step-${i}`);
+    const contentEl = document.getElementById(`step-${i}-content`);
+    stepEl.classList.remove('active', 'done');
+    if (contentEl) contentEl.style.display = 'none';
+  }
+  document.getElementById('density-final').classList.remove('show');
+  document.getElementById('density-next').disabled = false;
+  document.getElementById('density-next').textContent = '다음 단계 →';
+  document.getElementById('step-data').scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+// =========================================================================
+// 종료 화면
+// =========================================================================
+function showComplete() {
+  document.getElementById('main-container').innerHTML = `
+    <div class="complete-message">
+      <span class="emoji">🎓</span>
+      <h3>모두 끝났어요!</h3>
+      <p>측정과 불확정도, 이제 손에 익었어요.<br>
+      다음 차시 동전 밀도 수행평가, 잘 해낼 거예요!</p>
+      <button class="restart-btn" onclick="location.reload()">처음부터 다시 →</button>
+    </div>
+  `;
+}
+
+// =========================================================================
+// 초기화
+// =========================================================================
+window.addEventListener('load', () => {
+  updateBalance(1);
+  setupSf();
+  setupUncertainty();
+  renderQuiz('quiz4-area', QUIZ4_DATA);
+  renderQuiz('quiz5-area', QUIZ5_DATA);
+  setupRound();
+  renderToolQuiz();
+  setupCompare();
+  setupDensity();
+});
+</script>
+</body>
+</html>
