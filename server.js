@@ -514,7 +514,7 @@ scheduleBackups();
 // 보안 관련 이벤트만 — 일별 로테이션 (audit.YYYY-MM-DD.log)
 function audit(req, kind, payload) {
   try {
-    const ip = (req.headers['x-forwarded-for'] || req.socket?.remoteAddress || '?').toString().split(',')[0].trim();
+    const ip = clientIp(req);
     const ua = (req.headers['user-agent'] || '').slice(0, 100);
     const line = JSON.stringify({ ts: new Date().toISOString(), kind, ip, ua, ...(payload || {}) }) + '\n';
     const day = todayKey();
@@ -1417,6 +1417,19 @@ const pid = () => crypto.randomBytes(5).toString('hex');
 
 // CORS allowed origins — 환경변수 CORS_ORIGIN 으로 화이트리스트 지정 가능 (#2)
 const CORS_ORIGIN = process.env.CORS_ORIGIN || '*';
+
+// x-forwarded-for 는 클라이언트가 마음대로 지어낼 수 있는 헤더다.
+// 리버스 프록시 뒤가 아닌데 이걸 믿으면, 요청마다 가짜 IP를 넣어 레이트리밋을
+// 무제한 우회할 수 있다(교사 비밀번호 무차별 대입). 그래서 프록시 뒤일 때만 신뢰한다.
+// 공개 배포에서 Caddy/nginx/Cloudflare 뒤에 둘 때만 TRUST_PROXY=1 로 켤 것.
+const TRUST_PROXY = process.env.TRUST_PROXY === '1' || process.env.TRUST_PROXY === 'true';
+function clientIp(req) {
+  if (TRUST_PROXY) {
+    const xff = req.headers['x-forwarded-for'];
+    if (xff) return String(xff).split(',')[0].trim();
+  }
+  return String(req.socket?.remoteAddress || 'unknown');
+}
 // #15 응답 압축 — accept-encoding 보고 gzip/br 선택
 function maybeCompress(req, res, body, baseHeaders) {
   const acceptEnc = String(req.headers['accept-encoding'] || '');
@@ -2033,7 +2046,7 @@ async function handleApi(req, res, pathname, query) {
     if (!/^[0-9A-Za-z]+$/.test(studentId)) return sendJSON(res, { error: '학번은 숫자/영문만 가능' }, 400);
     if (hasBadWord(name)) return sendJSON(res, { error: '닉네임에 부적절한 단어가 포함되어 있어요.' }, 400);
     // Rate limit (학번+IP 기준)
-    const ipKeyS = (req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'unknown').toString().split(',')[0].trim();
+    const ipKeyS = clientIp(req);
     if (!rateLimitOK('login:' + ipKeyS + ':' + studentId, 20, 60_000)) return sendJSON(res, { error: '잠시 후 다시 시도하세요' }, 429);
     const sdb = clsStudents(classroomCode);
     const rec = sdb[studentId];
@@ -2447,7 +2460,7 @@ async function handleApi(req, res, pathname, query) {
     const pw = String(body.password || '');
     if (pw.length < 1) return sendJSON(res, { error: '비밀번호를 입력하세요' }, 400);
     // Rate limit (IP 기준 — 5분에 10회)
-    const ipKey = (req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'unknown').toString().split(',')[0].trim();
+    const ipKey = clientIp(req);
     if (!rateLimitOK('teacherlogin:' + ipKey, 10, 5 * 60_000)) return sendJSON(res, { error: '비밀번호 시도 횟수 초과 — 5분 후 다시 시도하세요' }, 429);
     // default 교실 자동 생성 (없으면)
     let c = clsroom(code);
@@ -3910,10 +3923,33 @@ server.listen(PORT, HOST, () => {
   console.log(`  학생 입장: http://localhost:${PORT}/`);
   console.log(`  교사 카운터: http://localhost:${PORT}/teacher.html`);
   console.log(`  점수판: http://localhost:${PORT}/leaderboard.html`);
-  const ifs = os.networkInterfaces();
-  Object.values(ifs).flat().forEach(i => {
-    if (i && i.family === 'IPv4' && !i.internal) console.log(`  네트워크 주소: http://${i.address}:${PORT}`);
-  });
+  // 루프백에만 묶여 있으면 LAN 주소를 안내해봐야 접속되지 않는다(공개 배포는 프록시 뒤).
+  if (HOST !== '127.0.0.1' && HOST !== 'localhost' && HOST !== '::1') {
+    const ifs = os.networkInterfaces();
+    Object.values(ifs).flat().forEach(i => {
+      if (i && i.family === 'IPv4' && !i.internal) console.log(`  네트워크 주소: http://${i.address}:${PORT}`);
+    });
+  }
   const cList = Object.values(classrooms).map(c => `    - ${c.code} (${c.name})`).join('\n');
   console.log(`  등록된 교실:\n${cList || '    (아직 없음)'}\n`);
+
+  // 인터넷에 공개해 두고 아래 경고를 못 보면 사고로 이어진다.
+  // 교내 LAN 운영이면 아래 항목들은 그대로 둬도 된다.
+  // 인터넷에 공개하는 경우에만 해당하는 점검 목록이다.
+  const warn = [];
+  if (!process.env.TEACHER_PASSWORD) {
+    warn.push('TEACHER_PASSWORD 미설정 → 기본값(3000) 사용 중.');
+  }
+  if (CORS_ORIGIN === '*') {
+    warn.push('CORS_ORIGIN 이 * (모든 출처 허용).');
+  }
+  if (!TRUST_PROXY) {
+    warn.push('TRUST_PROXY 꺼짐 → x-forwarded-for 를 믿지 않음(직접 노출 시 올바른 설정).');
+  }
+  if (warn.length) {
+    console.log('  ℹ️  현재 설정 (교내 LAN 운영이면 이대로 괜찮습니다)');
+    warn.forEach(w => console.log(`     - ${w}`));
+    console.log('     인터넷에 공개할 때만: 긴 TEACHER_PASSWORD, CORS_ORIGIN 좁히기,');
+    console.log('     HTTPS 리버스 프록시 뒤에 두고 TRUST_PROXY=1\n');
+  }
 });
