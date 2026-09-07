@@ -1321,7 +1321,28 @@ function viewQuestion(q, hide) {
     if (hide) return { gameMode: 6, num: q.num, target: q.target };
     return { gameMode: 6, num: q.num, target: q.target, answer: q.answer };
   }
+  // gm3(측정값 읽기)도 다른 모드처럼 hide 를 지켜야 함.
+  // sf 는 정답이라 문제 단계에서 절대 보내지 않는다.
+  // val 은 캔버스로 기구를 그리는 데 반드시 필요해서 남길 수밖에 없고,
+  // dv(표시값)는 디지털 저울일 때만 화면에 실제로 찍히므로 그때만 보낸다.
+  if (hide) {
+    const m = q.meas || {};
+    const safe = { type: m.type, val: m.val, unit: m.unit };
+    if (m.type === 'scale') safe.dv = m.dv;
+    return { gameMode: 3, meas: safe };
+  }
   return { gameMode: 3, meas: q.meas };
+}
+
+// 비밀값스러운 키를 걸러낸 얕은 복사본. 현재 학생 레코드엔 해당 키가 없고,
+// 앞으로도 없어야 한다는 뜻의 방어선.
+const SECRETISH = /(token|secret|password|passwd|^pw$|hash|salt|apikey|api_key)/i;
+function stripSecretish(rec) {
+  const out = {};
+  for (const k of Object.keys(rec)) {
+    if (!SECRETISH.test(k)) out[k] = rec[k];
+  }
+  return out;
 }
 
 function pushLB(classroomCode, type, entry) {
@@ -1431,6 +1452,21 @@ function sendJSON(res, obj, status = 200) {
     'X-Content-Type-Options': 'nosniff',
   });
   res.end(JSON.stringify(obj));
+}
+
+// sendJSON 과 같은 헤더를 쓰되 accept-encoding 을 보고 압축한다.
+// /api/state 처럼 1.2초마다 폴링되는 큰 응답에만 쓸 것 — 1KB 미만은 maybeCompress 가
+// 알아서 원문으로 보낸다.
+function sendJSONCompressed(req, res, obj, status = 200) {
+  const body = Buffer.from(JSON.stringify(obj), 'utf8');
+  maybeCompress(req, res, body, {
+    status,
+    'Content-Type': 'application/json; charset=utf-8',
+    'Cache-Control': 'no-store',
+    'Access-Control-Allow-Origin': CORS_ORIGIN,
+    'Vary': 'Origin',
+    'X-Content-Type-Options': 'nosniff',
+  });
 }
 function readBody(req) {
   return new Promise((resolve, reject) => {
@@ -2277,7 +2313,8 @@ async function handleApi(req, res, pathname, query) {
     if (!room) return sendJSON(res, { error: '방 없음' }, 404);
     const forTeacher = authTeacher(req);
     const viewerS = authStudent(req);
-    return sendJSON(res, roomView(room, forTeacher, viewerS?.studentId));
+    // 1.2초마다 전원이 폴링하는 경로라 응답이 가장 큼 → 여기만 압축
+    return sendJSONCompressed(req, res, roomView(room, forTeacher, viewerS?.studentId));
   }
 
   // ---------- 점수판 (글로벌) ----------
@@ -2786,8 +2823,13 @@ async function handleApi(req, res, pathname, query) {
     const cls = teacherClassroom(req);
     if (!cls) return sendJSON(res, { error: '교사 권한' }, 401);
     const sdb = clsStudents(cls);
+    // 레코드를 통째로(...r) 내보내는 형태라, 나중에 누가 비밀값을 학생 레코드에 얹으면
+    // 교사 응답으로 그대로 흘러나간다. 지금은 그런 필드가 없지만(토큰은 persistedTokens에
+    // 따로 보관) 실수 방지용으로 비밀값스러운 키만 걸러낸다.
+    // 허용목록으로 바꾸지 않은 이유: 교사 화면이 뱃지·연속일수 등 여러 필드를 쓰고 있어
+    // 하나만 빠뜨려도 대시보드가 조용히 깨진다.
     const list = Object.values(sdb).map(r => ({
-      ...r, stats: ensureStatsShape(r.stats), online: students.has(studentSessKey(cls, r.studentId)),
+      ...stripSecretish(r), stats: ensureStatsShape(r.stats), online: students.has(studentSessKey(cls, r.studentId)),
     }));
     list.sort((a,b) => (a.studentId > b.studentId ? 1 : -1));
     return sendJSON(res, { students: list });

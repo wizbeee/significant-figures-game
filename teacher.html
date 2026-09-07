@@ -408,7 +408,6 @@ async function init() {
   // 교실 시스템 단순화로 brand 상세 표시 안 함
   if (brandCls) brandCls.textContent = '';
   refresh(ov);
-  // loadAutoApprove(); — 단순화 후 제거 (모든 방 자동 승인 고정)
   pollTimer = setInterval(() => refresh(), 1500);
 }
 
@@ -508,31 +507,6 @@ async function refresh(ov) {
       }).join('');
     }
   }
-}
-
-async function loadAutoApprove() {
-  const r = await teacherApi('/api/teacher/auto-approve');
-  if (r && r.enabled !== undefined) applyAutoApproveUI(r.enabled);
-}
-function applyAutoApproveUI(enabled) {
-  const t = document.getElementById('auto-approve-tog');
-  const l = document.getElementById('auto-approve-label');
-  const h = document.getElementById('auto-approve-hint');
-  if (t) t.checked = !!enabled;
-  if (l) { l.textContent = enabled ? '🔁 자동 승인 ON' : '🔁 자동 승인 OFF'; l.style.color = enabled ? 'var(--sec)' : 'var(--txt2)'; }
-  if (h) h.style.display = enabled ? 'block' : 'none';
-}
-async function toggleAutoApprove() {
-  const enabled = document.getElementById('auto-approve-tog').checked;
-  const r = await teacherApi('/api/teacher/auto-approve', { method: 'POST', body: { enabled } });
-  if (r.error) { alert(r.error); document.getElementById('auto-approve-tog').checked = !enabled; return; }
-  applyAutoApproveUI(r.enabled);
-  if (r.approvedPending > 0) {
-    // 작은 토스트 대신 간단한 상태 메시지
-    const h = document.getElementById('auto-approve-hint');
-    if (h) h.innerHTML = `✅ <b style="color:var(--sec)">자동 승인 ON</b> — 대기 중이던 ${r.approvedPending}개 방을 일괄 승인했습니다.`;
-  }
-  refresh();
 }
 
 async function approveRoom(code, approved) {
