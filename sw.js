@@ -1,5 +1,5 @@
 // 유효숫자 마스터 — Service Worker (오프라인 폴백 + 정적 캐시)
-const CACHE = 'sigfig-v2-' + (self.registration?.scope || '');
+const CACHE = 'sigfig-v3-' + (self.registration?.scope || '');
 const CORE = [
   '/',
   '/home.html',

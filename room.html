@@ -76,6 +76,10 @@
 .explain-box .tag{display:inline-block;padding:2px 8px;margin:0 2px;border-radius:4px;font-weight:700}
 .explain-box .tag.sig{background:rgba(16,185,129,.2);color:var(--sec)}
 .explain-box .tag.nosig{background:rgba(148,163,184,.15);color:var(--txt2)}
+/* 틀린 문제 다시 보기 */
+.review-card{background:var(--bg2);border:1px solid var(--bg3);border-radius:12px;padding:14px 12px;margin:14px auto;max-width:680px;text-align:left}
+.review-card .review-no{font-weight:800;color:var(--acc);font-size:.92rem;margin-bottom:2px}
+.review-empty{max-width:640px;margin:14px auto;padding:14px;color:var(--txt2);text-align:center}
 .digit-box.reveal-digs{pointer-events:none;font-size:2.2rem}
 .dg.leading{background:rgba(148,163,184,.1);border-color:var(--txt2);color:var(--txt2)}
 .dg.middle{background:rgba(16,185,129,.2);border-color:var(--sec);color:var(--sec)}
@@ -118,7 +122,7 @@
 
 <script src="common.js"></script>
 <script>
-const S = { code: null, state: null, pollTimer: null, submittedQIdx: -1, me: null, lastSig: null, lastPhase: null, guideSeen: false };
+const S = { code: null, state: null, pollTimer: null, submittedQIdx: -1, me: null, lastSig: null, lastPhase: null, guideSeen: false, reviewOpen: false, reviewData: null };
 const params = new URLSearchParams(location.search);
 S.code = params.get('code');
 
@@ -171,6 +175,8 @@ function render() {
     return showCountdown(() => render());
   }
   if (phaseChanged) { S.lastSig = null; S.lastQSig = null; }
+  // 새 게임이 시작되면 오답 다시 보기 캐시 초기화
+  if (s.phase === 'lobby' || s.phase === 'question') { S.reviewOpen = false; S.reviewData = null; }
   if (s.phase === 'lobby') renderLobby(phaseChanged);
   else if (s.phase === 'question') renderQuestion(phaseChanged);
   else if (s.phase === 'reveal') renderReveal(phaseChanged);
@@ -632,15 +638,8 @@ function colorDigsHtml(num) {
   }).join('') + '</div>';
 }
 
-function renderReveal(phaseChanged) {
-  const s = S.state, q = s.question;
-  const me = myPlayer();
-  const myAns = me?.lastAnswer;
-  const sig = 'r:' + s.qIndex + ':' + s.players.map(p=>p.studentId+':'+p.score+':'+(p.lastAnswer?.ok?'1':'0')).join(',');
-  if (!phaseChanged && sig === S.lastSig) return;
-  S.lastSig = sig;
-
-  // 내 답 vs 정답 + 설명
+// 내 답 vs 정답 + 설명 — 정답 공개 화면과 오답 다시 보기가 공유
+function buildExplanation(q, myAns) {
   let myShown = '—', correctShown = '', explanation = '';
   if (q.gameMode === 1) {
     correctShown = `${q.num} → ${q.count}개`;
@@ -678,6 +677,18 @@ function renderReveal(phaseChanged) {
     const tolerance = m.type === 'ruler' ? '±0.03 cm' : '±0.2';
     explanation = `📏 <b>${m.dv} ${m.unit}</b>가 정답입니다 (허용 오차 ${tolerance}). 유효숫자는 적은 모든 숫자를 세요 → <b class="tag sig">${m.sf}개</b>. 최소눈금보다 한 자리 더 어림해서 읽는 것이 핵심이에요.`;
   }
+  return { myShown, correctShown, explanation };
+}
+
+function renderReveal(phaseChanged) {
+  const s = S.state, q = s.question;
+  const me = myPlayer();
+  const myAns = me?.lastAnswer;
+  const sig = 'r:' + s.qIndex + ':' + s.players.map(p=>p.studentId+':'+p.score+':'+(p.lastAnswer?.ok?'1':'0')).join(',');
+  if (!phaseChanged && sig === S.lastSig) return;
+  S.lastSig = sig;
+
+  const { myShown, correctShown, explanation } = buildExplanation(q, myAns);
 
   const verdict = myAns?.ok ? `<div class="fb ok" style="max-width:640px;margin:10px auto">✅ 정답! +${myAns.points}점${myAns.classBonus?` (+학급 보너스 ${myAns.classBonus})`:''}${me?.streak>=2?` · 🔥 콤보 x${me.streak}`:''}</div>`
     : myAns?.timeout ? `<div class="fb no" style="max-width:640px;margin:10px auto">⏰ 시간 초과</div>`
@@ -746,7 +757,9 @@ function renderWaiting(phaseChanged) {
         <h2 style="color:var(--ok);margin:0 0 10px">🎉 문제 풀이 완료!</h2>
         <p style="color:var(--txt2)">내 점수: <b style="color:var(--acc);font-size:1.3rem">${me?.score||0}점</b> · 정답 ${me?.correct||0}/${qc}</p>
         <p style="color:var(--txt2);margin-top:14px">남은 ${othersDoing}명이 마치면 결과가 발표됩니다. 잠시만 기다려 주세요!</p>
+        ${(me?.wrong || 0) > 0 ? `<div style="margin-top:14px"><button class="btn btn-sec" onclick="showReview()">📝 틀린 문제 다시 보기 (${me.wrong})</button></div>` : ''}
       </div>
+      <div id="review-area"></div>
       <div class="live-board">
         ${s.players.slice().sort((a,b)=>b.score-a.score).map(p => {
           const done = (p.pPhase || 'done') === 'done';
@@ -759,6 +772,7 @@ function renderWaiting(phaseChanged) {
       </div>
     </div>
   `;
+  if (S.reviewOpen) paintReview();
 }
 
 function renderResults(phaseChanged) {
@@ -767,6 +781,7 @@ function renderResults(phaseChanged) {
   S.lastSig = 'done';
   const sorted = s.players.slice().sort((a,b) => b.score - a.score);
   const myRank = sorted.findIndex(p => p.studentId === S.me.studentId) + 1;
+  const myWrong = myPlayer()?.wrong || 0;
   document.getElementById('app').innerHTML = `
     ${renderHeader()}
     <div class="results-view fade-in">
@@ -788,13 +803,67 @@ function renderResults(phaseChanged) {
       }).join('')}
       <div style="margin-top:24px">
         <button class="btn btn-pri btn-lg" onclick="location.href='/'">🏠 로비로</button>
+        ${myWrong > 0 ? `<button class="btn btn-acc btn-lg" onclick="showReview()">📝 틀린 문제 다시 보기 (${myWrong})</button>` : ''}
         <button class="btn btn-sec btn-lg" onclick="showMyStatsInline()">📊 내 전적 보기</button>
         <a class="btn btn-ghost btn-lg" href="/leaderboard.html">🏆 점수판 보기</a>
       </div>
+      <div id="review-area"></div>
       <div id="inline-stats" style="margin-top:20px"></div>
     </div>
   `;
+  if (S.reviewOpen) paintReview();
   clearInterval(S.pollTimer);
+}
+
+// ---------- 틀린 문제 다시 보기 ----------
+// renderResults 가 폴링을 멈추므로, 데이터는 버튼 클릭 시 별도 fetch 로 받는다.
+async function showReview() {
+  const area = document.getElementById('review-area');
+  if (!area) return;
+  if (S.reviewOpen) { S.reviewOpen = false; area.innerHTML = ''; return; }
+  S.reviewOpen = true;
+  if (S.reviewData) { paintReview(); return; }
+  area.innerHTML = '<div class="review-empty">불러오는 중…</div>';
+  const r = await api('/api/room/review?code=' + encodeURIComponent(S.code));
+  if (!S.reviewOpen) return;
+  if (!r || r.error) {
+    S.reviewOpen = false;
+    area.innerHTML = '';
+    toast(r?.error || '오답을 불러오지 못했어요', 'warn');
+    return;
+  }
+  S.reviewData = r;
+  paintReview();
+}
+
+function paintReview() {
+  const area = document.getElementById('review-area');
+  if (!area || !S.reviewData) return;
+  const items = S.reviewData.items || [];
+  if (items.length === 0) {
+    area.innerHTML = '<div class="review-empty">🎉 틀린 문제가 없어요!</div>';
+    return;
+  }
+  const cards = items.map((item, i) => {
+    let ex;
+    try {
+      ex = buildExplanation(item.q, { submitted: item.submitted, timeout: item.timeout, ok: false });
+    } catch (e) {
+      ex = { myShown: '—', correctShown: '—', explanation: '해설을 표시할 수 없어요.' };
+    }
+    const myShown = item.timeout ? '⏰ 시간 초과' : ex.myShown;
+    const no = (typeof item.qIndex === 'number' ? item.qIndex : i) + 1;
+    return `<div class="review-card">
+      <div class="review-no">${no}번 문제</div>
+      <div class="reveal-grid">
+        <div class="cell no"><div class="lab">내 답</div><div class="val">${myShown}</div></div>
+        <div class="cell ok"><div class="lab">정답</div><div class="val">${ex.correctShown}</div></div>
+      </div>
+      <div class="explain-box">${ex.explanation}</div>
+    </div>`;
+  }).join('');
+  area.innerHTML = `<h3 style="margin-top:22px">📝 틀린 문제 다시 보기 (${items.length})</h3>` + cards
+    + '<div style="margin-top:10px"><button class="btn btn-ghost" onclick="showReview()">닫기</button></div>';
 }
 
 async function showMyStatsInline() {

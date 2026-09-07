@@ -514,7 +514,7 @@ scheduleBackups();
 // 보안 관련 이벤트만 — 일별 로테이션 (audit.YYYY-MM-DD.log)
 function audit(req, kind, payload) {
   try {
-    const ip = (req.headers['x-forwarded-for'] || req.socket?.remoteAddress || '?').toString().split(',')[0].trim();
+    const ip = clientIp(req);
     const ua = (req.headers['user-agent'] || '').slice(0, 100);
     const line = JSON.stringify({ ts: new Date().toISOString(), kind, ip, ua, ...(payload || {}) }) + '\n';
     const day = todayKey();
@@ -550,7 +550,21 @@ function clsCfg(code) {
   const c = classrooms[code];
   if (!c) return null;
   if (!c.config) c.config = { autoApproveRooms: false, sheetsUrl: '' };
+  // 하위 호환 — 예전 데이터에는 rosterOnly 가 없다
+  if (c.config.rosterOnly === undefined) c.config.rosterOnly = false;
   return c.config;
+}
+
+// 이름 비교용 정규화 — NFC + 모든 공백류(일반/NBSP/전각/제로폭) 제거 + 소문자
+function normName(s) {
+  return String(s === null || s === undefined ? '' : s)
+    .normalize('NFC')
+    .replace(/[\s\u00A0\u1680\u2000-\u200D\u202F\u205F\u2060\u3000\uFEFF]/g, '')
+    .toLowerCase();
+}
+// 명단(preregistered) 학생 수
+function preregisteredCount(code) {
+  return Object.values(clsStudents(code)).filter(r => !!r.preregistered).length;
 }
 
 // 교실 코드 정규화 (2~20자, 한글/영문/숫자/하이픈/언더스코어)
@@ -1307,7 +1321,28 @@ function viewQuestion(q, hide) {
     if (hide) return { gameMode: 6, num: q.num, target: q.target };
     return { gameMode: 6, num: q.num, target: q.target, answer: q.answer };
   }
+  // gm3(측정값 읽기)도 다른 모드처럼 hide 를 지켜야 함.
+  // sf 는 정답이라 문제 단계에서 절대 보내지 않는다.
+  // val 은 캔버스로 기구를 그리는 데 반드시 필요해서 남길 수밖에 없고,
+  // dv(표시값)는 디지털 저울일 때만 화면에 실제로 찍히므로 그때만 보낸다.
+  if (hide) {
+    const m = q.meas || {};
+    const safe = { type: m.type, val: m.val, unit: m.unit };
+    if (m.type === 'scale') safe.dv = m.dv;
+    return { gameMode: 3, meas: safe };
+  }
   return { gameMode: 3, meas: q.meas };
+}
+
+// 비밀값스러운 키를 걸러낸 얕은 복사본. 현재 학생 레코드엔 해당 키가 없고,
+// 앞으로도 없어야 한다는 뜻의 방어선.
+const SECRETISH = /(token|secret|password|passwd|^pw$|hash|salt|apikey|api_key)/i;
+function stripSecretish(rec) {
+  const out = {};
+  for (const k of Object.keys(rec)) {
+    if (!SECRETISH.test(k)) out[k] = rec[k];
+  }
+  return out;
 }
 
 function pushLB(classroomCode, type, entry) {
@@ -1382,6 +1417,19 @@ const pid = () => crypto.randomBytes(5).toString('hex');
 
 // CORS allowed origins — 환경변수 CORS_ORIGIN 으로 화이트리스트 지정 가능 (#2)
 const CORS_ORIGIN = process.env.CORS_ORIGIN || '*';
+
+// x-forwarded-for 는 클라이언트가 마음대로 지어낼 수 있는 헤더다.
+// 리버스 프록시 뒤가 아닌데 이걸 믿으면, 요청마다 가짜 IP를 넣어 레이트리밋을
+// 무제한 우회할 수 있다(교사 비밀번호 무차별 대입). 그래서 프록시 뒤일 때만 신뢰한다.
+// 공개 배포에서 Caddy/nginx/Cloudflare 뒤에 둘 때만 TRUST_PROXY=1 로 켤 것.
+const TRUST_PROXY = process.env.TRUST_PROXY === '1' || process.env.TRUST_PROXY === 'true';
+function clientIp(req) {
+  if (TRUST_PROXY) {
+    const xff = req.headers['x-forwarded-for'];
+    if (xff) return String(xff).split(',')[0].trim();
+  }
+  return String(req.socket?.remoteAddress || 'unknown');
+}
 // #15 응답 압축 — accept-encoding 보고 gzip/br 선택
 function maybeCompress(req, res, body, baseHeaders) {
   const acceptEnc = String(req.headers['accept-encoding'] || '');
@@ -1417,6 +1465,21 @@ function sendJSON(res, obj, status = 200) {
     'X-Content-Type-Options': 'nosniff',
   });
   res.end(JSON.stringify(obj));
+}
+
+// sendJSON 과 같은 헤더를 쓰되 accept-encoding 을 보고 압축한다.
+// /api/state 처럼 1.2초마다 폴링되는 큰 응답에만 쓸 것 — 1KB 미만은 maybeCompress 가
+// 알아서 원문으로 보낸다.
+function sendJSONCompressed(req, res, obj, status = 200) {
+  const body = Buffer.from(JSON.stringify(obj), 'utf8');
+  maybeCompress(req, res, body, {
+    status,
+    'Content-Type': 'application/json; charset=utf-8',
+    'Cache-Control': 'no-store',
+    'Access-Control-Allow-Origin': CORS_ORIGIN,
+    'Vary': 'Origin',
+    'X-Content-Type-Options': 'nosniff',
+  });
 }
 function readBody(req) {
   return new Promise((resolve, reject) => {
@@ -1978,16 +2041,22 @@ async function handleApi(req, res, pathname, query) {
       saveClassrooms();
     }
     const studentId = String(body.studentId || '').trim().slice(0, 10);
-    const name = String(body.name || '').trim().slice(0, 12);
+    let name = String(body.name || '').trim().slice(0, 12);
     if (!studentId || !name) return sendJSON(res, { error: '학번과 이름을 입력하세요.' }, 400);
     if (!/^[0-9A-Za-z]+$/.test(studentId)) return sendJSON(res, { error: '학번은 숫자/영문만 가능' }, 400);
     if (hasBadWord(name)) return sendJSON(res, { error: '닉네임에 부적절한 단어가 포함되어 있어요.' }, 400);
     // Rate limit (학번+IP 기준)
-    const ipKeyS = (req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'unknown').toString().split(',')[0].trim();
+    const ipKeyS = clientIp(req);
     if (!rateLimitOK('login:' + ipKeyS + ':' + studentId, 20, 60_000)) return sendJSON(res, { error: '잠시 후 다시 시도하세요' }, 429);
-    // 차단 확인 (교실별)
     const sdb = clsStudents(classroomCode);
     const rec = sdb[studentId];
+    // 명단 등록 학생만 입장 (rosterOnly) — 꺼져 있으면 기존 동작 그대로
+    if (clsCfg(classroomCode).rosterOnly) {
+      if (!rec || !rec.preregistered) return sendJSON(res, { error: '명단에 없는 학번이에요. 선생님께 확인하세요.' }, 403);
+      if (normName(rec.name) !== normName(name)) return sendJSON(res, { error: '학번과 이름이 명단과 달라요.' }, 403);
+      name = rec.name;  // 이름은 명단 정본을 사용 (임의 덮어쓰기 방지)
+    }
+    // 차단 확인 (교실별)
     if (rec && rec.blocked) return sendJSON(res, { error: '차단된 학생입니다. 교사에게 문의하세요.' }, 403);
     // 기존 세션이 있으면 토큰 갱신 (다중 탭 방지)
     const sKey = studentSessKey(classroomCode, studentId);
@@ -2126,6 +2195,27 @@ async function handleApi(req, res, pathname, query) {
     return sendJSON(res, { ok: true });
   }
 
+  // ---------- 틀린 문제 다시 보기 (본인 것만) ----------
+  // 게임이 끝난 뒤(results) 또는 멀티에서 본인이 다 푼 뒤(pPhase === 'done')에만 열람 가능.
+  // p.wrongHistory 는 이미 정답이 포함된 뷰(viewQuestion(q, false))라 추가 계산 없음.
+  if (method === 'GET' && pathname === '/api/room/review') {
+    const s = authStudent(req);
+    if (!s) return sendJSON(res, { error: '로그인 필요' }, 401);
+    const room = rooms.get(String(query.code || s.currentRoom || ''));
+    if (!room) return sendJSON(res, { error: '방 없음' }, 404);
+    const p = Object.values(room.players).find(x => x.studentId === s.studentId);
+    if (!p) return sendJSON(res, { error: '참여자 아님' }, 400);
+    const finished = room.phase === 'results' || (room.type === 'multi' && p.pPhase === 'done');
+    if (!finished) return sendJSON(res, { error: '게임이 끝난 뒤에 볼 수 있어요' }, 400);
+    const items = (p.wrongHistory || []).map(it => ({
+      qIndex: it.qIndex, q: it.q, submitted: it.submitted, timeout: !!it.timeout,
+    }));
+    const total = room.type === 'multi'
+      ? ((p.correct || 0) + (p.wrong || 0))
+      : room.questions.length;
+    return sendJSON(res, { items, total, correct: p.correct || 0 });
+  }
+
   // ---------- 방장 시작 ----------
   if (method === 'POST' && pathname === '/api/room/start') {
     const s = authStudent(req);
@@ -2236,7 +2326,8 @@ async function handleApi(req, res, pathname, query) {
     if (!room) return sendJSON(res, { error: '방 없음' }, 404);
     const forTeacher = authTeacher(req);
     const viewerS = authStudent(req);
-    return sendJSON(res, roomView(room, forTeacher, viewerS?.studentId));
+    // 1.2초마다 전원이 폴링하는 경로라 응답이 가장 큼 → 여기만 압축
+    return sendJSONCompressed(req, res, roomView(room, forTeacher, viewerS?.studentId));
   }
 
   // ---------- 점수판 (글로벌) ----------
@@ -2369,7 +2460,7 @@ async function handleApi(req, res, pathname, query) {
     const pw = String(body.password || '');
     if (pw.length < 1) return sendJSON(res, { error: '비밀번호를 입력하세요' }, 400);
     // Rate limit (IP 기준 — 5분에 10회)
-    const ipKey = (req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'unknown').toString().split(',')[0].trim();
+    const ipKey = clientIp(req);
     if (!rateLimitOK('teacherlogin:' + ipKey, 10, 5 * 60_000)) return sendJSON(res, { error: '비밀번호 시도 횟수 초과 — 5분 후 다시 시도하세요' }, 429);
     // default 교실 자동 생성 (없으면)
     let c = clsroom(code);
@@ -2556,6 +2647,43 @@ async function handleApi(req, res, pathname, query) {
     }
     return sendJSON(res, { ok: true, enabled: c.autoApproveRooms, approvedPending: approvedCount });
   }
+  // 명단 등록 학생만 입장 토글 조회/변경
+  if (method === 'GET' && pathname === '/api/teacher/classroom/roster-only') {
+    const cls = teacherClassroom(req);
+    if (!cls) return sendJSON(res, { error: '교사 권한' }, 401);
+    return sendJSON(res, { enabled: !!clsCfg(cls).rosterOnly, preregisteredCount: preregisteredCount(cls) });
+  }
+  if (method === 'POST' && pathname === '/api/teacher/classroom/roster-only') {
+    const cls = teacherClassroom(req);
+    if (!cls) return sendJSON(res, { error: '교사 권한' }, 401);
+    const body = await readBody(req);
+    const c = clsCfg(cls);
+    c.rosterOnly = !!body.enabled;
+    saveClassrooms();
+    audit(req, c.rosterOnly ? 'roster_only_on' : 'roster_only_off', { cls });
+    return sendJSON(res, { ok: true, enabled: c.rosterOnly, preregisteredCount: preregisteredCount(cls) });
+  }
+  // 기존 학생을 명단 학생으로 표시/해제 (CSV 없이 토글을 켰을 때 전원 차단되는 사고 방지)
+  if (method === 'POST' && pathname === '/api/teacher/students/preregister') {
+    const cls = teacherClassroom(req);
+    if (!cls) return sendJSON(res, { error: '교사 권한' }, 401);
+    const body = await readBody(req);
+    const value = !!body.value;
+    const sdb = clsStudents(cls);
+    let targets;
+    if (body.all === true) targets = Object.keys(sdb);
+    else if (Array.isArray(body.studentIds)) targets = body.studentIds.map(String);
+    else return sendJSON(res, { error: 'studentIds 또는 all 필요' }, 400);
+    let count = 0;
+    for (const sid of targets) {
+      const rec = sdb[sid];
+      if (!rec) continue;
+      rec.preregistered = value;
+      count++;
+    }
+    saveStudentsDb();
+    return sendJSON(res, { ok: true, count, preregisteredCount: preregisteredCount(cls) });
+  }
   if (method === 'GET' && pathname === '/api/teacher/overview') {
     const cls = teacherClassroom(req);
     if (!cls) return sendJSON(res, { error: '교사 권한' }, 401);
@@ -2583,6 +2711,8 @@ async function handleApi(req, res, pathname, query) {
     return sendJSON(res, {
       classroomCode: cls, classroomName: classrooms[cls].name,
       students: studentList, rooms: roomList,
+      rosterOnly: !!clsCfg(cls).rosterOnly,
+      preregisteredCount: preregisteredCount(cls),
       leaderboards: {
         single: myCount('single'),
         multi: myCount('multi'),
@@ -2706,8 +2836,13 @@ async function handleApi(req, res, pathname, query) {
     const cls = teacherClassroom(req);
     if (!cls) return sendJSON(res, { error: '교사 권한' }, 401);
     const sdb = clsStudents(cls);
+    // 레코드를 통째로(...r) 내보내는 형태라, 나중에 누가 비밀값을 학생 레코드에 얹으면
+    // 교사 응답으로 그대로 흘러나간다. 지금은 그런 필드가 없지만(토큰은 persistedTokens에
+    // 따로 보관) 실수 방지용으로 비밀값스러운 키만 걸러낸다.
+    // 허용목록으로 바꾸지 않은 이유: 교사 화면이 뱃지·연속일수 등 여러 필드를 쓰고 있어
+    // 하나만 빠뜨려도 대시보드가 조용히 깨진다.
     const list = Object.values(sdb).map(r => ({
-      ...r, stats: ensureStatsShape(r.stats), online: students.has(studentSessKey(cls, r.studentId)),
+      ...stripSecretish(r), stats: ensureStatsShape(r.stats), online: students.has(studentSessKey(cls, r.studentId)),
     }));
     list.sort((a,b) => (a.studentId > b.studentId ? 1 : -1));
     return sendJSON(res, { students: list });
@@ -3003,11 +3138,12 @@ async function handleApi(req, res, pathname, query) {
       const sid = sanitizeStr(cols[sidIdx], 10);
       const name = sanitizeStr(cols[nameIdx], 12);
       if (!sid || !name || !/^[0-9A-Za-z]+$/.test(sid) || hasBadWord(name)) { skipped++; continue; }
-      if (sdb[sid]) { sdb[sid].name = name; updated++; }
-      else { sdb[sid] = { studentId: sid, name, joinedAt: Date.now(), stats: emptyStats(), blocked: false }; added++; }
+      // CSV 로 등록한 학생은 명단 학생(preregistered) 으로 표시 — 기존 학생도 갱신
+      if (sdb[sid]) { sdb[sid].name = name; sdb[sid].preregistered = true; updated++; }
+      else { sdb[sid] = { studentId: sid, name, joinedAt: Date.now(), stats: emptyStats(), blocked: false, preregistered: true }; added++; }
     }
     saveStudentsDb();
-    return sendJSON(res, { ok: true, added, updated, skipped });
+    return sendJSON(res, { ok: true, added, updated, skipped, preregisteredCount: preregisteredCount(cls) });
   }
 
   // ---------- 학생 일괄 차단/해제/삭제 ----------
@@ -3787,10 +3923,33 @@ server.listen(PORT, HOST, () => {
   console.log(`  학생 입장: http://localhost:${PORT}/`);
   console.log(`  교사 카운터: http://localhost:${PORT}/teacher.html`);
   console.log(`  점수판: http://localhost:${PORT}/leaderboard.html`);
-  const ifs = os.networkInterfaces();
-  Object.values(ifs).flat().forEach(i => {
-    if (i && i.family === 'IPv4' && !i.internal) console.log(`  네트워크 주소: http://${i.address}:${PORT}`);
-  });
+  // 루프백에만 묶여 있으면 LAN 주소를 안내해봐야 접속되지 않는다(공개 배포는 프록시 뒤).
+  if (HOST !== '127.0.0.1' && HOST !== 'localhost' && HOST !== '::1') {
+    const ifs = os.networkInterfaces();
+    Object.values(ifs).flat().forEach(i => {
+      if (i && i.family === 'IPv4' && !i.internal) console.log(`  네트워크 주소: http://${i.address}:${PORT}`);
+    });
+  }
   const cList = Object.values(classrooms).map(c => `    - ${c.code} (${c.name})`).join('\n');
   console.log(`  등록된 교실:\n${cList || '    (아직 없음)'}\n`);
+
+  // 인터넷에 공개해 두고 아래 경고를 못 보면 사고로 이어진다.
+  // 교내 LAN 운영이면 아래 항목들은 그대로 둬도 된다.
+  // 인터넷에 공개하는 경우에만 해당하는 점검 목록이다.
+  const warn = [];
+  if (!process.env.TEACHER_PASSWORD) {
+    warn.push('TEACHER_PASSWORD 미설정 → 기본값(3000) 사용 중.');
+  }
+  if (CORS_ORIGIN === '*') {
+    warn.push('CORS_ORIGIN 이 * (모든 출처 허용).');
+  }
+  if (!TRUST_PROXY) {
+    warn.push('TRUST_PROXY 꺼짐 → x-forwarded-for 를 믿지 않음(직접 노출 시 올바른 설정).');
+  }
+  if (warn.length) {
+    console.log('  ℹ️  현재 설정 (교내 LAN 운영이면 이대로 괜찮습니다)');
+    warn.forEach(w => console.log(`     - ${w}`));
+    console.log('     인터넷에 공개할 때만: 긴 TEACHER_PASSWORD, CORS_ORIGIN 좁히기,');
+    console.log('     HTTPS 리버스 프록시 뒤에 두고 TRUST_PROXY=1\n');
+  }
 });

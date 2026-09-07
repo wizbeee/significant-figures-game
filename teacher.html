@@ -244,6 +244,19 @@
     </div>
 
     <div id="tab-students" style="display:none">
+      <div class="panel" style="margin-bottom:16px">
+        <h3>🔒 입장 제한</h3>
+        <p style="color:var(--txt2);font-size:.88rem;margin-bottom:12px">
+          켜면 <b>명단에 등록된 학번·이름이 정확히 일치하는 학생만</b> 로그인할 수 있어요.
+          이름이 임의로 바뀌지 않고 명단에 적힌 이름으로 표시됩니다. (이미 로그인한 학생은 그대로 유지)
+        </p>
+        <label style="display:inline-flex;align-items:center;gap:8px;background:var(--bg);padding:8px 14px;border-radius:8px;border:1px solid var(--bg3);cursor:pointer">
+          <input type="checkbox" id="roster-only-tog" onchange="toggleRosterOnly()">
+          <b id="roster-only-label" style="color:var(--txt2)">명단 학생만 입장 OFF</b>
+        </label>
+        <button class="btn btn-sec btn-sm" onclick="preregisterAll()" title="지금 명단에 있는 학생 전원을 명단 학생으로 표시">✅ 현재 명단 전체를 등록 학생으로 표시</button>
+        <div id="roster-only-hint" style="margin-top:10px;color:var(--txt2);font-size:.85rem"></div>
+      </div>
       <div class="panel">
         <h3>👤 학생 명단
           <button class="btn btn-ghost btn-sm" onclick="loadStudentsDb()">🔄 새로고침</button>
@@ -395,7 +408,6 @@ async function init() {
   // 교실 시스템 단순화로 brand 상세 표시 안 함
   if (brandCls) brandCls.textContent = '';
   refresh(ov);
-  // loadAutoApprove(); — 단순화 후 제거 (모든 방 자동 승인 고정)
   pollTimer = setInterval(() => refresh(), 1500);
 }
 
@@ -495,31 +507,6 @@ async function refresh(ov) {
       }).join('');
     }
   }
-}
-
-async function loadAutoApprove() {
-  const r = await teacherApi('/api/teacher/auto-approve');
-  if (r && r.enabled !== undefined) applyAutoApproveUI(r.enabled);
-}
-function applyAutoApproveUI(enabled) {
-  const t = document.getElementById('auto-approve-tog');
-  const l = document.getElementById('auto-approve-label');
-  const h = document.getElementById('auto-approve-hint');
-  if (t) t.checked = !!enabled;
-  if (l) { l.textContent = enabled ? '🔁 자동 승인 ON' : '🔁 자동 승인 OFF'; l.style.color = enabled ? 'var(--sec)' : 'var(--txt2)'; }
-  if (h) h.style.display = enabled ? 'block' : 'none';
-}
-async function toggleAutoApprove() {
-  const enabled = document.getElementById('auto-approve-tog').checked;
-  const r = await teacherApi('/api/teacher/auto-approve', { method: 'POST', body: { enabled } });
-  if (r.error) { alert(r.error); document.getElementById('auto-approve-tog').checked = !enabled; return; }
-  applyAutoApproveUI(r.enabled);
-  if (r.approvedPending > 0) {
-    // 작은 토스트 대신 간단한 상태 메시지
-    const h = document.getElementById('auto-approve-hint');
-    if (h) h.innerHTML = `✅ <b style="color:var(--sec)">자동 승인 ON</b> — 대기 중이던 ${r.approvedPending}개 방을 일괄 승인했습니다.`;
-  }
-  refresh();
 }
 
 async function approveRoom(code, approved) {
@@ -663,6 +650,57 @@ async function loadStudentsDb() {
   if (r.error) return;
   studentsDbCache = r.students || [];
   renderStudentsDb();
+  loadRosterOnly();
+}
+
+// ============ 명단 학생만 입장 (rosterOnly) ============
+async function loadRosterOnly() {
+  const r = await teacherApi('/api/teacher/classroom/roster-only');
+  if (r && r.enabled !== undefined) applyRosterOnlyUI(r.enabled, r.preregisteredCount);
+}
+function applyRosterOnlyUI(enabled, count) {
+  const t = document.getElementById('roster-only-tog');
+  const l = document.getElementById('roster-only-label');
+  const h = document.getElementById('roster-only-hint');
+  if (t) t.checked = !!enabled;
+  if (l) { l.textContent = enabled ? '🔒 명단 학생만 입장 ON' : '🔓 명단 학생만 입장 OFF'; l.style.color = enabled ? 'var(--sec)' : 'var(--txt2)'; }
+  if (h) {
+    const n = count === undefined ? '?' : count;
+    h.innerHTML = enabled
+      ? `현재 명단 등록 학생 <b style="color:var(--sec)">${n}명</b>만 입장할 수 있어요.`
+      : `현재 명단 등록 학생 <b>${n}명</b>. 꺼져 있어서 누구나 학번·이름만으로 입장합니다.`;
+  }
+}
+async function toggleRosterOnly() {
+  const tog = document.getElementById('roster-only-tog');
+  const enabled = tog.checked;
+  if (enabled) {
+    const cur = await teacherApi('/api/teacher/classroom/roster-only');
+    if (cur && cur.preregisteredCount === 0) {
+      const ok = await confirmDialog('명단으로 등록된 학생이 0명이에요.\n지금 켜면 모든 학생이 로그인할 수 없습니다.\n\nCSV로 명단을 가져오거나 "현재 명단 전체를 등록 학생으로 표시"를 먼저 눌러 주세요.\n\n그래도 켤까요?', { danger: true });
+      if (!ok) { tog.checked = false; return; }
+    }
+  }
+  const r = await teacherApi('/api/teacher/classroom/roster-only', { method: 'POST', body: { enabled } });
+  if (r.error) { toast(r.error, 'err'); tog.checked = !enabled; return; }
+  applyRosterOnlyUI(r.enabled, r.preregisteredCount);
+  toast(r.enabled ? '명단 학생만 입장 ON' : '명단 학생만 입장 OFF', 'ok', 1800);
+}
+async function setPreregistered(sid, value) {
+  const r = await teacherApi('/api/teacher/students/preregister', { method: 'POST', body: { studentIds: [sid], value } });
+  if (r.error) { toast(r.error, 'err'); return; }
+  const s = studentsDbCache.find(x => x.studentId === sid);
+  if (s) s.preregistered = value;
+  renderStudentsDb();
+  applyRosterOnlyUI(document.getElementById('roster-only-tog')?.checked, r.preregisteredCount);
+  toast(value ? '명단 학생으로 표시했어요' : '명단 표시를 해제했어요', 'ok', 1500);
+}
+async function preregisterAll() {
+  if (!await confirmDialog('지금 학생 명단에 있는 학생 전원을 "명단 등록 학생"으로 표시할까요?')) return;
+  const r = await teacherApi('/api/teacher/students/preregister', { method: 'POST', body: { all: true, value: true } });
+  if (r.error) { toast(r.error, 'err'); return; }
+  toast(`${r.count}명을 명단 학생으로 표시했어요`, 'ok');
+  loadStudentsDb();
 }
 let _selectedStudents = window._selectedStudents || (window._selectedStudents = new Set());
 function toggleStudentSel(sid, on) { if (on) _selectedStudents.add(sid); else _selectedStudents.delete(sid); }
@@ -699,7 +737,7 @@ function renderStudentsDb() {
         <td onclick="event.stopPropagation()"><input type="checkbox" ${_selectedStudents.has(s.studentId)?'checked':''} onclick="event.stopPropagation()" onchange="toggleStudentSel('${s.studentId}', this.checked)"></td>
         <td onclick="showStudentStats('${s.studentId}','${(s.name||'').replace(/'/g,"\\'")}')"><b>${_h(s.studentId)}</b></td>
         <td onclick="showStudentStats('${s.studentId}','${(s.name||'').replace(/'/g,"\\'")}')">${_h(s.name)}</td>
-        <td>${s.online?'<span class="badge ok">🟢 접속</span>':'<span class="badge">오프</span>'} ${s.blocked?'<span class="badge no">🚫 차단</span>':''}</td>
+        <td>${s.online?'<span class="badge ok">🟢 접속</span>':'<span class="badge">오프</span>'} ${s.blocked?'<span class="badge no">🚫 차단</span>':''} ${s.preregistered?'<span class="badge pri">📋 명단</span>':''}</td>
         <td>${st.totalGames||0}</td>
         <td style="font-weight:700;color:var(--sec)">${(st.totalScore||0).toLocaleString()}</td>
         <td><span style="color:var(--sec)">${bw}</span>-<span style="color:var(--err)">${bl}</span></td>
@@ -708,6 +746,7 @@ function renderStudentsDb() {
         <td style="white-space:nowrap" onclick="event.stopPropagation()">
           <button class="btn btn-ghost btn-sm" onclick="showStudentStats('${s.studentId}','${(s.name||'').replace(/'/g,"\\'")}')">📊</button>
           <button class="btn btn-ghost btn-sm" onclick="renameStudent('${s.studentId}','${(s.name||'').replace(/'/g,"\\'")}')">✏️</button>
+          <button class="btn btn-ghost btn-sm" title="${s.preregistered?'명단 표시 해제':'명단 학생으로 표시'}" onclick="setPreregistered('${s.studentId}',${!s.preregistered})">${s.preregistered?'📋❌':'📋'}</button>
           <button class="btn btn-ghost btn-sm" onclick="toggleBlock('${s.studentId}',${!s.blocked})">${s.blocked?'✅':'🚫'}</button>
           <button class="btn btn-err btn-sm" onclick="deleteStudent('${s.studentId}')">🗑</button>
         </td>
@@ -1015,7 +1054,7 @@ async function showImportModal() {
   if (!csv.trim()) { toast('CSV 내용이 없어요', 'err'); return; }
   const r = await teacherApi('/api/teacher/students/import', { method: 'POST', body: { csv } });
   if (r.error) { toast(r.error, 'err'); return; }
-  toast('추가 ' + r.added + '명 · 갱신 ' + r.updated + '명 · 건너뜀 ' + r.skipped + '명', 'ok', 5000);
+  toast('추가 ' + r.added + '명 · 갱신 ' + r.updated + '명 · 건너뜀 ' + r.skipped + '명 (명단 등록 ' + (r.preregisteredCount ?? 0) + '명)', 'ok', 5000);
   loadStudentsDb();
 }
 

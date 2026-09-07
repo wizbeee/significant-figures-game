@@ -39,14 +39,26 @@ node server.js
 
 ---
 
-## 🌐 Render.com 무료 클라우드 배포 (5분)
+## 🌐 클라우드 배포
+
+> ⚠️ **무료 플랜으로는 배포되지 않습니다.** 이 저장소의 `render.yaml`은 `plan: free`와
+> `disk:`(영구 디스크)를 함께 선언하는데, Render는 **유료 인스턴스에만 디스크를 붙일 수
+> 있어** 이 조합이 거부됩니다. 예전 README에 적혀 있던 "무료 플랜 … 영구 디스크 1GB"는
+> 사실이 아니었습니다.
+>
+> 디스크가 없으면 재시작할 때마다 `DATA_DIR`의 학생 기록·점수·출결이 전부 사라지므로,
+> 무료 플랜에 디스크만 빼고 올리는 것도 사실상 쓸 수 없습니다.
+
+**Render로 올리려면** `render.yaml`의 `plan: free`를 유료 플랜으로 바꾸세요.
 
 1. [Render.com](https://render.com) 가입 → GitHub 로그인
-2. 본 저장소 fork → Render에서 **New + → Blueprint** → 저장소 선택 → **Apply**
-3. `render.yaml` 자동 감지 → 1분 내 배포 완료
-4. 받은 URL (예: `https://sigfig-xxx.onrender.com`) 동료 교사들에게 공유
+2. 본 저장소 fork → `render.yaml`의 `plan` 수정 → Render에서 **New + → Blueprint** → **Apply**
+3. 받은 URL (예: `https://sigfig-xxx.onrender.com`) 동료 교사들에게 공유
 
-**무료 플랜**: 15분 무활동 시 슬립 (첫 접속 10~30초), 영구 디스크 1GB, 싱가포르 리전.
+**무료로 24시간 운영하려면** 영구 디스크가 딸린 무료 VM(예: Oracle Cloud Always Free)에
+직접 올리는 쪽이 현실적입니다. 이 앱은 의존성이 0이라 `node server.js` 한 줄이면 뜨고,
+`DATA_DIR`만 디스크 경로로 지정하면 됩니다. 폴링이 잦아 트래픽이 큰 편이므로
+(100명 기준 수업 1회에 수백 MB~1GB) **월 무료 egress 한도가 작은 곳은 피하세요.**
 
 ---
 

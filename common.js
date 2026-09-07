@@ -533,15 +533,25 @@ function beep(kind = 'tick') {
   o.start(); o.stop(ctx.currentTime + p.dur);
 }
 
-// ==================== 테마 토글 (다크 기본 / 라이트) ====================
-function getTheme() { return localStorage.getItem('sigfig-theme') || 'dark'; }
+// ==================== 테마 토글 (라이트 기본 / 다크 / 고대비) ====================
+function getTheme() { return localStorage.getItem('sigfig-theme') || 'light'; }
 function setTheme(t) {
   localStorage.setItem('sigfig-theme', t);
   document.documentElement.setAttribute('data-theme', t);
+  syncThemeIcon(t);
+}
+// 내비게이션의 테마 버튼이 현재 테마를 보여주도록 (기존에는 🌙 로 고정돼 있었음)
+function syncThemeIcon(t) {
+  if (typeof document === 'undefined') return;
+  const el = document.getElementById('theme-toggle');
+  if (el) el.textContent = ({ dark: '🌙', light: '☀️', hc: '🔆' })[t] || '☀️';
 }
 // 페이지 로드 즉시 적용
 (function applyThemeImmediately() {
-  if (typeof document !== 'undefined') document.documentElement.setAttribute('data-theme', getTheme());
+  if (typeof document === 'undefined') return;
+  document.documentElement.setAttribute('data-theme', getTheme());
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => syncThemeIcon(getTheme()));
+  else syncThemeIcon(getTheme());
 })();
 
 // ==================== 폰트 크기 (3단계) ====================
