@@ -441,6 +441,36 @@ h1 { font-family: 'Gaegu', serif; font-size: 2.1rem; font-weight: 700; margin-bo
   font-size: 1.8rem; font-weight: 700; color: var(--c9);
 }
 
+/* === 섹션 4: 단위 변환기 === */
+.unit-conv .uc-btns {
+  display: grid; grid-template-columns: repeat(2, 1fr);
+  gap: 10px; max-width: 600px; margin: 0 auto;
+}
+.unit-conv .uc-btn {
+  padding: 14px 10px; border: 2px solid var(--line); background: white;
+  border-radius: 14px; font-family: inherit; font-size: 0.95rem;
+  cursor: pointer; transition: all 0.2s; font-weight: 700; color: var(--ink);
+  line-height: 1.3;
+}
+.unit-conv .uc-btn small { display: block; font-size: 0.78rem; color: var(--soft); font-weight: 400; margin-top: 3px; }
+.unit-conv .uc-btn:hover { transform: translateY(-2px); border-color: var(--c4); }
+.unit-conv .uc-btn.selected { background: var(--c4); color: white; border-color: var(--c4); }
+.unit-conv .uc-btn.selected small { color: rgba(255,255,255,0.9); }
+.unit-conv-record {
+  font-family: 'IBM Plex Mono', monospace; font-size: 1.5rem; font-weight: 700;
+  color: var(--c4); text-align: center; margin: 18px 0 6px;
+}
+.unit-conv-note { font-size: 0.88rem; color: var(--soft); margin: 0 0 4px; text-align: center; line-height: 1.7; }
+.unit-conv-sep { text-align: center; color: var(--soft); font-size: 0.85rem; margin: 16px 0 10px; }
+.unit-conv .final-result {
+  background: linear-gradient(135deg, rgba(236,72,153,0.1), rgba(236,72,153,0.05));
+  border-color: var(--c4); display: block; margin-top: 12px;
+}
+.unit-conv .final-result .value { color: var(--c4); font-size: 1.5rem; }
+.unit-conv .uc-explain { font-size: 0.88rem; color: var(--soft); margin-top: 10px; line-height: 1.7; }
+/* 좁은 화면에서 숫자가 중간에 잘리지 않도록 (이 블록에만 적용) */
+.unit-conv .calc-line { word-break: normal; overflow-wrap: break-word; }
+
 /* === 네비게이션 === */
 .nav-buttons {
   display: flex; justify-content: space-between; gap: 12px; margin-top: 14px;
@@ -637,8 +667,26 @@ h1 { font-family: 'Gaegu', serif; font-size: 2.1rem; font-weight: 700; margin-bo
       </div>
     </div>
     <div class="intro">
-      측정값과 절대불확정도는 <strong>소수점 끝자리</strong>가 같아야 해요. 상대불확정도는 <strong>유효숫자 1개</strong>로 적어요.
+      측정값과 절대불확정도는 <strong>소수점 끝자리</strong>가 같아야 해요. 상대불확정도는 <strong>유효숫자 1개</strong>로 적어요.<br>
+      그리고 단위를 바꿀 때는 값과 흔들림을 <strong>함께</strong> 바꿔요.
     </div>
+
+    <div class="playground unit-conv">
+      <div class="playground-label">🔁 단위를 바꿔도 흔들림은 따라와요</div>
+      <div class="uc-btns">
+        <button class="uc-btn selected" data-case="ruler">📏 자<small>아날로그</small></button>
+        <button class="uc-btn" data-case="microbit">🎛️ 마이크로비트<small>디지털</small></button>
+      </div>
+      <div class="unit-conv-record" id="unit-record"></div>
+      <div class="unit-conv-note" id="unit-note"></div>
+      <div class="unit-conv-sep">↓ 단위를 바꿔볼까요?</div>
+      <div class="uc-btns">
+        <button class="uc-mode-btn uc-btn selected" data-mode="raw">그대로 두기<small id="unit-raw-label"></small></button>
+        <button class="uc-mode-btn uc-btn" data-mode="conv">단위 바꾸기<small id="unit-conv-label"></small></button>
+      </div>
+      <div id="unit-detail"></div>
+    </div>
+
     <div class="playground" id="quiz4-area"></div>
   </div>
 
@@ -1016,6 +1064,69 @@ document.querySelectorAll('.balance-btn').forEach(btn => {
     updateBalance(parseFloat(btn.dataset.precision));
   });
 });
+
+// =========================================================================
+// === 섹션 4: 단위 변환기 — 값과 흔들림을 함께 바꾸기 ===
+// 기구가 흔들림을 정하고(자=최소눈금÷2, 디지털=최소단위 1),
+// 단위를 바꿀 때는 값과 흔들림에 똑같은 수를 곱하거나 나눈다.
+// =========================================================================
+const UNIT_CASES = {
+  ruler: {
+    record: '3.05 ± 0.05 cm',
+    note: '아날로그 기구는 <strong>최소 눈금의 절반</strong>을 흔들림으로 잡아요.<br>눈금이 0.1 cm 간격이라 ±0.05 cm예요.',
+    rawLabel: 'cm 단위',
+    convLabel: 'm 단위 (÷100)',
+    valLine: '값&nbsp;&nbsp;&nbsp;: 3.05 ÷ 100 = <span class="blue">0.0305</span>',
+    uncLine: '흔들림: 0.05 ÷ 100 = <span class="blue">0.0005</span>',
+    result: '0.0305 ± 0.0005 m',
+    explain: '📌 값과 흔들림을 <strong>똑같이 100으로 나눴어요</strong>. 앞쪽 0들은 자리만 잡아주는 숫자라, 유효숫자는 여전히 <strong>3개</strong>예요.'
+  },
+  microbit: {
+    record: '593 ± 1 mg',
+    note: '디지털 기기는 <strong>최소 단위 1</strong>이 흔들림이에요. 화면에 593이 뜨면 ±1 mg.<br>' +
+          '여러 번 재서 평균을 내도 기기의 한계는 그대로라 <strong>±1은 줄지 않아요</strong>.<br>' +
+          '<span style="font-size:0.82rem;">※ 여기서 mg는 밀리그램이 아니라 <strong>밀리 g</strong>, 중력가속도의 1/1000이에요 (1000 mg = 9.80 m/s²).</span>',
+    rawLabel: 'mg 단위',
+    convLabel: 'm/s² 단위 (×9.80÷1000)',
+    valLine: '값&nbsp;&nbsp;&nbsp;: 593 × 9.80 ÷ 1000 = <span class="blue">5.8114</span> → <span class="blue">5.81</span>',
+    uncLine: '흔들림: 1 × 9.80 ÷ 1000 = <span class="blue">0.0098</span> → <span class="blue">0.01</span>',
+    result: '5.81 ± 0.01 m/s²',
+    explain: '📌 g는 <strong>9.80</strong>으로 계산해요. 9.8로 쓰면 유효숫자가 2개로 줄어서 결과의 자릿수까지 깎여요.'
+  }
+};
+let unitCase = 'ruler', unitMode = 'raw';
+
+function renderUnitConv() {
+  const c = UNIT_CASES[unitCase];
+  document.getElementById('unit-record').textContent = c.record;
+  document.getElementById('unit-note').innerHTML = c.note;
+  document.getElementById('unit-raw-label').textContent = c.rawLabel;
+  document.getElementById('unit-conv-label').textContent = c.convLabel;
+
+  const detail = document.getElementById('unit-detail');
+  if (unitMode === 'raw') {
+    detail.innerHTML = '<div class="uc-explain">📌 기구가 정해지면 흔들림도 정해져요. 기록할 때는 <strong>값과 흔들림을 함께</strong> 적어요.</div>';
+  } else {
+    detail.innerHTML =
+      '<div class="calc-line">' + c.valLine + '</div>' +
+      '<div class="calc-line">' + c.uncLine + '</div>' +
+      '<div class="final-result"><div class="label">🎯 바꾼 단위로 다시 쓰면</div>' +
+      '<div class="value">' + c.result + '</div></div>' +
+      '<div class="uc-explain">' + c.explain + '</div>';
+  }
+  document.querySelectorAll('.unit-conv .uc-btn[data-case]').forEach(b =>
+    b.classList.toggle('selected', b.dataset.case === unitCase));
+  document.querySelectorAll('.uc-mode-btn').forEach(b =>
+    b.classList.toggle('selected', b.dataset.mode === unitMode));
+}
+
+function setupUnitConv() {
+  document.querySelectorAll('.unit-conv .uc-btn[data-case]').forEach(b =>
+    b.addEventListener('click', () => { unitCase = b.dataset.case; renderUnitConv(); }));
+  document.querySelectorAll('.uc-mode-btn').forEach(b =>
+    b.addEventListener('click', () => { unitMode = b.dataset.mode; renderUnitConv(); }));
+  renderUnitConv();
+}
 
 // =========================================================================
 // 섹션 2: 유효숫자
@@ -1411,6 +1522,7 @@ window.addEventListener('load', () => {
   updateBalance(1);
   setupSf();
   setupUncertainty();
+  setupUnitConv();
   renderQuiz('quiz4-area', QUIZ4_DATA);
   renderQuiz('quiz5-area', QUIZ5_DATA);
   setupRound();
